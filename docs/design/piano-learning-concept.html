@@ -1,0 +1,242 @@
+<style>
+#piano-concept { color-scheme:light dark; font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:14px; line-height:1.45; }
+#piano-concept * { box-sizing:border-box; }
+#piano-concept .p-app { --p-bg:light-dark(#f5f5f8,#12131a); --p-panel:light-dark(#ffffff,#1b1c25); --p-ink:light-dark(#222332,#f1f0f7); --p-muted:light-dark(#737483,#a3a2b5); --p-line:light-dark(#e6e6ed,#30313d); --p-accent:light-dark(#7354cf,#b69af9); --p-soft:light-dark(#eee8fc,#342a4a); --p-right:light-dark(#a086e9,#b99af7); --p-left:light-dark(#56b6a9,#76ceba); --p-grid:light-dark(#e5e5ed,#2a2b38); background:var(--p-bg); color:var(--p-ink); border:1px solid var(--p-line); border-radius:18px; overflow:clip; min-height:806px; display:flex; flex-direction:column; }
+#piano-concept button,#piano-concept select,#piano-concept input { font:inherit; }
+#piano-concept button { color:inherit; cursor:inherit; }
+#piano-concept button:focus-visible,#piano-concept input:focus-visible { outline:2px solid var(--p-accent); outline-offset:3px; }
+#piano-concept .p-top { min-height:72px; display:flex; align-items:center; gap:26px; padding:16px 116px 16px 22px; background:var(--p-panel); border-bottom:1px solid var(--p-line); flex-wrap:wrap; }
+#piano-concept .p-brand { display:flex; align-items:center; gap:9px; font-size:20px; font-weight:600; letter-spacing:-.6px; }
+#piano-concept .p-brand-mark { display:flex; align-items:flex-end; height:25px; gap:3px; padding:3px 0; }
+#piano-concept .p-brand-mark span { width:5px; background:var(--p-accent); border-radius:3px; }
+#piano-concept .p-brand-mark span:nth-child(1) { height:12px; }
+#piano-concept .p-brand-mark span:nth-child(2) { height:23px; }
+#piano-concept .p-brand-mark span:nth-child(3) { height:17px; }
+#piano-concept .p-preview { font-size:11px; letter-spacing:.7px; text-transform:uppercase; color:var(--p-muted); }
+#piano-concept .p-device { margin-left:auto; display:flex; gap:8px; align-items:center; background:var(--p-bg); border:1px solid var(--p-line); padding:8px 11px; border-radius:9px; font-size:12px; }
+#piano-concept .p-dot { width:7px; height:7px; background:var(--p-left); border-radius:50%; display:inline-block; }
+#piano-concept .p-body { display:grid; grid-template-columns:178px minmax(0,1fr); min-height:654px; flex:1; }
+#piano-concept .p-side { background:var(--p-panel); border-right:1px solid var(--p-line); padding:26px 13px 18px; display:flex; flex-direction:column; gap:24px; }
+#piano-concept .p-nav-label { padding:0 10px; color:var(--p-muted); font-size:11px; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:10px; }
+#piano-concept .p-song { text-align:left; width:100%; display:block; padding:11px 10px; border:0; background:transparent; border-radius:9px; margin:3px 0; }
+#piano-concept .p-song small { display:block; font-size:11px; color:var(--p-muted); padding-top:3px; }
+#piano-concept .p-song[aria-pressed="true"] { background:var(--p-soft); color:var(--p-accent); }
+#piano-concept .p-song:hover { background:var(--p-bg); }
+#piano-concept .p-side-footer { margin-top:auto; padding:13px 10px 0; border-top:1px solid var(--p-line); font-size:12px; color:var(--p-muted); }
+#piano-concept .p-side-footer strong { display:block; color:var(--p-ink); font-weight:500; margin-bottom:4px; }
+#piano-concept .p-main { min-width:0; padding:26px 25px 20px; }
+#piano-concept .p-song-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:23px; }
+#piano-concept h2 { font-size:25px; font-weight:500; letter-spacing:-.9px; margin:0 0 5px; line-height:1.2; }
+#piano-concept .p-sub { font-size:12px; color:var(--p-muted); }
+#piano-concept .p-chip { border:1px solid var(--p-line); padding:5px 9px; border-radius:6px; font-size:11px; color:var(--p-muted); white-space:nowrap; }
+#piano-concept .p-work { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; }
+#piano-concept .p-options { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
+#piano-concept .p-tabs { display:inline-flex; padding:3px; background:var(--p-panel); border:1px solid var(--p-line); border-radius:9px; gap:2px; flex-wrap:wrap; }
+#piano-concept .p-tabs button { background:transparent; border:0; padding:7px 10px; font-size:12px; border-radius:6px; color:var(--p-muted); }
+#piano-concept .p-tabs button[aria-pressed="true"] { background:var(--p-ink); color:var(--p-panel); }
+#piano-concept .p-hand-toggle { display:flex; gap:7px; }
+#piano-concept .p-hand-toggle button { border:1px solid var(--p-line); border-radius:7px; background:var(--p-panel); padding:6px 9px; font-size:11px; display:flex; gap:6px; align-items:center; }
+#piano-concept .p-hand-toggle button[aria-pressed="false"] { opacity:.45; }
+#piano-concept .p-swatch { width:7px; height:7px; border-radius:2px; background:var(--p-left); }
+#piano-concept .p-swatch.right { background:var(--p-right); }
+#piano-concept .p-roll { position:relative; background:light-dark(#eeedf4,#171820); border:1px solid var(--p-line); border-radius:12px; overflow:hidden; }
+#piano-concept .p-fall { position:relative; height:300px; overflow:hidden; }
+#piano-concept .p-lanes,#piano-concept .p-notes,#piano-concept .p-beats { position:absolute; inset:0; pointer-events:none; }
+#piano-concept .p-lane { position:absolute; height:100%; border-right:1px solid var(--p-grid); }
+#piano-concept .p-lane.octave { border-left:1px solid light-dark(#ceccdc,#444353); }
+#piano-concept .p-beat { position:absolute; width:100%; border-top:1px solid var(--p-grid); }
+#piano-concept .p-beat span { position:absolute; left:8px; top:4px; font-size:10px; color:var(--p-muted); }
+#piano-concept .p-note { position:absolute; border-radius:5px; display:flex; align-items:flex-end; justify-content:center; padding-bottom:5px; font-size:10px; font-weight:500; background:var(--p-right); color:light-dark(#34234d,#251939); box-shadow:inset 0 2px 0 light-dark(#c4b4f1,#d2bdfb); overflow:hidden; }
+#piano-concept .p-note.left { background:var(--p-left); color:light-dark(#183e38,#153b31); box-shadow:inset 0 2px 0 light-dark(#98d5cb,#a5e8d4); }
+#piano-concept .p-playline { position:absolute; bottom:0; width:100%; height:2px; background:var(--p-accent); box-shadow:0 0 18px var(--p-accent); }
+#piano-concept .p-keyboard { position:relative; height:100px; background:light-dark(#dddde6,#2b2c39); }
+#piano-concept .p-key { position:absolute; top:0; height:100%; border:0; border-right:1px solid light-dark(#ceccd8,#cbc8d5); border-bottom:3px solid light-dark(#d0cddc,#c5c2ce); border-radius:0 0 4px 4px; background:light-dark(#faf9fd,#e9e7f0); color:#696474; display:flex; justify-content:center; align-items:flex-end; padding:0 0 8px; font-size:10px; touch-action:manipulation; }
+#piano-concept .p-key.black { z-index:2; height:63%; background:linear-gradient(light-dark(#383644,#2e2c39),light-dark(#24212f,#181622)); border-right:1px solid #17141f; border-bottom:4px solid #15121c; color:#d3cee0; border-radius:0 0 4px 4px; }
+#piano-concept .p-key.is-active { background:var(--p-right); border-bottom-color:var(--p-accent); color:light-dark(#33244d,#251939); }
+#piano-concept .p-key.is-active.left { background:var(--p-left); border-bottom-color:var(--p-left); }
+#piano-concept .p-bottom { margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:15px; flex-wrap:wrap; }
+#piano-concept .p-transport { display:flex; align-items:center; gap:9px; }
+#piano-concept .p-icon { display:flex; align-items:center; justify-content:center; width:34px; height:34px; border:1px solid var(--p-line); border-radius:8px; background:var(--p-panel); }
+#piano-concept .p-play { display:flex; align-items:center; justify-content:center; gap:7px; border:0; background:var(--p-accent); color:light-dark(#fff,#221731); border-radius:8px; padding:9px 14px; font-weight:500; min-width:91px; }
+#piano-concept .p-loop[aria-pressed="true"] { background:var(--p-soft); color:var(--p-accent); border-color:var(--p-accent); }
+#piano-concept .p-speed { display:flex; align-items:center; gap:8px; color:var(--p-muted); font-size:12px; }
+#piano-concept .p-speed input { accent-color:var(--p-accent); width:90px; }
+#piano-concept .p-speed output { color:var(--p-ink); min-width:33px; font-variant-numeric:tabular-nums; }
+#piano-concept .p-time { color:var(--p-muted); font-size:11px; font-variant-numeric:tabular-nums; }
+#piano-concept .p-scrub { margin-top:16px; width:100%; accent-color:var(--p-accent); height:4px; display:block; }
+#piano-concept .p-status { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--p-muted); padding-top:13px; min-height:30px; }
+#piano-concept .p-status i { color:var(--p-accent); }
+#piano-concept .p-coach { display:none; }
+#piano-concept .p-guided .p-body { grid-template-columns:minmax(0,1fr); }
+#piano-concept .p-guided .p-side { display:none; }
+#piano-concept .p-guided .p-main { padding:26px; }
+#piano-concept .p-guided .p-work { grid-template-columns:minmax(0,1fr) 218px; align-items:stretch; }
+#piano-concept .p-guided .p-coach { display:flex; flex-direction:column; background:var(--p-panel); border:1px solid var(--p-line); border-radius:12px; padding:20px 17px; }
+#piano-concept .p-coach-kicker { font-size:11px; text-transform:uppercase; letter-spacing:1.3px; color:var(--p-accent); margin-bottom:14px; }
+#piano-concept .p-coach h3 { font-size:20px; font-weight:500; line-height:1.3; margin:0 0 9px; letter-spacing:-.5px; }
+#piano-concept .p-coach-text { color:var(--p-muted); font-size:12px; }
+#piano-concept .p-chord { display:flex; gap:7px; margin:23px 0 12px; flex-wrap:wrap; }
+#piano-concept .p-chord span { padding:9px 10px; border-radius:8px; background:var(--p-soft); color:var(--p-accent); font-weight:500; }
+#piano-concept .p-fingers { font-size:11px; color:var(--p-muted); }
+#piano-concept .p-coach .p-demo-chord { margin-top:23px; width:100%; }
+#piano-concept .p-steps { margin-top:auto; padding-top:30px; }
+#piano-concept .p-step { display:flex; align-items:center; gap:8px; padding:9px 0; font-size:12px; color:var(--p-muted); }
+#piano-concept .p-step.active { color:var(--p-ink); }
+#piano-concept .p-step .p-step-dot { width:19px; height:19px; display:grid; place-items:center; border:1px solid var(--p-line); border-radius:50%; font-size:10px; }
+#piano-concept .p-step.active .p-step-dot { background:var(--p-soft); border-color:transparent; color:var(--p-accent); }
+#piano-concept .p-guided .p-fall { height:340px; }
+#piano-concept .p-connection { padding:13px 16px; border-bottom:1px solid var(--p-line); background:var(--p-soft); font-size:12px; color:var(--p-ink); }
+#piano-concept [hidden] { display:none !important; }
+#piano-concept svg { width:16px; height:16px; flex-shrink:0; }
+@media(max-width:850px) { #piano-concept .p-body { grid-template-columns:1fr; } #piano-concept .p-side { display:none; } #piano-concept .p-guided .p-work { grid-template-columns:minmax(0,1fr) 200px; } }
+@media(max-width:650px) { #piano-concept .p-top { gap:10px; padding:16px 108px 16px 16px; align-items:flex-start; } #piano-concept .p-device { margin-left:0; } #piano-concept .p-preview { display:none; } #piano-concept .p-main,#piano-concept .p-guided .p-main { padding:21px 15px; } #piano-concept .p-guided .p-work { grid-template-columns:1fr; } #piano-concept .p-guided .p-coach { padding:16px; } #piano-concept .p-steps { display:none; } #piano-concept .p-chord { margin:14px 0 7px; } #piano-concept .p-coach .p-demo-chord { margin-top:15px; } #piano-concept .p-app { min-height:1160px; } #piano-concept .p-chip { display:none; } #piano-concept .p-fall,#piano-concept .p-guided .p-fall { height:290px; } #piano-concept .p-keyboard { height:90px; } #piano-concept .p-key:not(.black) { font-size:9px; } #piano-concept .p-tabs button { padding:7px 9px; } #piano-concept .p-speed input { width:76px; } #piano-concept h2 { font-size:23px; } }
+@media(pointer:coarse) { #piano-concept .p-icon,#piano-concept .p-play,#piano-concept .p-device,#piano-concept .p-tabs button,#piano-concept .p-hand-toggle button { min-height:44px; } }
+</style>
+<div id="piano-concept" class="viz-carousel" aria-label="Piano learning app concepts">
+  <section data-variant="Practice studio" aria-label="Practice studio design"><div class="p-app" data-design="studio"></div></section>
+  <section data-variant="Guided lesson" aria-label="Guided lesson design" hidden><div class="p-app p-guided" data-design="guided"></div></section>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('piano-concept');
+  const whitePcs = [0,2,4,5,7,9,11];
+  const noteNames = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const label = n => noteNames[n%12] + (Math.floor(n/12)-1);
+  const whiteKeys = [];
+  for(let n=48;n<=84;n++) if(whitePcs.includes(n%12)) whiteKeys.push(n);
+  const totalWhite = whiteKeys.length;
+  const geometry = n => {
+    const i = whiteKeys.indexOf(n);
+    if(i>=0) return {left:i/totalWhite*100,width:100/totalWhite,black:false};
+    const prev = whiteKeys.indexOf(n-1);
+    return {left:(prev+.68)/totalWhite*100,width:.64/totalWhite*100,black:true};
+  };
+  const melody = [64,64,65,67,67,65,64,62,60,60,62,64,64,62,62];
+  const songs = {
+    joy: {title:'Ode to Joy',sub:'L. van Beethoven · Beginner arrangement',bpm:80,notes:[]},
+    chords: {title:'Your first chords',sub:'Foundations · C major, F major, G major',bpm:60,notes:[]},
+    scale: {title:'C major, one octave',sub:'Foundations · Right-hand exercise',bpm:72,notes:[]}
+  };
+  melody.forEach((pitch,i) => songs.joy.notes.push({pitch,t:i*.75,d:.65,hand:'right'}));
+  [48,55,48,55].forEach((pitch,i) => songs.joy.notes.push({pitch,t:i*3,d:2.7,hand:'left'}));
+  [[60,64,67],[60,65,69],[59,62,67],[60,64,67]].forEach((chord,i)=>chord.forEach(pitch=>songs.chords.notes.push({pitch,t:i*2,d:1.7,hand:'right'})));
+  [60,62,64,65,67,69,71,72,71,69,67,65,64,62,60].forEach((pitch,i)=>songs.scale.notes.push({pitch,t:i*.65,d:.55,hand:'right'}));
+  const saved = window.openai?.widgetState?.modelContent || {};
+  const instances = [];
+  root.querySelectorAll('.p-app').forEach((app,idx) => {
+    const guided = idx===1;
+    const initial = saved[guided?'guided':'studio'] || {};
+    const state = { song: songs[initial.song]?initial.song:guided?'chords':'joy', mode:['listen','wait','rhythm'].includes(initial.mode)?initial.mode:guided?'wait':'listen', speed:initial.speed>=25&&initial.speed<=125?initial.speed:75, left:true,right:true,loop:false,playing:false,time:0,showNames:true,lookahead:5,pressed:new Set(),accepted:new Set(),last:0,waiting:false,raf:0 };
+    app.innerHTML = `
+      <header class="p-top"><div class="p-brand"><div class="p-brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>cadence</div><span class="p-preview">Concept preview</span><button class="p-device cursor-interaction" aria-expanded="false"><span class="p-dot"></span>Piano · demo<i data-lucide="chevron-down" aria-hidden="true"></i></button></header>
+      <div class="p-connection" hidden>MIDI connection preview · The finished app will let you choose your connected piano and test a key. This rendering uses simulated notes.</div>
+      <div class="p-body"><aside class="p-side"><div><div class="p-nav-label">Your library</div><button class="p-song cursor-interaction" data-song="joy">Ode to Joy<small>Beginner · Both hands</small></button><button class="p-song cursor-interaction" data-song="chords">Your first chords<small>Lesson · Right hand</small></button><button class="p-song cursor-interaction" data-song="scale">C major scale<small>Exercise · Right hand</small></button></div><div class="p-side-footer"><strong>One phrase at a time.</strong>Slow it down. Find your rhythm.</div></aside>
+      <main class="p-main"><div class="p-song-head"><div><h2></h2><div class="p-sub"></div></div><span class="p-chip">${guided?'Lesson · 1 of 3':'Practice studio'}</span></div>
+      <div class="p-work"><div class="p-work-main"><div class="p-options"><div class="p-tabs" aria-label="Practice mode"><button class="cursor-interaction" data-mode="listen">Listen</button><button class="cursor-interaction" data-mode="wait">Wait for me</button><button class="cursor-interaction" data-mode="rhythm">Rhythm</button></div><div class="p-hand-toggle" aria-label="Hands"><button class="cursor-interaction" data-hand="left" aria-pressed="true"><span class="p-swatch"></span>Left</button><button class="cursor-interaction" data-hand="right" aria-pressed="true"><span class="p-swatch right"></span>Right</button></div></div>
+      <div class="p-roll"><div class="p-fall" role="img" aria-label="Falling notes aligned with a piano keyboard. Teal notes are for the left hand; lavender notes are for the right hand."><div class="p-lanes"></div><div class="p-beats"></div><div class="p-notes"></div><div class="p-playline"></div></div><div class="p-keyboard" role="group" aria-label="Demo piano keys"></div></div>
+      <div class="p-bottom"><div class="p-transport"><button class="p-icon p-restart cursor-interaction" aria-label="Restart phrase"><i data-lucide="rotate-ccw" aria-hidden="true"></i></button><button class="p-play cursor-interaction"><i data-lucide="play" aria-hidden="true"></i><span>Play</span></button><button class="p-icon p-loop cursor-interaction" aria-pressed="false" aria-label="Loop phrase"><i data-lucide="repeat-2" aria-hidden="true"></i></button></div><label class="p-speed">Speed<input class="cursor-interaction" type="range" min="25" max="125" step="5" value="75" aria-label="Playback speed"><output>75%</output></label><div class="p-time">0:00 / 0:12</div></div>
+      <input class="p-scrub cursor-interaction" type="range" min="0" max="12" value="0" step=".01" aria-label="Song position">
+      <div class="p-status" role="status" aria-live="polite"><i data-lucide="sparkles" aria-hidden="true"></i><span></span></div></div>
+      <aside class="p-coach"><div class="p-coach-kicker">Let's play together</div><h3>A little chord.<br>A great beginning.</h3><div class="p-coach-text">Press the highlighted keys together. The song moves at your pace.</div><div class="p-chord"><span>C</span><span>E</span><span>G</span></div><div class="p-fingers">Right hand · fingers 1, 3, 5</div><button class="p-play p-demo-chord cursor-interaction">Try chord</button><div class="p-steps"><div class="p-step active"><span class="p-step-dot">1</span>Find the notes</div><div class="p-step"><span class="p-step-dot">2</span>Play the changes</div><div class="p-step"><span class="p-step-dot">3</span>Add the rhythm</div></div></aside>
+      </div></main></div>`;
+    const q = s => app.querySelector(s);
+    const qa = s => [...app.querySelectorAll(s)];
+    let noteElements = [];
+    const keyElements = new Map();
+    const activeNotes = () => songs[state.song].notes.filter(n=>state[n.hand]);
+    const duration = () => Math.max(...songs[state.song].notes.map(n=>n.t+n.d))+1;
+    const stamp = t => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
+    function save() {
+      const modelContent = {};
+      instances.forEach(x => modelContent[x.guided?'guided':'studio']={song:x.state.song,mode:x.state.mode,speed:x.state.speed});
+      window.openai?.setWidgetState?.({modelContent,privateContent:null})?.catch(()=>{});
+    }
+    function setStatus(text) { q('.p-status span').textContent=text; }
+    function setPlay(playing) {
+      state.playing=playing;state.last=0;
+      q('.p-play:not(.p-demo-chord) span').textContent=playing?'Pause':'Play';
+      const el=q('.p-play:not(.p-demo-chord)');
+      const icon=el.querySelector('svg,i');
+      if(icon) icon.remove();
+      el.insertAdjacentHTML('afterbegin',`<i data-lucide="${playing?'pause':'play'}" aria-hidden="true"></i>`);
+      globalThis.lucide?.createIcons({attrs:{width:16,height:16}});
+      if(playing&&!state.raf) state.raf=requestAnimationFrame(tick);
+    }
+    for(let n=48;n<=84;n++) {
+      const g=geometry(n), b=document.createElement('button');
+      b.className='p-key cursor-interaction'+(g.black?' black':'');b.type='button';
+      b.style.left=g.left+'%';b.style.width=g.width+'%';b.setAttribute('aria-label','Play '+label(n));
+      b.innerHTML=n%12===0?label(n):'';
+      b.addEventListener('pointerdown',()=>press(n));
+      b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();press(n);}});
+      q('.p-keyboard').append(b);keyElements.set(n,b);
+      if(!g.black){const lane=document.createElement('div');lane.className='p-lane'+(n%12===0?' octave':'');lane.style.left=g.left+'%';lane.style.width=g.width+'%';q('.p-lanes').append(lane);}
+    }
+    for(let i=0;i<7;i++){const b=document.createElement('div');b.className='p-beat';b.innerHTML='<span></span>';q('.p-beats').append(b);}
+    function loadSong() {
+      setPlay(false);state.time=0;state.accepted.clear();state.waiting=false;
+      q('h2').textContent=songs[state.song].title;q('.p-sub').textContent=songs[state.song].sub;
+      qa('[data-song]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.song===state.song));
+      q('.p-notes').replaceChildren();
+      noteElements=songs[state.song].notes.map(n=>{
+        const g=geometry(n.pitch),el=document.createElement('div');el.className='p-note '+n.hand;
+        el.style.left=`calc(${g.left}% + 2px)`;el.style.width=`calc(${g.width}% - 4px)`;
+        el.textContent=noteNames[n.pitch%12];el.setAttribute('aria-hidden','true');q('.p-notes').append(el);return {n,el};
+      });
+      q('.p-scrub').max=duration();draw();modeStatus();
+    }
+    function modeStatus() {
+      setStatus(state.mode==='wait'?'The song waits for your notes. Try the on-screen keys.':state.mode==='rhythm'?'Keep the beat. The finished app will check your notes and timing.':'Preview the falling notes. Use your piano’s sound in the finished app.');
+    }
+    function draw() {
+      const height=q('.p-fall').clientHeight,px=height/state.lookahead;
+      noteElements.forEach(({n,el})=>{const y=height-(n.t-state.time)*px-n.d*px;el.style.height=Math.max(16,n.d*px)+'px';el.style.top=y+'px';el.hidden=!state[n.hand]||y>height||y+n.d*px<0;el.textContent=state.showNames?noteNames[n.pitch%12]:'';});
+      const beat=.75;
+      qa('.p-beat').forEach((el,i)=>{const t=(Math.floor(state.time/beat)+i)*beat;el.style.top=height-(t-state.time)*px+'px';el.querySelector('span').textContent=i%4===0?String(Math.floor(t/(beat*4))+1):'';});
+      keyElements.forEach((b,n)=>{const note=activeNotes().find(x=>x.pitch===n&&state.time>=x.t&&state.time<x.t+x.d);b.classList.toggle('is-active',!!note||state.pressed.has(n));b.classList.toggle('left',note?.hand==='left');});
+      q('.p-time').textContent=stamp(state.time)+' / '+stamp(duration());q('.p-scrub').value=state.time;
+      if(guided){const next=activeNotes().filter(n=>n.t+n.d>state.time);const start=next[0]?.t;const chord=next.filter(n=>Math.abs(n.t-start)<.03);q('.p-chord').innerHTML=chord.map(n=>'<span>'+noteNames[n.pitch%12]+'</span>').join('');}
+    }
+    function press(n) {
+      state.pressed.add(n);state.accepted.add(n);draw();
+      const expected=activeNotes().filter(x=>Math.abs(x.t-state.time)<.04);
+      if(state.mode==='wait'&&expected.length&&expected.every(x=>state.accepted.has(x.pitch))){state.time+=.06;state.waiting=false;state.accepted.clear();setStatus('That’s it. Move to the next notes.');draw();}
+      setTimeout(()=>{state.pressed.delete(n);draw();},320);
+    }
+    function tick(now) {
+      state.raf=0;
+      if(!state.playing)return;
+      if(app.closest('[data-variant]').hidden){state.last=0;state.raf=requestAnimationFrame(tick);return;}
+      const dt=state.last?Math.min((now-state.last)/1000,.08):0;state.last=now;
+      let next=state.time+dt*state.speed/100;
+      if(state.mode==='wait'){
+        const group=activeNotes().find(n=>n.t>=state.time-.001&&n.t<=next+.001);
+        if(group){next=group.t;if(!state.waiting){state.waiting=true;state.accepted.clear();setStatus('Your turn · '+activeNotes().filter(n=>n.t===group.t).map(n=>label(n.pitch)).join(' + '));}}
+      }
+      state.time=next;
+      if(state.time>=duration()){if(state.loop){state.time=0;state.accepted.clear();state.waiting=false;}else {state.time=duration();setPlay(false);setStatus('Phrase complete. Replay it or try another mode.');}}
+      draw();if(state.playing)state.raf=requestAnimationFrame(tick);
+    }
+    qa('[data-mode]').forEach(b=>b.addEventListener('click',()=>{state.mode=b.dataset.mode;state.accepted.clear();state.waiting=false;qa('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x===b));modeStatus();save();}));
+    qa('[data-hand]').forEach(b=>b.addEventListener('click',()=>{state[b.dataset.hand]=!state[b.dataset.hand];if(!state.left&&!state.right)state[b.dataset.hand]=true;b.setAttribute('aria-pressed',state[b.dataset.hand]);draw();}));
+    qa('[data-song]').forEach(b=>b.addEventListener('click',()=>{state.song=b.dataset.song;loadSong();save();}));
+    q('.p-play:not(.p-demo-chord)').addEventListener('click',()=>{if(state.time>=duration())state.time=0;setPlay(!state.playing);});
+    q('.p-restart').addEventListener('click',()=>{state.time=0;state.accepted.clear();state.waiting=false;modeStatus();draw();});
+    q('.p-loop').addEventListener('click',()=>{state.loop=!state.loop;q('.p-loop').setAttribute('aria-pressed',state.loop);});
+    q('.p-speed input').value=state.speed;q('.p-speed output').textContent=state.speed+'%';
+    q('.p-speed input').addEventListener('input',e=>{state.speed=Number(e.target.value);q('.p-speed output').textContent=state.speed+'%';});
+    q('.p-speed input').addEventListener('change',save);
+    q('.p-scrub').addEventListener('input',e=>{state.time=Number(e.target.value);state.accepted.clear();state.waiting=false;draw();});
+    q('.p-device').addEventListener('click',()=>{const panel=q('.p-connection');panel.hidden=!panel.hidden;q('.p-device').setAttribute('aria-expanded',!panel.hidden);});
+    q('.p-demo-chord').addEventListener('click',()=>{const upcoming=activeNotes().filter(n=>n.t>=state.time-.03);if(!upcoming.length){state.time=0;draw();return;}state.time=upcoming[0].t;upcoming.filter(n=>Math.abs(n.t-state.time)<.02).forEach(n=>press(n.pitch));if(!state.playing)setPlay(true);});
+    qa('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.mode===state.mode));
+    instances.push({state,guided,draw});loadSong();
+    new ResizeObserver(draw).observe(q('.p-fall'));
+    if(globalThis.Tweak){const tweak=new Tweak({container:app,onChange:draw});tweak.addToggle(state,'showNames',{label:'Note names'});tweak.addSlider(state,'lookahead',{label:'Visible lead time',min:3,max:8,step:1,unit:'s'});}
+  });
+  window.addEventListener('openai:set_globals',event=>{
+    const content=event.detail?.globals?.widgetState?.modelContent;if(!content)return;
+    instances.forEach(x=>{const data=content[x.guided?'guided':'studio'];if(data&&data.speed>=25&&data.speed<=125){x.state.speed=data.speed;const app=root.querySelector(x.guided?'[data-design="guided"]':'[data-design="studio"]');app.querySelector('.p-speed input').value=data.speed;app.querySelector('.p-speed output').textContent=data.speed+'%';}});
+  });
+})();
+</script>
