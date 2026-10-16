@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeMidi } from "midi-file";
 import { ReferenceAudio } from "../src/audio";
 import { MidiState, Practice, Transport } from "../src/engine";
-import { draw, keyLayout, range } from "../src/render";
+import {
+  draw,
+  keyLayout,
+  leftColor,
+  MAX_VISIBLE_NOTES,
+  range,
+} from "../src/render";
 import { parseSong, type Note, type Song } from "../src/song";
 
 const note = (
@@ -31,6 +37,38 @@ const song = (notes: Note[]): Song => ({
   notes,
   tracks: [{ id: 0, name: "Right", hand: "right", count: notes.length }],
 });
+
+function drawingCanvas() {
+  const fills: { x: number; y: number; color: string }[] = [];
+  const context = {
+    fillStyle: "",
+    setTransform: vi.fn(),
+    fillRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+    fillText: vi.fn(),
+    save: vi.fn(),
+    rect: vi.fn(),
+    clip: vi.fn(),
+    roundRect: vi.fn(),
+    fill: vi.fn(),
+    restore: vi.fn(),
+    strokeRect: vi.fn(),
+    arc: vi.fn(),
+  };
+  context.fillRect.mockImplementation((x: number, y: number) => {
+    fills.push({ x, y, color: context.fillStyle });
+  });
+  const canvas = {
+    width: 0,
+    height: 0,
+    getContext: () => context,
+    getBoundingClientRect: () => ({ width: 880, height: 400 }),
+  } as unknown as HTMLCanvasElement;
+  return { canvas, context, fills };
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -276,6 +314,99 @@ describe("review regressions", () => {
     expect(render(fixture, 1)).toEqual(["beat 5", 7, 175]);
     expect(tempoReads).toBe(initialReads);
     expect(readTempos).toHaveBeenCalledOnce();
+  });
+
+  it("bounds 50,000 visible rectangles while scanning all active pitches for the keyboard", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const notes = Array.from({ length: 50000 }, (_, i) =>
+      note(`dense-${i}`, 60, 0, 1 + i / 50000),
+    );
+    notes[notes.length - 1] = note("last-left", 48, 0, 2, 1);
+    const fixture = song(notes);
+    fixture.tracks.push({ id: 1, name: "Left", hand: "left", count: 1 });
+    const { canvas, context, fills } = drawingCanvas();
+    draw(
+      canvas,
+      fixture,
+      notes,
+      0.5,
+      new MidiState(),
+      new Practice(notes),
+      false,
+      false,
+      true,
+    );
+    expect(context.roundRect).toHaveBeenCalledTimes(MAX_VISIBLE_NOTES);
+    const [min, max] = range(fixture);
+    const left = keyLayout(min, max).find((key) => key.pitch === 48)!;
+    expect(fills).toContainEqual({
+      x: left.x * 880,
+      y: 300,
+      color: leftColor,
+    });
+  });
+
+  it("keeps the nearest notes in onset order when the visible drawing budget is exhausted", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const notes = Array.from({ length: 5000 }, (_, i) =>
+      note(`ordered-${i}`, 60, i / 1000, i / 1000 + 0.25),
+    );
+    const fixture = song(notes);
+    const { canvas, context } = drawingCanvas();
+    draw(
+      canvas,
+      fixture,
+      notes,
+      0,
+      new MidiState(),
+      new Practice(notes),
+      false,
+      false,
+      false,
+    );
+    expect(context.roundRect).toHaveBeenCalledTimes(MAX_VISIBLE_NOTES);
+    const rectangles = context.roundRect.mock.calls as number[][];
+    expect(rectangles[0][1] + rectangles[0][3]).toBe(300);
+    const last = rectangles.at(-1)!;
+    expect(last[1] + last[3]).toBeCloseTo(
+      300 - ((MAX_VISIBLE_NOTES - 1) / 1000) * 60,
+    );
+  });
+
+  it("coalesces dense duplicate geometry per hand and caches Wait targets without per-note chord scans", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const notes = Array.from({ length: 50000 }, (_, i) =>
+      note(`chord-${i}`, 60, 1, 2, i === 49999 ? 1 : 0),
+    );
+    const fixture = song(notes);
+    fixture.tracks.push({ id: 1, name: "Left", hand: "left", count: 1 });
+    const practice = new Practice(notes),
+      group = practice.gate!;
+    const expected = group.notes;
+    const readExpected = vi.fn(() => expected);
+    Object.defineProperty(group, "notes", { get: readExpected });
+    const scanExpected = vi.spyOn(expected, "some").mockImplementation(() => {
+      throw new Error("Expected chord membership must use the cached ID set.");
+    });
+    const { canvas, context } = drawingCanvas();
+    for (let frame = 0; frame < 3; frame++) {
+      context.roundRect.mockClear();
+      draw(
+        canvas,
+        fixture,
+        notes,
+        frame / 10,
+        new MidiState(),
+        practice,
+        false,
+        true,
+        false,
+      );
+      expect(context.roundRect).toHaveBeenCalledTimes(2);
+    }
+    expect(readExpected).toHaveBeenCalledOnce();
+    expect(scanExpected).not.toHaveBeenCalled();
+    expect(practice.notes).toHaveLength(50000); // Rendering never removes scoring notes.
   });
 });
 

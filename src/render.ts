@@ -1,10 +1,16 @@
 import { tempoConverter, noteName, type Note, type Song } from "./song";
-import type { MidiState, Practice } from "./engine";
+import type { Group, MidiState, Practice } from "./engine";
 const ranges = new WeakMap<Song, [number, number]>();
 const beatTimelines = new WeakMap<
   Song,
   { converter: ReturnType<typeof tempoConverter>; tickLimit: number }
 >();
+const waitGroups = new WeakMap<
+  Group,
+  { ids: Set<string>; targets: Map<number, Note> }
+>();
+/** Limit Canvas work on dense files; the full note set still drives practice and audio. */
+export const MAX_VISIBLE_NOTES = 4096;
 export const rightColor = "#a086e9",
   leftColor = "#51b3a5";
 export const black = (pitch: number) => [1, 3, 6, 8, 10].includes(pitch % 12);
@@ -118,10 +124,21 @@ export function draw(
       c.fillText("beat " + String(beat + 1), 7, y - 5);
     }
   }
-  const expected = waiting ? practice.gate?.notes : [];
+  const group = waiting ? practice.gate : undefined;
+  let expected = group ? waitGroups.get(group) : undefined;
+  if (group && !expected) {
+    const ids = new Set<string>(),
+      targets = new Map<number, Note>();
+    for (const note of group.notes) {
+      ids.add(note.id);
+      targets.set(note.pitch, note);
+    }
+    expected = { ids, targets };
+    waitGroups.set(group, expected);
+  }
   const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
   const reference = new Map<number, Note>();
-  const targets = new Map((expected || []).map((note) => [note.pitch, note]));
+  const rendered = new Set<string>();
   c.save();
   c.beginPath();
   c.rect(0, 0, width, fall);
@@ -134,9 +151,15 @@ export function draw(
       !reference.has(n.pitch)
     )
       reference.set(n.pitch, n);
+    // Imported notes are in onset order. Keep the nearest visible geometry, while
+    // still scanning every note above so active keyboard pitches remain complete.
+    if (rendered.size >= MAX_VISIBLE_NOTES) continue;
     const k = geometry.get(n.pitch);
     if (!k || n.end < position || n.start > position + 5) continue;
     const hand = hands.get(n.track);
+    const shape = `${n.pitch}:${n.start}:${n.end}:${hand}`;
+    if (rendered.has(shape)) continue;
+    rendered.add(shape);
     const color = hand === "left" ? leftColor : rightColor;
     const h = Math.max(8, (n.end - n.start) * px),
       y = fall - (n.start - position) * px - h,
@@ -148,7 +171,7 @@ export function draw(
     c.roundRect(x, y, w, h, 4);
     c.fill();
     c.globalAlpha = 1;
-    if (expected?.some((e) => e.id === n.id)) {
+    if (expected?.ids.has(n.id)) {
       c.strokeStyle = "#7354cf";
       c.lineWidth = 2;
       c.stroke();
@@ -170,7 +193,7 @@ export function draw(
       w = k.width * width,
       h = k.black ? 63 : keyHeight;
     const ref = reference.get(k.pitch);
-    const target = targets.get(k.pitch);
+    const target = expected?.targets.get(k.pitch);
     const hand = hands.get((ref || target)?.track ?? -1);
     const color = hand === "left" ? leftColor : rightColor;
     c.fillStyle = input.down.has(k.pitch)
