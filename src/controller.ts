@@ -1,0 +1,409 @@
+import { Practice, Transport, MidiState, type Mode } from "./engine";
+import { ReferenceAudio } from "./audio";
+import { MidiConnection } from "./midi";
+import { exampleSong, parseSong, type Song, type Hand } from "./song";
+import {
+  settings,
+  write,
+  progress,
+  library,
+  saveSong,
+  deleteSong,
+  songId,
+  type Progress,
+} from "./storage";
+export class Studio {
+  settings = settings();
+  savedSelection = this.settings.selected;
+  scoringEpoch = 0;
+  songs = [exampleSong()];
+  song = this.songs[0];
+  audio = new ReferenceAudio();
+  input = new MidiState();
+  transport = new Transport(this.song.duration);
+  practice = new Practice(this.song.notes);
+  midi: MidiConnection;
+  position = 0;
+  notice = "";
+  storageNotice = "";
+  lastVelocity = 0;
+  revision = 0;
+  listeners = new Set<() => void>();
+  lastSave = 0;
+  progress: Progress = {
+    position: 0,
+    best: 0,
+    attempts: 0,
+    updated: "",
+    assignments: {},
+    loop: null,
+  };
+  loopEnabled = false;
+  loopStart = 0;
+  loopEnd = this.song.duration;
+  timer: ReturnType<typeof setInterval> | null = null;
+  constructor() {
+    this.midi = new MidiConnection({
+      onMessage: (data, time) => this.receive(data, time),
+      onReset: () => {
+        this.input.clear();
+        if (this.settings.mode !== "listen" && this.transport.playing) {
+          this.pause();
+          this.notice =
+            "Piano connection changed. Press Play when you are ready.";
+        }
+        this.emit();
+      },
+      onChange: () => this.emit(),
+    });
+    this.load(this.song);
+  }
+  get scoringNotes() {
+    return this.notes.filter(
+      (n) =>
+        !this.loopEnabled ||
+        (n.start >= this.loopStart - 0.001 && n.start < this.loopEnd),
+    );
+  }
+  get notes() {
+    return this.song.notes.filter((n) => {
+      const h = this.song.tracks.find((t) => t.id === n.track)?.hand;
+      return h === "left"
+        ? this.settings.left
+        : h === "right"
+          ? this.settings.right
+          : false;
+    });
+  }
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+  snapshot = () => this.revision;
+  emit() {
+    this.revision++;
+    for (const l of this.listeners) l();
+  }
+  async init() {
+    try {
+      const songs = await library();
+      this.songs = [this.songs[0], ...songs];
+      const selected = this.songs.find((s) => s.id === this.savedSelection);
+      if (selected) this.load(selected);
+      this.emit();
+    } catch {
+      this.storageNotice =
+        "Local song storage is unavailable. Imports work for this session.";
+      this.emit();
+    }
+    this.timer = setInterval(() => this.tick(), 20);
+  }
+  destroy() {
+    if (this.timer) clearInterval(this.timer);
+    this.save();
+    this.audio.stop();
+    this.midi.dispose();
+  }
+  persist() {
+    if (!write("settings", this.settings))
+      this.storageNotice =
+        "Browser storage is full or blocked. Changes will last for this session.";
+  }
+  save() {
+    this.progress = {
+      ...this.progress,
+      position: this.position,
+      updated: new Date().toISOString(),
+      assignments: Object.fromEntries(
+        this.song.tracks.map((t) => [t.id, t.hand]),
+      ),
+      loop: this.loopEnabled ? [this.loopStart, this.loopEnd] : null,
+    };
+    if (!write(`progress:${this.song.id}`, this.progress))
+      this.storageNotice = "Progress could not be saved in this browser.";
+  }
+  load(song: Song) {
+    if (this.transport.playing) this.pause();
+    this.audio.stop();
+    this.input.clear();
+    this.song = { ...song, tracks: song.tracks.map((t) => ({ ...t })) };
+    this.settings.selected = song.id;
+    this.persist();
+    this.progress = progress(song.id, song.duration);
+    for (const t of this.song.tracks) {
+      const hand = this.progress.assignments[t.id];
+      if (["left", "right", "off"].includes(hand)) t.hand = hand as Hand;
+    }
+    this.transport = new Transport(song.duration);
+    this.transport.speed = this.settings.speed;
+    this.position = Math.max(
+      0,
+      Math.min(song.duration, this.progress.position || 0),
+    );
+    this.transport.seek(this.position, this.audio.now());
+    this.loopStart = this.progress.loop?.[0] ?? 0;
+    this.loopEnd = this.progress.loop?.[1] ?? song.duration;
+    this.loopEnabled = !!this.progress.loop;
+    this.syncLoop();
+    this.practice = new Practice(this.scoringNotes);
+    this.practice.reset(this.position);
+    this.scoringEpoch = this.audio.now();
+    this.notice = "";
+    this.emit();
+  }
+  rebuild() {
+    this.audio.stop();
+    this.scoringEpoch = this.audio.now();
+    this.input.clear();
+    this.practice = new Practice(this.scoringNotes);
+    this.practice.reset(this.position);
+    this.transport.seek(this.position, this.audio.now());
+    this.save();
+    this.persist();
+    this.emit();
+  }
+  mode(mode: Mode) {
+    this.pause();
+    this.settings.mode = mode;
+    this.rebuild();
+  }
+  hand(hand: "left" | "right") {
+    if (
+      this.settings[hand] &&
+      !this.settings[hand === "left" ? "right" : "left"]
+    )
+      return;
+    this.pause();
+    this.settings[hand] = !this.settings[hand];
+    this.rebuild();
+  }
+  assign(track: number, hand: Hand) {
+    this.pause();
+    this.song.tracks.find((t) => t.id === track)!.hand = hand;
+    this.rebuild();
+  }
+  speed(speed: number) {
+    this.transport.setSpeed(speed, this.audio.now());
+    this.settings.speed = speed;
+    this.audio.stop();
+    this.persist();
+    this.emit();
+  }
+  tolerance(value: number) {
+    this.settings.tolerance = value;
+    this.persist();
+    this.emit();
+  }
+  seek(position: number) {
+    this.audio.stop();
+    this.scoringEpoch = this.audio.now();
+    if (this.loopEnabled)
+      position = Math.min(
+        this.loopEnd - 0.001,
+        Math.max(this.loopStart, position),
+      );
+    this.input.clear();
+    this.transport.seek(position, this.audio.now());
+    this.position = this.transport.at(this.audio.now());
+    this.practice = new Practice(this.scoringNotes);
+    this.practice.reset(this.position);
+    this.notice = "";
+    this.save();
+    this.emit();
+  }
+  pause() {
+    this.transport.pause(this.audio.now());
+    this.position = this.transport.position;
+    this.audio.stop();
+    this.save();
+    this.emit();
+  }
+  async play() {
+    if (!this.notes.length) {
+      this.notice = "Assign at least one track to an enabled hand below.";
+      this.emit();
+      return;
+    }
+    try {
+      const p = this.position;
+      await this.audio.unlock();
+      this.scoringEpoch = this.audio.now();
+      this.transport.seek(p, this.audio.now());
+      if (p >= this.song.duration)
+        this.seek(this.loopEnabled ? this.loopStart : 0);
+      if (
+        this.loopEnabled &&
+        (this.position < this.loopStart || this.position >= this.loopEnd)
+      )
+        this.seek(this.loopStart);
+      this.transport.play(this.audio.now());
+      this.progress.attempts++;
+      this.notice = "";
+      this.save();
+      this.emit();
+    } catch {
+      this.notice =
+        "Browser audio could not start. Enable audio for this page and try Play again.";
+      this.emit();
+    }
+  }
+  syncLoop() {
+    if (this.loopEnabled && this.loopEnd > this.loopStart + 0.1)
+      this.transport.loop = [this.loopStart, this.loopEnd];
+    else this.transport.loop = null;
+  }
+  loop(enabled: boolean) {
+    this.loopEnabled = enabled;
+    this.syncLoop();
+    this.seek(enabled ? this.loopStart : this.position);
+  }
+  bounds(start: number, end: number) {
+    this.loopStart = Math.max(0, Math.min(this.song.duration - 0.2, start));
+    this.loopEnd = Math.max(
+      this.loopStart + 0.2,
+      Math.min(this.song.duration, end),
+    );
+    this.syncLoop();
+    this.audio.stop();
+    if (this.loopEnabled) this.seek(this.loopStart);
+    this.save();
+    this.emit();
+  }
+  tick() {
+    const now = this.audio.now(),
+      playing = this.transport.playing,
+      cycle = this.transport.cycle;
+    if (playing) {
+      this.position = this.transport.update(
+        now,
+        this.settings.mode === "wait" ? this.practice.gate?.start : undefined,
+      );
+      if (cycle !== this.transport.cycle) {
+        this.audio.stop();
+        this.scoringEpoch =
+          now - (this.position - this.loopStart) / this.settings.speed;
+        this.input.clear();
+        this.practice.reset(this.loopStart);
+        this.position = this.transport.update(
+          now,
+          this.settings.mode === "wait" ? this.practice.gate?.start : undefined,
+        );
+      }
+      if (this.settings.mode === "rhythm")
+        this.practice.expire(
+          this.position,
+          this.settings.tolerance,
+          this.settings.speed,
+        );
+      this.audio.schedule(
+        this.notes,
+        this.transport,
+        this.settings.mode === "listen" ||
+          (this.settings.mode === "rhythm" && this.settings.reference),
+      );
+      const total = this.practice.notes.filter(
+        (n) => n.start >= this.practice.from - 0.001,
+      ).length;
+      if (total)
+        this.progress.best = Math.max(
+          this.progress.best,
+          Math.round((this.practice.hit.size / total) * 100),
+        );
+      if (!this.transport.playing) {
+        this.audio.stop();
+        this.notice = "Passage complete. Review your notes below, or restart.";
+        this.save();
+      }
+      if (now - this.lastSave > 1) {
+        this.save();
+        this.lastSave = now;
+      }
+      this.emit();
+    }
+  }
+  receive(data: Uint8Array, timestamp: number) {
+    const wasPlaying = this.transport.playing,
+      now = this.audio.now(),
+      event = Math.min(now, this.audio.eventTime(timestamp)),
+      mapped = this.transport.eventAt(event);
+    if (wasPlaying) this.tick();
+    const edge = this.input.message(data);
+    if (edge) {
+      this.lastVelocity = edge.velocity;
+      if (wasPlaying && event >= this.scoringEpoch) {
+        // Map event time before ticking; score after any loop reset in the correct pass.
+        const position =
+          this.settings.mode === "wait" ? this.position : mapped.position;
+        const advanced = this.practice.input(
+          edge.pitch,
+          position,
+          this.settings.mode,
+          this.settings.tolerance,
+          mapped.speed,
+          this.input.down,
+        );
+        if (advanced) {
+          this.transport.seek(this.position, now);
+          this.notice = "That’s it. Follow the next notes.";
+        }
+      }
+    }
+    this.emit();
+  }
+  virtual(pitch: number, on: boolean) {
+    this.receive(
+      new Uint8Array([on ? 0x9f : 0x8f, pitch, on ? 90 : 0]),
+      performance.now(),
+    );
+    if (on) {
+      void this.audio
+        .unlock()
+        .then(() => this.audio.tone(pitch, 0.6, this.audio.now(), 0.4));
+    }
+  }
+  async import(file: File) {
+    try {
+      if (file.size > 10 * 1024 * 1024)
+        throw new Error("Please choose a MIDI file smaller than 10 MB.");
+      const bytes = new Uint8Array(await file.arrayBuffer()),
+        song = parseSong(
+          bytes,
+          file.name.replace(/\.midi?$/i, ""),
+          await songId(bytes),
+        );
+      try {
+        await saveSong(song);
+      } catch {
+        this.storageNotice =
+          "This song is available for this session; browser storage could not save it.";
+      }
+      this.songs = [...this.songs.filter((s) => s.id !== song.id), song];
+      this.save();
+      this.load(song);
+      this.notice =
+        song.tracks.filter((t) => t.count).length > 1
+          ? "Choose Left, Right, or Skip for each track below before playing."
+          : "Imported locally. Check the track assignment below.";
+      this.emit();
+    } catch (error) {
+      this.notice =
+        error instanceof Error
+          ? error.message
+          : "Unable to read this MIDI file.";
+      this.emit();
+    }
+  }
+  async remove() {
+    const id = this.song.id;
+    if (id === "cadence-first-steps-v1") return;
+    try {
+      await deleteSong(id);
+      localStorage.removeItem(`cadence:progress:${id}`);
+      this.songs = this.songs.filter((s) => s.id !== id);
+      this.load(this.songs[0]);
+    } catch {
+      this.notice = "This song could not be removed from local storage.";
+      this.emit();
+    }
+  }
+}

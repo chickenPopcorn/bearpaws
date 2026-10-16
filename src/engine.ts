@@ -1,0 +1,310 @@
+import type { Note } from "./song";
+export type Mode = "listen" | "wait" | "rhythm";
+export interface Group {
+  start: number;
+  notes: Note[];
+}
+export function chords(notes: Note[]): Group[] {
+  const groups: Group[] = [];
+  for (const n of [...notes].sort((a, b) => a.start - b.start)) {
+    const last = groups.at(-1);
+    if (last && Math.abs(last.start - n.start) < 0.001) last.notes.push(n);
+    else groups.push({ start: n.start, notes: [n] });
+  }
+  return groups;
+}
+export class Transport {
+  position = 0;
+  speed = 1;
+  playing = false;
+  held = false;
+  anchor = 0;
+  duration: number;
+  loop: [number, number] | null = null;
+  cycle = 0;
+  private history: {
+    time: number;
+    position: number;
+    speed: number;
+    playing: boolean;
+    loop: [number, number] | null;
+  }[] = [];
+  private record(now: number) {
+    if (this.history.at(-1) && this.history.at(-1)!.time > now)
+      this.history = [];
+    this.history.push({
+      time: now,
+      position: this.position,
+      speed: this.speed,
+      playing: this.playing && !this.held,
+      loop: this.loop ? [...this.loop] : null,
+    });
+    if (this.history.length > 256) this.history.shift();
+  }
+  eventAt(when: number) {
+    const h = [...this.history].reverse().find((h) => h.time <= when);
+    if (!h) return { position: this.at(when), speed: this.speed };
+    let p = h.position + (h.playing ? (when - h.time) * h.speed : 0);
+    if (h.loop && p >= h.loop[1])
+      p = h.loop[0] + ((p - h.loop[0]) % (h.loop[1] - h.loop[0]));
+    return {
+      position: Math.max(0, Math.min(this.duration, p)),
+      speed: h.speed,
+    };
+  }
+  constructor(duration: number) {
+    this.duration = duration;
+  }
+  raw(now: number) {
+    return (
+      this.position +
+      (this.playing && !this.held ? (now - this.anchor) * this.speed : 0)
+    );
+  }
+  at(now: number) {
+    const p = this.raw(now);
+    if (this.loop && p >= this.loop[1])
+      return (
+        this.loop[0] + ((p - this.loop[0]) % (this.loop[1] - this.loop[0]))
+      );
+    return Math.min(this.duration, Math.max(0, p));
+  }
+  seek(position: number, now: number) {
+    this.held = false;
+    this.position = Math.max(0, Math.min(this.duration, position));
+    this.anchor = now;
+    this.cycle++;
+    this.record(now);
+  }
+  play(now: number) {
+    if (this.position >= this.duration) this.seek(this.loop?.[0] || 0, now);
+    this.anchor = now;
+    this.held = false;
+    this.playing = true;
+    this.record(now);
+  }
+  pause(now: number) {
+    this.position = this.at(now);
+    this.anchor = now;
+    this.held = false;
+    this.playing = false;
+    this.record(now);
+  }
+  setSpeed(speed: number, now: number) {
+    this.position = this.at(now);
+    this.anchor = now;
+    this.speed = Math.min(1.5, Math.max(0.25, speed));
+    this.record(now);
+  }
+  update(now: number, gate?: number) {
+    if (this.held && gate !== this.position) {
+      this.held = false;
+      this.record(this.anchor);
+    }
+    let raw = this.raw(now);
+    if (gate !== undefined && raw >= gate && gate >= this.position) {
+      if (this.position === gate) {
+        if (!this.held) {
+          this.held = true;
+          this.record(this.anchor);
+        }
+        this.anchor = now;
+        return gate;
+      }
+      const reached = this.anchor + (gate - this.position) / this.speed;
+      this.position = gate;
+      this.held = true;
+      this.anchor = now;
+      this.record(reached);
+      this.history.at(-1)!.playing = false;
+      return gate;
+    }
+    if (this.loop && raw >= this.loop[1]) {
+      this.position = this.at(now);
+      this.anchor = now;
+      this.cycle++;
+      raw = this.position;
+    }
+    if (gate !== undefined && raw >= gate) {
+      this.position = gate;
+      this.anchor = now;
+      return gate;
+    }
+    if (raw >= this.duration) {
+      this.position = this.duration;
+      this.playing = false;
+      this.anchor = now;
+    }
+    return this.at(now);
+  }
+}
+export interface Feedback {
+  kind: "hit" | "wrong" | "early" | "late" | "miss";
+  pitch: number;
+  at: number;
+  offset?: number;
+}
+export class Practice {
+  notes: Note[];
+  groups: Group[];
+  from = 0;
+  hit = new Set<string>();
+  missed = new Set<string>();
+  feedback: Feedback[] = [];
+  gateIndex = 0;
+  constructor(notes: Note[]) {
+    this.notes = notes;
+    this.groups = chords(notes);
+  }
+  reset(position: number) {
+    this.from = position;
+    this.hit.clear();
+    this.missed.clear();
+    this.feedback = [];
+    this.gateIndex = this.groups.findIndex((g) => g.start >= position - 0.001);
+    if (this.gateIndex < 0) this.gateIndex = this.groups.length;
+  }
+  get gate() {
+    return this.groups[this.gateIndex];
+  }
+  input(
+    pitch: number,
+    position: number,
+    mode: Mode,
+    tolerance: number,
+    speed: number,
+    physical: Set<number>,
+  ) {
+    if (mode === "listen") return;
+    if (mode === "wait") {
+      const gate = this.gate;
+      if (!gate || Math.abs(position - gate.start) > 0.002) return;
+      const expected = gate.notes.filter((n) => n.pitch === pitch);
+      if (!expected.length) {
+        this.feedback.push({ kind: "wrong", pitch, at: position });
+        return;
+      }
+      for (const n of expected) this.hit.add(n.id);
+      // Every chord pitch must be physically down at completion. Pedal cannot fill a chord.
+      if (
+        gate.notes.every((n) => this.hit.has(n.id) && physical.has(n.pitch))
+      ) {
+        this.feedback.push({ kind: "hit", pitch, at: position });
+        this.gateIndex++;
+        return true;
+      }
+      return;
+    }
+    const candidates = this.notes.filter(
+      (n) =>
+        n.start >= this.from - 0.001 &&
+        n.pitch === pitch &&
+        !this.hit.has(n.id),
+    );
+    const nearest = candidates.sort(
+      (a, b) => Math.abs(a.start - position) - Math.abs(b.start - position),
+    )[0];
+    const offset = nearest ? (position - nearest.start) / speed : Infinity;
+    if (nearest && Math.abs(offset) <= tolerance) {
+      for (const n of candidates.filter(
+        (n) => Math.abs(n.start - nearest.start) < 0.001,
+      )) {
+        this.hit.add(n.id);
+        this.missed.delete(n.id);
+      }
+      this.feedback = this.feedback.filter(
+        (f) =>
+          !(
+            f.kind === "miss" &&
+            f.pitch === nearest.pitch &&
+            Math.abs(f.at - nearest.start) < 0.001
+          ),
+      );
+      this.feedback.push({
+        kind: offset < -0.05 ? "early" : offset > 0.05 ? "late" : "hit",
+        pitch,
+        at: position,
+        offset,
+      });
+    } else this.feedback.push({ kind: "wrong", pitch, at: position });
+  }
+  expire(position: number, tolerance: number, speed: number) {
+    for (const n of this.notes)
+      if (
+        n.start >= this.from - 0.001 &&
+        n.start < position - tolerance * speed &&
+        !this.hit.has(n.id) &&
+        !this.missed.has(n.id)
+      ) {
+        this.missed.add(n.id);
+        this.feedback.push({ kind: "miss", pitch: n.pitch, at: n.start });
+      }
+  }
+}
+export class MidiState {
+  down = new Set<number>();
+  sounding = new Set<number>();
+  velocities = new Map<number, number>();
+  pedals = new Set<number>();
+  private keys = new Map<string, number>();
+  private sustained = new Map<string, number>();
+  get sustain() {
+    return this.pedals.size > 0;
+  }
+  clear() {
+    this.down.clear();
+    this.sounding.clear();
+    this.velocities.clear();
+    this.pedals.clear();
+    this.keys.clear();
+    this.sustained.clear();
+  }
+  private refresh() {
+    this.down = new Set(this.keys.values());
+    this.sounding = new Set([
+      ...this.keys.values(),
+      ...this.sustained.values(),
+    ]);
+  }
+  message(
+    data: ArrayLike<number>,
+  ): { pitch: number; velocity: number } | undefined {
+    const [status, pitch, value] = Array.from(data);
+    const type = status & 0xf0,
+      channel = status & 15,
+      key = `${channel}:${pitch}`;
+    if (type === 0xb0 && pitch === 64) {
+      if (value >= 64) this.pedals.add(channel);
+      else {
+        this.pedals.delete(channel);
+        for (const k of this.sustained.keys())
+          if (k.startsWith(`${channel}:`)) this.sustained.delete(k);
+      }
+      this.refresh();
+      return;
+    }
+    if (type === 0xb0 && (pitch === 120 || pitch === 123)) {
+      for (const k of this.keys.keys())
+        if (k.startsWith(`${channel}:`)) this.keys.delete(k);
+      for (const k of this.sustained.keys())
+        if (k.startsWith(`${channel}:`)) this.sustained.delete(k);
+      this.pedals.delete(channel);
+      this.refresh();
+      return;
+    }
+    if (type === 0x90 && value > 0) {
+      const edge = !this.keys.has(key);
+      this.keys.set(key, pitch);
+      this.sustained.delete(key);
+      this.velocities.set(pitch, value);
+      this.refresh();
+      if (edge) return { pitch, velocity: value };
+    } else if (type === 0x80 || (type === 0x90 && value === 0)) {
+      const held = this.keys.has(key);
+      this.keys.delete(key);
+      if (this.pedals.has(channel) && held) this.sustained.set(key, pitch);
+      else if (!this.pedals.has(channel)) this.sustained.delete(key);
+      this.refresh();
+    }
+  }
+}
