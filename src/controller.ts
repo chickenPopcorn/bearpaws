@@ -331,9 +331,12 @@ export class Studio {
     if (edge) {
       this.lastVelocity = edge.velocity;
       if (wasPlaying && event >= this.scoringEpoch) {
-        // Map event time before ticking; score after any loop reset in the correct pass.
+        // Wait gates are recorded by tick; map again so delayed events retain
+        // their actual position, including time spent held at the gate.
         const position =
-          this.settings.mode === "wait" ? this.position : mapped.position;
+          this.settings.mode === "wait"
+            ? this.transport.eventAt(event).position
+            : mapped.position;
         const advanced = this.practice.input(
           edge.pitch,
           position,

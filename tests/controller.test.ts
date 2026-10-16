@@ -124,6 +124,37 @@ afterEach(() => {
 });
 
 describe("practice studio integration", () => {
+  it.each([false, true])(
+    "rejects early Wait input delivered after the gate (already held: %s)",
+    async (held) => {
+      const studio = create(song([[60, 1]]));
+      await studio.play();
+      env.now += 1.1;
+      if (held) studio.tick();
+      midi(studio, [0x90, 60, 100], 0.3);
+      expect(studio.position).toBe(1);
+      expect(studio.practice.hit.size).toBe(0);
+      expect(studio.practice.gate?.start).toBe(1);
+      midi(studio, [0x80, 60, 0]);
+      midi(studio, [0x90, 60, 100]);
+      expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+      expect(studio.practice.gate).toBeUndefined();
+    },
+  );
+
+  it.each([false, true])(
+    "accepts Wait input played after the gate despite delayed delivery (already held: %s)",
+    async (held) => {
+      const studio = create(song([[60, 1]]));
+      await studio.play();
+      if (held) advance(studio, 1);
+      env.now = 102;
+      midi(studio, [0x90, 60, 100], 0.5);
+      expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+      expect(studio.practice.gate).toBeUndefined();
+    },
+  );
+
   it("reanchors the transport when browser audio starts with a different clock origin", async () => {
     const studio = create(song([[60, 1]]));
     studio.mode("listen");
