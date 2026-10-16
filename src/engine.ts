@@ -154,6 +154,36 @@ export class Practice {
   missed = new Set<string>();
   feedback: Feedback[] = [];
   gateIndex = 0;
+  private wrongCount = 0;
+  private timingCount = 0;
+  private timingAbsTotal = 0;
+  private missFeedback: Feedback[] = [];
+  get stats() {
+    return {
+      wrong: this.wrongCount,
+      matched: this.hit.size,
+      missed: this.missed.size,
+      timingCount: this.timingCount,
+      timingAbsTotal: this.timingAbsTotal,
+    };
+  }
+  get recentMisses() {
+    return this.missFeedback;
+  }
+  private recordFeedback(item: Feedback) {
+    if (item.kind === "wrong") this.wrongCount++;
+    if (item.offset !== undefined) {
+      this.timingCount++;
+      this.timingAbsTotal += Math.abs(item.offset);
+    }
+    this.feedback.push(item);
+    if (this.feedback.length > 256)
+      this.feedback.splice(0, this.feedback.length - 256);
+    if (item.kind === "miss") {
+      this.missFeedback.push(item);
+      if (this.missFeedback.length > 6) this.missFeedback.shift();
+    }
+  }
   constructor(notes: Note[]) {
     this.notes = notes;
     this.groups = chords(notes);
@@ -163,6 +193,8 @@ export class Practice {
     this.hit.clear();
     this.missed.clear();
     this.feedback = [];
+    this.missFeedback = [];
+    this.wrongCount = this.timingCount = this.timingAbsTotal = 0;
     this.gateIndex = this.groups.findIndex((g) => g.start >= position - 0.001);
     if (this.gateIndex < 0) this.gateIndex = this.groups.length;
   }
@@ -183,7 +215,7 @@ export class Practice {
       if (!gate || Math.abs(position - gate.start) > 0.002) return;
       const expected = gate.notes.filter((n) => n.pitch === pitch);
       if (!expected.length) {
-        this.feedback.push({ kind: "wrong", pitch, at: position });
+        this.recordFeedback({ kind: "wrong", pitch, at: position });
         return;
       }
       for (const n of expected) this.hit.add(n.id);
@@ -191,7 +223,7 @@ export class Practice {
       if (
         gate.notes.every((n) => this.hit.has(n.id) && physical.has(n.pitch))
       ) {
-        this.feedback.push({ kind: "hit", pitch, at: position });
+        this.recordFeedback({ kind: "hit", pitch, at: position });
         this.gateIndex++;
         return true;
       }
@@ -222,13 +254,19 @@ export class Practice {
             Math.abs(f.at - nearest.start) < 0.001
           ),
       );
-      this.feedback.push({
+      this.missFeedback = this.missFeedback.filter(
+        (f) =>
+          !(
+            f.pitch === nearest.pitch && Math.abs(f.at - nearest.start) < 0.001
+          ),
+      );
+      this.recordFeedback({
         kind: offset < -0.05 ? "early" : offset > 0.05 ? "late" : "hit",
         pitch,
         at: position,
         offset,
       });
-    } else this.feedback.push({ kind: "wrong", pitch, at: position });
+    } else this.recordFeedback({ kind: "wrong", pitch, at: position });
   }
   expire(position: number, tolerance: number, speed: number) {
     for (const n of this.notes)
@@ -239,7 +277,7 @@ export class Practice {
         !this.missed.has(n.id)
       ) {
         this.missed.add(n.id);
-        this.feedback.push({ kind: "miss", pitch: n.pitch, at: n.start });
+        this.recordFeedback({ kind: "miss", pitch: n.pitch, at: n.start });
       }
   }
 }

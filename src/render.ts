@@ -1,7 +1,10 @@
 import { tempoConverter, noteName, type Note, type Song } from "./song";
 import type { MidiState, Practice } from "./engine";
 const ranges = new WeakMap<Song, [number, number]>();
-const converters = new WeakMap<Song, ReturnType<typeof tempoConverter>>();
+const beatTimelines = new WeakMap<
+  Song,
+  { converter: ReturnType<typeof tempoConverter>; tickLimit: number }
+>();
 export const rightColor = "#a086e9",
   leftColor = "#51b3a5";
 export const black = (pitch: number) => [1, 3, 6, 8, 10].includes(pitch % 12);
@@ -78,18 +81,22 @@ export function draw(
       c.stroke();
     }
   // Beat grid follows the actual tempo map, including changes.
-  if (!converters.has(song))
-    converters.set(song, tempoConverter(song.ppq, song.tempos));
-  const converter = converters.get(song)!;
+  let timeline = beatTimelines.get(song);
+  if (!timeline) {
+    const tempos = song.tempos;
+    let minimumTempo = 500000;
+    for (const tempo of tempos)
+      minimumTempo = Math.min(minimumTempo, tempo.microseconds);
+    timeline = {
+      converter: tempoConverter(song.ppq, tempos),
+      tickLimit: Math.ceil((song.duration * song.ppq * 1e6) / minimumTempo),
+    };
+    beatTimelines.set(song, timeline);
+  }
+  const { converter, tickLimit } = timeline;
   // A bounded binary search locates the visible beat even in a long imported song.
   let low = 0,
-    high = Math.ceil(
-      (song.duration * song.ppq * 1e6) /
-        song.tempos.reduce(
-          (min, tempo) => Math.min(min, tempo.microseconds),
-          500000,
-        ),
-    );
+    high = tickLimit;
   while (low < high) {
     const mid = Math.floor((low + high) / 2);
     if (converter(mid) < position) low = mid + 1;

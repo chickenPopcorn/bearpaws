@@ -8,6 +8,10 @@ vi.mock("midi-file", async (importOriginal) => {
 });
 
 function midi(...tracks: Uint8Array[]) {
+  return midiTracks(tracks);
+}
+
+function midiTracks(tracks: Uint8Array[]) {
   const bytes = new Uint8Array(
     14 + tracks.reduce((sum, track) => sum + 8 + track.length, 0),
   );
@@ -28,6 +32,7 @@ function midi(...tracks: Uint8Array[]) {
     0xe0,
   ]);
   const view = new DataView(bytes.buffer);
+  view.setUint16(10, tracks.length);
   let offset = 14;
   for (const track of tracks) {
     bytes.set([0x4d, 0x54, 0x72, 0x6b], offset);
@@ -73,6 +78,43 @@ beforeEach(() => {
 });
 
 describe("bounded MIDI import preflight", () => {
+  it.each([257, 65535])(
+    "rejects %i valid declared tracks before full parsing",
+    (count) => {
+      const empty = Uint8Array.from([0, 0xff, 0x2f, 0]);
+      const notes = Uint8Array.from(validNotes);
+      const bytes = midiTracks(
+        Array.from({ length: count }, (_, i) => (i === 0 ? notes : empty)),
+      );
+      expect(bytes.length).toBeLessThan(10 * 1024 * 1024);
+      expect(() => parseSong(bytes, "Too many tracks", "tracks")).toThrow(
+        /more than 256 tracks/,
+      );
+      expect(parseMidi).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accepts the 256-track boundary including empty EOT tracks", () => {
+    const empty = Uint8Array.from([0, 0xff, 0x2f, 0]);
+    const notes = Uint8Array.from(validNotes);
+    const bytes = midiTracks(
+      Array.from({ length: 256 }, (_, i) => (i === 255 ? notes : empty)),
+    );
+    const song = parseSong(bytes, "Track boundary", "track-boundary");
+    expect(parseMidi).toHaveBeenCalledOnce();
+    expect(song.tracks).toHaveLength(256);
+    expect(song.tracks.slice(0, 255).every((track) => track.count === 0)).toBe(
+      true,
+    );
+    expect(song.tracks[255]).toMatchObject({
+      id: 255,
+      count: 1,
+      hand: "right",
+    });
+    expect(song.notes).toHaveLength(1);
+    expect(song.notes[0]).toMatchObject({ track: 255, pitch: 60, end: 0.5 });
+  });
+
   it("rejects more than 50,000 running-status attacks before allocating parser events", () => {
     const bytes = midi(attacks(50001));
     expect(bytes.length).toBeLessThan(10 * 1024 * 1024);

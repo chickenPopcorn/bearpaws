@@ -194,6 +194,89 @@ describe("review regressions", () => {
     expect(canvas.width).toBe(1760);
     expect(canvas.height).toBe(800);
   });
+
+  it("caches each song's tempo scan and tick bound while retaining its tempo-aware beat grid", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const context = {
+      setTransform: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      fillText: vi.fn(),
+      save: vi.fn(),
+      rect: vi.fn(),
+      clip: vi.fn(),
+      roundRect: vi.fn(),
+      fill: vi.fn(),
+      restore: vi.fn(),
+      strokeRect: vi.fn(),
+      arc: vi.fn(),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => context,
+      getBoundingClientRect: () => ({ width: 880, height: 400 }),
+    } as unknown as HTMLCanvasElement;
+    let tempoReads = 0;
+    const tempos = [
+      {
+        tick: 0,
+        get microseconds() {
+          tempoReads++;
+          return 1000000;
+        },
+      },
+      {
+        tick: 960,
+        get microseconds() {
+          tempoReads++;
+          return 500000;
+        },
+      },
+    ];
+    const fixture = song([note("tempo-grid", 60, 0, 0.5)]);
+    fixture.duration = 6;
+    const readTempos = vi.fn(() => tempos);
+    Object.defineProperty(fixture, "tempos", { get: readTempos });
+    const render = (current: Song, position: number) => {
+      context.fillText.mockClear();
+      draw(
+        canvas,
+        current,
+        current.notes,
+        position,
+        new MidiState(),
+        new Practice(current.notes),
+        false,
+        false,
+        false,
+      );
+      return context.fillText.mock.calls.find(([text]) => text === "beat 5");
+    };
+
+    // Beat 5 lands at 3 seconds: two 1-second beats, then two .5-second beats.
+    expect(render(fixture, 0)).toEqual(["beat 5", 7, 115]);
+    const initialReads = tempoReads;
+    expect(initialReads).toBeGreaterThan(0);
+    expect(readTempos).toHaveBeenCalledOnce();
+    for (let frame = 1; frame <= 50; frame++) render(fixture, frame / 50);
+    expect(tempoReads).toBe(initialReads);
+    expect(readTempos).toHaveBeenCalledOnce();
+    expect(context.fillText.mock.calls).toContainEqual(["beat 5", 7, 175]);
+
+    // Another song uses its own default-tempo grid; returning retains the first cache.
+    expect(render(song([note("default-grid", 60, 0, 0.5)]), 0)).toEqual([
+      "beat 5",
+      7,
+      175,
+    ]);
+    expect(render(fixture, 1)).toEqual(["beat 5", 7, 175]);
+    expect(tempoReads).toBe(initialReads);
+    expect(readTempos).toHaveBeenCalledOnce();
+  });
 });
 
 function audioContext() {

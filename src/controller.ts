@@ -323,6 +323,7 @@ export class Studio {
         this.settings.mode === "listen" ||
           (this.settings.mode === "rhythm" && this.settings.reference),
       );
+      if (this.audio.error) this.notice = this.audio.error;
       const total = this.practice.notes.filter(
         (n) => n.start >= this.practice.from - 0.001,
       ).length;

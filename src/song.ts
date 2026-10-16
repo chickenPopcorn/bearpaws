@@ -32,6 +32,7 @@ export interface Song {
 }
 const MAX_NOTES = 50000;
 const MAX_EVENTS = 500000;
+const MAX_TRACKS = 256;
 const NOTE_LIMIT_MESSAGE =
   "This MIDI file has more than 50,000 notes. Export a smaller passage for practice.";
 
@@ -135,6 +136,10 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
   if (bytes.length < 14 || view.getUint32(4) !== 6)
     throw new Error("This MIDI file is malformed or incomplete.");
   const declaredTracks = view.getUint16(10);
+  if (declaredTracks > MAX_TRACKS)
+    throw new Error(
+      "This MIDI file has more than 256 tracks. Export a smaller selection of tracks for practice.",
+    );
   let offset = 14;
   const budget = { notes: 0, events: 0 };
   for (let i = 0; i < declaredTracks; i++) {

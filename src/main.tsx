@@ -167,8 +167,8 @@ function App() {
       setBusy(false);
     }
   };
-  const misses = p.feedback.filter((f) => f.kind === "miss"),
-    timings = p.feedback.filter((f) => f.offset !== undefined),
+  const misses = p.recentMisses,
+    stats = p.stats,
     recent = p.feedback.at(-1);
   return (
     <div className="app">
@@ -618,19 +618,14 @@ function App() {
                   <span>Matched</span>
                 </div>
                 <div>
-                  <strong>{misses.length}</strong>
+                  <strong>{stats.missed}</strong>
                   <span>Missed</span>
                 </div>
                 <div>
                   <strong>
-                    {timings.length
+                    {stats.timingCount
                       ? Math.round(
-                          (timings.reduce(
-                            (a, f) => a + Math.abs(f.offset || 0),
-                            0,
-                          ) /
-                            timings.length) *
-                            1000,
+                          (stats.timingAbsTotal / stats.timingCount) * 1000,
                         ) + " ms"
                       : "—"}
                   </strong>
@@ -668,8 +663,8 @@ function App() {
                 </div>
               )}
               <div className="progress-note">
-                {studio.progress.attempts} starts saved · Best matched{" "}
-                {studio.progress.best}%
+                {stats.wrong} wrong presses · {studio.progress.attempts} starts
+                saved · Best matched {studio.progress.best}%
                 <span>Skipped notes are excluded after seeking.</span>
               </div>
             </section>
