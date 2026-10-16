@@ -61,7 +61,7 @@ Once audio is unlocked, AudioContext time is the musical clock; MIDI event times
 
 See [docs/verification.md](docs/verification.md) for checks run, limitations, and the local hardware acceptance procedure.
 
-The production output is the static `dist/` directory. `.openai/hosting.json` declares it for ChatGPT Sites. Sites registration was attempted but failed with `Project owner is not linked to an account`; no project ID or deployed URL was returned. **Deployment is pending**, with a prepared static archive. After account linkage is repaired, create an owner-private Site, persist its returned project ID, synchronize the exact source commit, package `.openai/hosting.json` plus `dist/`, and deploy that saved version privately.
+The production output is the static `dist/` directory. The GitHub checks workflow uploads that directory and the hosting manifest as a `cadence-static` artifact after a successful CI build. `.openai/hosting.json` declares it for ChatGPT Sites. Sites registration was attempted but failed with `Project owner is not linked to an account`; no project ID or deployed URL was returned. **Deployment is pending**, with a prepared static archive. After account linkage is repaired, create an owner-private Site, persist its returned project ID, synchronize the exact source commit, package `.openai/hosting.json` plus `dist/`, and deploy that saved version privately.
 
 Interactive browser QA was unavailable because this session exposed no browser-control tool. Fake Canvas/AudioContext and synthetic MIDI tests are not real browser or USB hardware validation. **Web MIDI at a published URL and the actual USB piano remain unverified.** Do not infer hardware compatibility from passing automated tests.
 
