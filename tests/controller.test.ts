@@ -339,7 +339,12 @@ describe("practice studio integration", () => {
   });
 
   it("resets the loop pass when Pause is the first update after crossing its end", async () => {
-    const studio = create(song([[60, 0.5], [62, 1.5]]));
+    const studio = create(
+      song([
+        [60, 0.5],
+        [62, 1.5],
+      ]),
+    );
     studio.mode("rhythm");
     studio.bounds(0, 2);
     studio.loop(true);
@@ -377,18 +382,41 @@ describe("practice studio integration", () => {
     expect(studio.practice.gate).toBeUndefined();
   });
 
+  it("accepts delayed Wait input during a gate hold after a late loop-wrap update", async () => {
+    const studio = create(song([[60, 0.25]]));
+    studio.bounds(0, 2);
+    studio.loop(true);
+    await studio.play();
+    advance(studio, 0.25);
+    midi(studio, [0x90, 60, 100]);
+    midi(studio, [0x80, 60, 0]);
+    expect(studio.practice.gate).toBeUndefined();
+    advance(studio, 1.55);
+    env.now += 1.1; // The clock reaches 2.9 before the interval observes the wrap at 2.
+    studio.tick();
+    expect(studio.position).toBe(0.25);
+    expect(studio.practice.gate?.start).toBe(0.25);
+    expect(studio.practice.hit.size).toBe(0);
+    // This press occurred at 2.5, after the new pass should have reached and held its .25 gate.
+    midi(studio, [0x90, 60, 100], 0.4);
+    expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+    expect(studio.practice.gate).toBeUndefined();
+  });
+
   it("finishes removing an IndexedDB song when clearing its local progress fails", async () => {
     const imported = song([[60, 1]], "remove-imported");
     const studio = create(imported);
     const fallback = studio.songs[0];
     studio.songs.push(imported);
-    const removeItem = vi.fn(() => { throw new DOMException("Storage blocked", "SecurityError"); });
+    const removeItem = vi.fn(() => {
+      throw new DOMException("Storage blocked", "SecurityError");
+    });
     vi.stubGlobal("localStorage", { removeItem });
     vi.mocked(deleteSong).mockClear();
     await studio.remove();
     expect(deleteSong).toHaveBeenCalledWith(imported.id);
     expect(removeItem).toHaveBeenCalledWith(`cadence:progress:${imported.id}`);
-    expect(studio.songs.some(s => s.id === imported.id)).toBe(false);
+    expect(studio.songs.some((s) => s.id === imported.id)).toBe(false);
     expect(studio.song.id).toBe(fallback.id);
     expect(`${studio.storageNotice} ${studio.notice}`).toMatch(/progress/i);
     expect(studio.notice).not.toMatch(/song could not be removed/i);
@@ -399,7 +427,9 @@ describe("practice studio integration", () => {
     async (change) => {
       const studio = create(song([[60, 1]]));
       let finishUnlock!: () => void;
-      env.unlockWait = new Promise<void>(resolve => { finishUnlock = resolve; });
+      env.unlockWait = new Promise<void>((resolve) => {
+        finishUnlock = resolve;
+      });
       const starting = studio.play();
       expect(studio.audio.unlock).toHaveBeenCalledOnce();
       expect(studio.transport.playing).toBe(false);
@@ -408,8 +438,10 @@ describe("practice studio integration", () => {
       else if (change === "seek") studio.seek(2);
       else studio.pause();
       const expected = {
-        song: studio.song.id, mode: studio.settings.mode,
-        position: studio.position, attempts: studio.progress.attempts,
+        song: studio.song.id,
+        mode: studio.settings.mode,
+        position: studio.position,
+        attempts: studio.progress.attempts,
       };
       finishUnlock();
       await starting;

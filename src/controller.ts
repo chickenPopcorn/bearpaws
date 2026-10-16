@@ -303,6 +303,9 @@ export class Studio {
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();
         this.practice.reset(this.loopStart);
+        // Replay this pass from its actual clock boundary so a late callback
+        // records the first Wait hold at its true arrival time.
+        this.transport.seek(this.loopStart, this.scoringEpoch);
         this.position = this.transport.update(
           now,
           this.settings.mode === "wait" ? this.practice.gate?.start : undefined,
