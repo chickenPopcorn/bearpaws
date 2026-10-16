@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
 import type { Song } from "../src/song";
+import { deleteSong } from "../src/storage";
 
 const env = vi.hoisted(() => ({
   now: 100,
   values: new Map<string, unknown>(),
   songs: [] as unknown[],
   resets: [] as (() => void)[],
+  unlockWait: null as Promise<void> | null,
 }));
 
 vi.mock("../src/audio", () => ({
@@ -18,6 +20,7 @@ vi.mock("../src/audio", () => ({
     }
     unlock = vi.fn(async () => {
       this.origin ??= env.now;
+      if (env.unlockWait) await env.unlockWait;
     });
     stop = vi.fn();
     schedule = vi.fn();
@@ -116,11 +119,13 @@ beforeEach(() => {
   env.values.clear();
   env.songs = [];
   env.resets = [];
+  env.unlockWait = null;
   vi.spyOn(performance, "now").mockImplementation(() => env.now * 1000);
 });
 afterEach(() => {
   for (const studio of active.splice(0)) studio.destroy();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("practice studio integration", () => {
@@ -332,6 +337,89 @@ describe("practice studio integration", () => {
     expect(studio.position).toBeCloseTo(0.2);
     expect(studio.practice.hit).toEqual(new Set(["note-0"]));
   });
+
+  it("resets the loop pass when Pause is the first update after crossing its end", async () => {
+    const studio = create(song([[60, 0.5], [62, 1.5]]));
+    studio.mode("rhythm");
+    studio.bounds(0, 2);
+    studio.loop(true);
+    await studio.play();
+    advance(studio, 0.5);
+    midi(studio, [0x90, 60, 100]);
+    midi(studio, [0x80, 60, 0]);
+    advance(studio, 1.3);
+    expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+    expect(studio.practice.missed).toEqual(new Set(["note-1"]));
+    env.now += 0.3; // Pause arrives at 2.1 before any interval update observes the new pass.
+    studio.pause();
+    expect(studio.position).toBeCloseTo(0.1);
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.practice.hit.size).toBe(0);
+    expect(studio.practice.missed.size).toBe(0);
+    await studio.play();
+    env.now += 0.4;
+    midi(studio, [0x90, 60, 100]);
+    expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+    expect(studio.practice.missed.size).toBe(0);
+  });
+
+  it("rejects an anticipatory Wait note delivered after the gate, but accepts an exact-gate timestamp", async () => {
+    const studio = create(song([[60, 1]]));
+    await studio.play();
+    advance(studio, 1.2);
+    expect(studio.position).toBe(1);
+    midi(studio, [0x90, 60, 100], 0.4); // Physically pressed at .8, before the gate at 1.
+    expect(studio.practice.hit.size).toBe(0);
+    expect(studio.practice.gate?.start).toBe(1);
+    midi(studio, [0x80, 60, 0]);
+    midi(studio, [0x90, 60, 100], 0.2); // Pressed at exactly 1, delivered at 1.2.
+    expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+    expect(studio.practice.gate).toBeUndefined();
+  });
+
+  it("finishes removing an IndexedDB song when clearing its local progress fails", async () => {
+    const imported = song([[60, 1]], "remove-imported");
+    const studio = create(imported);
+    const fallback = studio.songs[0];
+    studio.songs.push(imported);
+    const removeItem = vi.fn(() => { throw new DOMException("Storage blocked", "SecurityError"); });
+    vi.stubGlobal("localStorage", { removeItem });
+    vi.mocked(deleteSong).mockClear();
+    await studio.remove();
+    expect(deleteSong).toHaveBeenCalledWith(imported.id);
+    expect(removeItem).toHaveBeenCalledWith(`cadence:progress:${imported.id}`);
+    expect(studio.songs.some(s => s.id === imported.id)).toBe(false);
+    expect(studio.song.id).toBe(fallback.id);
+    expect(`${studio.storageNotice} ${studio.notice}`).toMatch(/progress/i);
+    expect(studio.notice).not.toMatch(/song could not be removed/i);
+  });
+
+  it.each(["song", "mode", "seek", "pause"] as const)(
+    "cancels pending audio startup when %s changes before unlock resolves",
+    async (change) => {
+      const studio = create(song([[60, 1]]));
+      let finishUnlock!: () => void;
+      env.unlockWait = new Promise<void>(resolve => { finishUnlock = resolve; });
+      const starting = studio.play();
+      expect(studio.audio.unlock).toHaveBeenCalledOnce();
+      expect(studio.transport.playing).toBe(false);
+      if (change === "song") studio.load(song([[62, 1]], "replacement"));
+      else if (change === "mode") studio.mode("rhythm");
+      else if (change === "seek") studio.seek(2);
+      else studio.pause();
+      const expected = {
+        song: studio.song.id, mode: studio.settings.mode,
+        position: studio.position, attempts: studio.progress.attempts,
+      };
+      finishUnlock();
+      await starting;
+      expect(studio.transport.playing).toBe(false);
+      expect(studio.song.id).toBe(expected.song);
+      expect(studio.settings.mode).toBe(expected.mode);
+      expect(studio.position).toBe(expected.position);
+      expect(studio.progress.attempts).toBe(expected.attempts);
+    },
+  );
 
   it("persists position, speed, hand assignments, loop and feedback settings per song", () => {
     const fixture = song([

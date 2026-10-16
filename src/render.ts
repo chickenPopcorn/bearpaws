@@ -1,5 +1,6 @@
 import { tempoConverter, noteName, type Note, type Song } from "./song";
 import type { MidiState, Practice } from "./engine";
+const ranges = new WeakMap<Song, [number, number]>();
 const converters = new WeakMap<Song, ReturnType<typeof tempoConverter>>();
 export const rightColor = "#a086e9",
   leftColor = "#51b3a5";
@@ -20,12 +21,20 @@ export function keyLayout(min: number, max: number) {
   });
 }
 export function range(song: Song): [number, number] {
-  const lo = Math.min(48, ...song.notes.map((n) => n.pitch)),
-    hi = Math.max(84, ...song.notes.map((n) => n.pitch));
-  return [
+  const cached = ranges.get(song);
+  if (cached) return cached;
+  let lo = 48,
+    hi = 84;
+  for (const note of song.notes) {
+    lo = Math.min(lo, note.pitch);
+    hi = Math.max(hi, note.pitch);
+  }
+  const result: [number, number] = [
     Math.max(0, Math.floor(lo / 12) * 12),
     Math.min(127, Math.ceil(hi / 12) * 12),
   ];
+  ranges.set(song, result);
+  return result;
 }
 export function draw(
   canvas: HTMLCanvasElement,
@@ -76,7 +85,10 @@ export function draw(
   let low = 0,
     high = Math.ceil(
       (song.duration * song.ppq * 1e6) /
-        Math.min(500000, ...song.tempos.map((t) => t.microseconds)),
+        song.tempos.reduce(
+          (min, tempo) => Math.min(min, tempo.microseconds),
+          500000,
+        ),
     );
   while (low < high) {
     const mid = Math.floor((low + high) / 2);
@@ -100,14 +112,24 @@ export function draw(
     }
   }
   const expected = waiting ? practice.gate?.notes : [];
+  const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
+  const reference = new Map<number, Note>();
+  const targets = new Map((expected || []).map((note) => [note.pitch, note]));
   c.save();
   c.beginPath();
   c.rect(0, 0, width, fall);
   c.clip();
   for (const n of notes) {
+    if (
+      listen &&
+      n.start <= position &&
+      n.soundEnd > position &&
+      !reference.has(n.pitch)
+    )
+      reference.set(n.pitch, n);
     const k = geometry.get(n.pitch);
     if (!k || n.end < position || n.start > position + 5) continue;
-    const hand = song.tracks.find((t) => t.id === n.track)?.hand;
+    const hand = hands.get(n.track);
     const color = hand === "left" ? leftColor : rightColor;
     const h = Math.max(8, (n.end - n.start) * px),
       y = fall - (n.start - position) * px - h,
@@ -140,14 +162,9 @@ export function draw(
     const x = k.x * width,
       w = k.width * width,
       h = k.black ? 63 : keyHeight;
-    const ref = listen
-      ? notes.find(
-          (n) =>
-            n.pitch === k.pitch && n.start <= position && n.soundEnd > position,
-        )
-      : undefined;
-    const target = expected?.find((n) => n.pitch === k.pitch);
-    const hand = song.tracks.find((t) => t.id === (ref || target)?.track)?.hand;
+    const ref = reference.get(k.pitch);
+    const target = targets.get(k.pitch);
+    const hand = hands.get((ref || target)?.track ?? -1);
     const color = hand === "left" ? leftColor : rightColor;
     c.fillStyle = input.down.has(k.pitch)
       ? "#7354cf"

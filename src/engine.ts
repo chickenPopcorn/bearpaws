@@ -84,6 +84,7 @@ export class Transport {
     this.record(now);
   }
   pause(now: number) {
+    if (this.playing) this.update(now, this.held ? this.position : undefined);
     this.position = this.at(now);
     this.anchor = now;
     this.held = false;
@@ -91,6 +92,7 @@ export class Transport {
     this.record(now);
   }
   setSpeed(speed: number, now: number) {
+    if (this.playing) this.update(now, this.held ? this.position : undefined);
     this.position = this.at(now);
     this.anchor = now;
     this.speed = Math.min(1.5, Math.max(0.25, speed));

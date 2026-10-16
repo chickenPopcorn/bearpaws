@@ -15,6 +15,8 @@ import {
 export class Studio {
   settings = settings();
   savedSelection = this.settings.selected;
+  private playGeneration = 0;
+  private selectedNotes: Song["notes"] = [];
   scoringEpoch = 0;
   songs = [exampleSong()];
   song = this.songs[0];
@@ -46,6 +48,7 @@ export class Studio {
     this.midi = new MidiConnection({
       onMessage: (data, time) => this.receive(data, time),
       onReset: () => {
+        this.playGeneration++;
         this.input.clear();
         if (this.settings.mode !== "listen" && this.transport.playing) {
           this.pause();
@@ -66,13 +69,15 @@ export class Studio {
     );
   }
   get notes() {
-    return this.song.notes.filter((n) => {
-      const h = this.song.tracks.find((t) => t.id === n.track)?.hand;
-      return h === "left"
+    return this.selectedNotes;
+  }
+  private refreshSelection() {
+    const hands = new Map(this.song.tracks.map((t) => [t.id, t.hand]));
+    this.selectedNotes = this.song.notes.filter((n) => {
+      const hand = hands.get(n.track);
+      return hand === "left"
         ? this.settings.left
-        : h === "right"
-          ? this.settings.right
-          : false;
+        : hand === "right" && this.settings.right;
     });
   }
   subscribe = (listener: () => void) => {
@@ -99,6 +104,7 @@ export class Studio {
     this.timer = setInterval(() => this.tick(), 20);
   }
   destroy() {
+    this.playGeneration++;
     if (this.timer) clearInterval(this.timer);
     this.save();
     this.audio.stop();
@@ -123,6 +129,7 @@ export class Studio {
       this.storageNotice = "Progress could not be saved in this browser.";
   }
   load(song: Song) {
+    this.playGeneration++;
     if (this.transport.playing) this.pause();
     this.audio.stop();
     this.input.clear();
@@ -145,6 +152,7 @@ export class Studio {
     this.loopEnd = this.progress.loop?.[1] ?? song.duration;
     this.loopEnabled = !!this.progress.loop;
     this.syncLoop();
+    this.refreshSelection();
     this.practice = new Practice(this.scoringNotes);
     this.practice.reset(this.position);
     this.scoringEpoch = this.audio.now();
@@ -152,6 +160,8 @@ export class Studio {
     this.emit();
   }
   rebuild() {
+    this.playGeneration++;
+    this.refreshSelection();
     this.audio.stop();
     this.scoringEpoch = this.audio.now();
     this.input.clear();
@@ -183,7 +193,9 @@ export class Studio {
     this.rebuild();
   }
   speed(speed: number) {
-    this.transport.setSpeed(speed, this.audio.now());
+    const now = this.audio.now();
+    if (this.transport.playing) this.tick(now);
+    this.transport.setSpeed(speed, now);
     this.settings.speed = speed;
     this.audio.stop();
     this.persist();
@@ -195,6 +207,7 @@ export class Studio {
     this.emit();
   }
   seek(position: number) {
+    this.playGeneration++;
     this.audio.stop();
     this.scoringEpoch = this.audio.now();
     if (this.loopEnabled)
@@ -212,13 +225,17 @@ export class Studio {
     this.emit();
   }
   pause() {
-    this.transport.pause(this.audio.now());
+    this.playGeneration++;
+    const now = this.audio.now();
+    if (this.transport.playing) this.tick(now);
+    this.transport.pause(now);
     this.position = this.transport.position;
     this.audio.stop();
     this.save();
     this.emit();
   }
   async play() {
+    const generation = ++this.playGeneration;
     if (!this.notes.length) {
       this.notice = "Assign at least one track to an enabled hand below.";
       this.emit();
@@ -227,6 +244,7 @@ export class Studio {
     try {
       const p = this.position;
       await this.audio.unlock();
+      if (generation !== this.playGeneration) return;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
       if (p >= this.song.duration)
@@ -242,6 +260,7 @@ export class Studio {
       this.save();
       this.emit();
     } catch {
+      if (generation !== this.playGeneration) return;
       this.notice =
         "Browser audio could not start. Enable audio for this page and try Play again.";
       this.emit();
@@ -258,6 +277,7 @@ export class Studio {
     this.seek(enabled ? this.loopStart : this.position);
   }
   bounds(start: number, end: number) {
+    this.playGeneration++;
     this.loopStart = Math.max(0, Math.min(this.song.duration - 0.2, start));
     this.loopEnd = Math.max(
       this.loopStart + 0.2,
@@ -269,9 +289,8 @@ export class Studio {
     this.save();
     this.emit();
   }
-  tick() {
-    const now = this.audio.now(),
-      playing = this.transport.playing,
+  tick(now = this.audio.now()) {
+    const playing = this.transport.playing,
       cycle = this.transport.cycle;
     if (playing) {
       this.position = this.transport.update(
@@ -399,14 +418,23 @@ export class Studio {
   async remove() {
     const id = this.song.id;
     if (id === "cadence-first-steps-v1") return;
+    this.pause();
     try {
       await deleteSong(id);
-      localStorage.removeItem(`cadence:progress:${id}`);
-      this.songs = this.songs.filter((s) => s.id !== id);
-      this.load(this.songs[0]);
     } catch {
       this.notice = "This song could not be removed from local storage.";
       this.emit();
+      return;
     }
+    // IndexedDB deletion has committed. Progress cleanup must not undo the UI result.
+    try {
+      localStorage.removeItem(`cadence:progress:${id}`);
+    } catch {
+      this.storageNotice =
+        "Song removed. Saved progress could not be cleared in this browser.";
+    }
+    this.songs = this.songs.filter((song) => song.id !== id);
+    if (this.song.id === id) this.load(this.songs[0]);
+    else this.emit();
   }
 }

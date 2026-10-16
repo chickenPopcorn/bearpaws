@@ -4,7 +4,7 @@ Validated in the cloud environment on 2026-10-16. All checks below distinguish s
 
 | Check                     | State                   | Evidence / limit                                                                                                                                                                                          |
 | ------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Automated tests           | Passed                  | 68 passing Vitest tests in 5 suites: engine/import, MIDI lifecycle, controller integration, storage validation, fake Canvas and Web Audio scheduling.                                                     |
+| Automated tests           | Passed                  | 101 passing Vitest tests in 7 suites: engine/import, MIDI lifecycle, controller integration, storage validation, fake Canvas and Web Audio scheduling.                                                     |
 | Tempo conversion          | Passed                  | Default tempo, nonzero first change, conductor-track changes, chronological normalization and historical timestamp mapping.                                                                               |
 | Pairing and chords        | Passed                  | Overlapping same-pitch FIFO pairs, channels, velocity-zero releases, simultaneous/repeated notes and duplicate selected-track pitches.                                                                    |
 | Transport                 | Passed                  | Clock-driven sparse/dense updates, speed, pause/resume, seek/restart, loop overshoot and pending Wait gates across dropped frames.                                                                        |
@@ -33,3 +33,9 @@ After private deployment, open the exact published URL in local desktop Chrome/E
 8. Test malformed files, no-device state, and a browser without Web MIDI. Import/Listen must remain usable. Check keyboard-only controls, narrow desktop layout, and accessibility labels.
 
 Record browser/OS, piano model, connection/driver, published URL, date, and each result before marking hardware or published Web MIDI verified.
+
+## Codex review follow-up
+
+Codex code review of `623e165` completed with six findings; its security review completed with no findings. The follow-up adds early bounded import scanning, cached hand selection, correct pass reset when pausing/changing speed across a loop boundary, timestamp-based Wait gating, best-effort progress cleanup after song deletion, and cancellation of stale asynchronous Play requests. New regression cases pass in the 101-test suite. Review of the follow-up commit is requested separately; the PR remains a draft.
+
+Permanent merge enforcement is not configured. GitHub returned a private-repository ruleset plan restriction (Pro required) and denied this integration access to branch-protection administration. Draft status blocks the current PR while it remains a draft; marking it ready is not protected by a required Codex check.

@@ -30,6 +30,74 @@ export interface Song {
   ppq: number;
   warnings: string[];
 }
+const MAX_NOTES = 50000;
+const MAX_EVENTS = 500000;
+const NOTE_LIMIT_MESSAGE =
+  "This MIDI file has more than 50,000 notes. Export a smaller passage for practice.";
+
+/** Count attacks without constructing parser events or normalized notes. */
+function preflightTrack(
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  budget: { notes: number; events: number },
+) {
+  let cursor = start,
+    runningStatus = 0,
+    tick = 0;
+  const malformed = () =>
+    new Error("This MIDI file has malformed or incomplete track events.");
+  const byte = () => {
+    if (cursor >= end) throw malformed();
+    return bytes[cursor++];
+  };
+  const variable = () => {
+    let value = 0;
+    for (let i = 0; i < 4; i++) {
+      const b = byte();
+      value = value * 128 + (b & 0x7f);
+      if (!(b & 0x80)) return value;
+    }
+    throw malformed();
+  };
+  while (cursor < end) {
+    if (++budget.events > MAX_EVENTS)
+      throw new Error(
+        "This MIDI file has more than 500,000 events. Export a smaller passage for practice.",
+      );
+    tick += variable();
+    if (!Number.isSafeInteger(tick) || tick > 2 ** 40)
+      throw new Error("MIDI timeline is too long.");
+    let status = byte();
+    let first: number | undefined;
+    if (status < 0x80) {
+      if (!runningStatus) throw malformed();
+      first = status;
+      status = runningStatus;
+    } else if (status < 0xf0) {
+      runningStatus = status;
+    } else {
+      // SMF SysEx and meta messages have explicit variable-length payloads.
+      if (status === 0xff) byte();
+      else {
+        if (status !== 0xf0 && status !== 0xf7) throw malformed();
+        runningStatus = 0;
+      }
+      const length = variable();
+      if (length > end - cursor) throw malformed();
+      cursor += length;
+      continue;
+    }
+    first ??= byte();
+    const type = status >> 4;
+    const second = type === 0xc || type === 0xd ? undefined : byte();
+    if (first >= 0x80 || (second !== undefined && second >= 0x80))
+      throw malformed();
+    if (type === 0x9 && second! > 0 && ++budget.notes > MAX_NOTES)
+      throw new Error(NOTE_LIMIT_MESSAGE);
+  }
+}
+
 export function tempoConverter(ppq: number, changes: Tempo[]) {
   const sorted = [{ tick: 0, microseconds: 500000 }, ...changes].sort(
     (a, b) => a.tick - b.tick,
@@ -68,6 +136,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     throw new Error("This MIDI file is malformed or incomplete.");
   const declaredTracks = view.getUint16(10);
   let offset = 14;
+  const budget = { notes: 0, events: 0 };
   for (let i = 0; i < declaredTracks; i++) {
     if (
       offset + 8 > bytes.length ||
@@ -75,9 +144,11 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     )
       throw new Error("This MIDI file has a missing or malformed track.");
     const size = view.getUint32(offset + 4);
-    offset += 8 + size;
+    const start = offset + 8;
+    offset = start + size;
     if (offset > bytes.length)
       throw new Error("This MIDI file has an incomplete track.");
+    preflightTrack(bytes, start, offset, budget);
   }
   if (!declaredTracks) throw new Error("This MIDI file has no tracks.");
   let midi;
@@ -162,6 +233,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
           warnings.push("Unpaired note-off ignored.");
           continue;
         }
+        if (notes.length >= MAX_NOTES) throw new Error(NOTE_LIMIT_MESSAGE);
         const n: Note = {
           id: `${track}-${count++}`,
           pitch: e.noteNumber,
@@ -179,6 +251,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     const last = events.at(-1)?.tick || 0;
     for (const [key, q] of active)
       for (const n of q) {
+        if (notes.length >= MAX_NOTES) throw new Error(NOTE_LIMIT_MESSAGE);
         const [channel, pitch] = key.split(":").map(Number);
         notes.push({
           id: `${track}-${count++}`,
@@ -241,10 +314,6 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     const interval = list[lo - 1];
     if (interval && n.end < interval.end) n.soundEnd = interval.end;
   }
-  if (notes.length > 50000)
-    throw new Error(
-      "This MIDI file has more than 50,000 notes. Export a smaller passage for practice.",
-    );
   if (!notes.length)
     throw new Error("No playable notes were found in this MIDI file.");
   notes.sort((a, b) => a.start - b.start || a.pitch - b.pitch);

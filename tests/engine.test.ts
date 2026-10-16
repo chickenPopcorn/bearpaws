@@ -458,6 +458,69 @@ describe("clock-driven transport", () => {
     expect(t.update(102)).toBe(2.5);
   });
 
+  it.each([1, 1.25, 7.25])(
+    "detects a loop wrap when pause is the first update after %s seconds",
+    (elapsed) => {
+      const t = new Transport(20);
+      t.loop = [1, 3];
+      t.seek(2, 100);
+      t.play(100);
+      const cycle = t.cycle;
+      t.pause(100 + elapsed);
+      const expected = 1 + ((1 + elapsed) % 2);
+      expect(t.position).toBe(expected);
+      expect(t.playing).toBe(false);
+      expect(t.cycle).toBeGreaterThan(cycle);
+      const pausedCycle = t.cycle;
+      expect(t.update(200)).toBe(expected);
+      expect(t.cycle).toBe(pausedCycle);
+      t.play(200);
+      expect(t.update(200.25)).toBe(expected + 0.25);
+    },
+  );
+
+  it("records a pending loop wrap before re-anchoring a speed change", () => {
+    const t = new Transport(20);
+    t.loop = [2, 5];
+    t.seek(4, 100);
+    t.play(100);
+    const cycle = t.cycle;
+    t.setSpeed(0.5, 101.25);
+    expect(t.position).toBe(2.25);
+    expect(t.cycle).toBeGreaterThan(cycle);
+    const changedCycle = t.cycle;
+    expect(t.update(101.25)).toBe(2.25);
+    expect(t.cycle).toBe(changedCycle);
+    expect(t.update(102.25)).toBe(2.75);
+    expect(t.eventAt(100.5)).toEqual({ position: 4.5, speed: 1 });
+    expect(t.eventAt(101.5)).toEqual({ position: 2.375, speed: 0.5 });
+  });
+
+  it("does not report another wrap when update already handled the boundary before pause or speed change", () => {
+    const t = new Transport(20);
+    t.loop = [1, 3];
+    t.seek(2, 100);
+    t.play(100);
+    expect(t.update(101.25)).toBe(1.25);
+    const cycle = t.cycle;
+    t.setSpeed(0.5, 101.25);
+    t.pause(101.25);
+    expect(t.cycle).toBe(cycle);
+    expect(t.position).toBe(1.25);
+    expect(t.at(200)).toBe(1.25);
+  });
+
+  it("freezes a held Wait gate without consuming time spent waiting before pause", () => {
+    const t = new Transport(20);
+    t.play(100);
+    expect(t.update(101, 1)).toBe(1);
+    t.pause(110);
+    expect(t.position).toBe(1);
+    expect(t.at(200)).toBe(1);
+    t.play(200);
+    expect(t.update(210, 1)).toBe(1);
+  });
+
   it("stops at the song end and clamps supported playback speeds", () => {
     const t = new Transport(3);
     t.setSpeed(100, 0);

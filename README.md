@@ -42,7 +42,7 @@ Settings and per-song position, track assignments, passage, number of starts, an
 
 No songs or MIDI input are uploaded. There is no backend, account, analytics, billing, cloud sync, Bluetooth integration, sheet-music recognition, or teacher dashboard.
 
-Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Imported notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. Imports are limited to 10 MB / 50,000 notes. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
+Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Imported notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. Imports are limited to 10 MB, 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
 
 ## Architecture
 
