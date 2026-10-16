@@ -207,37 +207,26 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
   const time = tempoConverter(ppq, tempos);
   const notes: Note[] = [];
   const tracks = events.map((events, track) => {
-    const active = new Map<string, { tick: number; velocity: number }[]>();
-    const pedal = new Set<number>();
-    const sustained: Note[] = [];
+    const active = new Map<
+      string,
+      { entries: { tick: number; velocity: number }[]; head: number }
+    >();
     let count = 0;
-    const release = (channel: number, tick: number) => {
-      for (let i = sustained.length - 1; i >= 0; i--)
-        if (sustained[i].channel === channel) {
-          sustained[i].soundEnd = time(tick);
-          sustained.splice(i, 1);
-        }
-    };
     for (const { e, tick } of events) {
-      if (e.type === "controller" && e.controllerType === 64) {
-        if (e.value >= 64) pedal.add(e.channel);
-        else {
-          pedal.delete(e.channel);
-          release(e.channel, tick);
-        }
-      }
       if (e.type !== "noteOn" && e.type !== "noteOff") continue;
       const key = `${e.channel}:${e.noteNumber}`;
       if (e.type === "noteOn" && e.velocity > 0) {
-        const q = active.get(key) || [];
-        q.push({ tick, velocity: e.velocity / 127 });
+        const q = active.get(key) || { entries: [], head: 0 };
+        q.entries.push({ tick, velocity: e.velocity / 127 });
         active.set(key, q);
       } else {
-        const first = active.get(key)?.shift();
-        if (!first) {
+        const q = active.get(key);
+        if (!q || q.head >= q.entries.length) {
           warnings.push("Unpaired note-off ignored.");
           continue;
         }
+        const first = q.entries[q.head++];
+        if (q.head === q.entries.length) active.delete(key);
         if (notes.length >= MAX_NOTES) throw new Error(NOTE_LIMIT_MESSAGE);
         const n: Note = {
           id: `${track}-${count++}`,
@@ -250,12 +239,12 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
           track,
         };
         notes.push(n);
-        if (pedal.has(e.channel)) sustained.push(n);
       }
     }
     const last = events.at(-1)?.tick || 0;
     for (const [key, q] of active)
-      for (const n of q) {
+      for (let i = q.head; i < q.entries.length; i++) {
+        const n = q.entries[i];
         if (notes.length >= MAX_NOTES) throw new Error(NOTE_LIMIT_MESSAGE);
         const [channel, pitch] = key.split(":").map(Number);
         notes.push({
@@ -270,11 +259,13 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
         });
         warnings.push("Unclosed note ended at track boundary.");
       }
-    for (const n of sustained) n.soundEnd = Math.max(n.end, time(last));
     const name = events.find((x) => x.e.type === "trackName")?.e;
     return {
       id: track,
-      name: name?.type === "trackName" ? name.text : `Track ${track + 1}`,
+      name:
+        name?.type === "trackName"
+          ? name.text.slice(0, 160)
+          : `Track ${track + 1}`,
       hand: "off" as Hand,
       count,
     };
