@@ -1,6 +1,6 @@
 # Verification record
 
-Updated October 17, 2026 for the BearPaws library, practice controls, full An Jing arrangement, and Natural piano sound.
+Updated October 17, 2026 for the Paw Pal library, practice controls, full An Jing arrangement, and Natural piano sound.
 
 ## Automated checks
 

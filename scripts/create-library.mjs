@@ -41,7 +41,7 @@ try {
             at: start,
             order: 1,
             type: "text",
-            text: `BearPaws fingering: ${note.fingerHand} ${note.finger}; MIDI pitch ${note.pitch}`,
+            text: `Paw Pal fingering: ${note.fingerHand} ${note.finger}; MIDI pitch ${note.pitch}`,
           },
           {
             at: start,
@@ -137,14 +137,14 @@ try {
   );
   writeFileSync(
     resolve(directory, "README.txt"),
-    "BearPaws beginner practice collection\n\n" +
-      "These short arrangements match the BearPaws practice library.\n" +
+    "Paw Pal beginner practice collection\n\n" +
+      "These short arrangements match the Paw Pal practice library.\n" +
       "Each MIDI has separate left- and right-hand tracks, tempo, and one full\n" +
       "silent count-in bar, keeping the musical downbeats on barlines.\n" +
       "Finger numbers are stored as MIDI text events and in catalog.json;\n" +
-      "BearPaws displays the complete fingering in its built-in arrangements.\n" +
+      "Paw Pal displays the complete fingering in its built-in arrangements.\n" +
       "Other MIDI players may ignore text events. Reimporting a MIDI into\n" +
-      "BearPaws treats it as a general MIDI file, without the lesson metadata.\n\n" +
+      "Paw Pal treats it as a general MIDI file, without the lesson metadata.\n\n" +
       "The catalog records countInBeats as the leading silent quarter-note beats.\n" +
       "Melody credits, starting positions, and per-note fingering are in catalog.json.\n" +
       "Dancing Raindrops is the personal-practice transcription supplied by the user.\n",

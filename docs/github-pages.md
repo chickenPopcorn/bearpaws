@@ -1,13 +1,13 @@
 # GitHub Pages at piano.pollos.us
 
 The deployment target is **https://piano.pollos.us/**, hosted by GitHub Pages
-from `chickenPopcorn/bearpaws`. Cloudflare manages the DNS for `pollos.us`.
+from `chickenPopcorn/pawpal`. Cloudflare manages the DNS for `pollos.us`.
 These are prepared deployment changes; the site and DNS have not been published
 by this change.
 
 ## One-time setup
 
-1. In [the repository’s Pages settings](https://github.com/chickenPopcorn/bearpaws/settings/pages),
+1. In [the repository’s Pages settings](https://github.com/chickenPopcorn/pawpal/settings/pages),
    set **Build and deployment → Source → GitHub Actions**. The repository is
    currently private, so its account must have a GitHub plan that supports Pages
    for private repositories. The resulting Pages website is public.
@@ -24,7 +24,7 @@ by this change.
    | Proxy status | **DNS only** (gray cloud)  |
    | TTL          | Auto                       |
 
-   The target is the GitHub account hostname, without `https://` or `/bearpaws/`.
+   The target is the GitHub account hostname, without `https://` or `/pawpal/`.
    If a record already exists for `piano`, update that record. No changes to the
    root domain or other subdomains are needed. DNS-only lets GitHub serve HTTPS
    directly without configuring a Cloudflare proxy.
@@ -51,7 +51,7 @@ The workflow’s `github-pages` environment records the deployed URL.
 
 Vite keeps `base: "./"`, and runtime asset links use `import.meta.env.BASE_URL`.
 The same build supports the custom domain and the default project URL
-`https://chickenpopcorn.github.io/bearpaws/` before a custom domain is configured.
+`https://chickenpopcorn.github.io/pawpal/` before a custom domain is configured.
 Once configured, GitHub redirects the default URL to the custom domain. The app
 has no server routes and needs no SPA rewrite rule.
 

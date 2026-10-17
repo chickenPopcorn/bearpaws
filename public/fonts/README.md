@@ -1,4 +1,4 @@
-# Fonts used by BearPaws
+# Fonts used by Paw Pal
 
 These fonts are served locally with the app and do not require an external font service.
 

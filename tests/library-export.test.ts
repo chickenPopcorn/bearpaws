@@ -13,7 +13,7 @@ import { join, resolve } from "node:path";
 import { expect, it } from "vitest";
 
 it("regenerates the unchanged starter pack and separate original MIDI reproducibly", () => {
-  const temporary = mkdtempSync(join(tmpdir(), "bearpaws-midi-export-"));
+  const temporary = mkdtempSync(join(tmpdir(), "pawpal-midi-export-"));
   try {
     // Run the real exporter with an empty output directory, without rewriting
     // the checked-in downloads or interfering with a running development app.

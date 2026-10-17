@@ -3,7 +3,7 @@ import { runCodexReviewGate } from "../scripts/codex-review-gate.mjs";
 
 const HEAD = "1".repeat(40);
 const OLD_HEAD = "2".repeat(40);
-const PR_URL = "https://github.com/chickenPopcorn/bearpaws/pull/7";
+const PR_URL = "https://github.com/chickenPopcorn/pawpal/pull/7";
 const cleanReview = (sha = HEAD) => ({
   commit_sha: sha,
   status: "completed",
@@ -172,7 +172,7 @@ function setup(comments = [], events = [], statuses = []) {
       ),
   };
   const context = {
-    repo: { owner: "chickenPopcorn", repo: "bearpaws" },
+    repo: { owner: "chickenPopcorn", repo: "pawpal" },
     payload: { pull_request: { number: 7 } },
   };
   const core = { info: vi.fn() };
@@ -224,14 +224,14 @@ describe("Codex review merge gate", () => {
     await expect(run()).resolves.toMatchObject({ state: "pending", sha: HEAD });
     expect(get).toHaveBeenCalledWith({
       owner: "chickenPopcorn",
-      repo: "bearpaws",
+      repo: "pawpal",
       pull_number: 7,
     });
     expect(github.paginate).toHaveBeenCalledWith(
       github.rest.issues.listComments,
       {
         owner: "chickenPopcorn",
-        repo: "bearpaws",
+        repo: "pawpal",
         issue_number: 7,
         per_page: 100,
       },
@@ -239,7 +239,7 @@ describe("Codex review merge gate", () => {
     expect(publish).toHaveBeenCalledTimes(3);
     expect(publish).toHaveBeenLastCalledWith({
       owner: "chickenPopcorn",
-      repo: "bearpaws",
+      repo: "pawpal",
       sha: HEAD,
       context: "Codex review gate",
       state: "pending",
@@ -908,7 +908,7 @@ describe("Codex review merge gate", () => {
       expect.stringContaining("reviewThreads(first:100"),
       {
         owner: "chickenPopcorn",
-        name: "bearpaws",
+        name: "pawpal",
         number: 7,
         cursor: null,
       },
@@ -953,7 +953,7 @@ describe("Codex review merge gate", () => {
         github.rest.pulls.listCommentsForReview,
         {
           owner: "chickenPopcorn",
-          repo: "bearpaws",
+          repo: "pawpal",
           pull_number: 7,
           review_id: 101,
           per_page: 100,
