@@ -1,4 +1,6 @@
 import React, {
+  memo,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -7,6 +9,7 @@ import React, {
 import { createRoot } from "react-dom/client";
 import { Studio } from "./controller";
 import { draw, pianoKeyAt } from "./render";
+import { watchCanvasRedraws } from "./canvasRedraw";
 import {
   noteName,
   suggestedFinger,
@@ -14,6 +17,7 @@ import {
   type Hand,
   type Song,
 } from "./song";
+import type { Feedback, Mode } from "./engine";
 import { FingerGuide } from "./FingerGuide";
 import { SongLibrary } from "./SongLibrary";
 import { PianoSoundControls } from "./PianoSoundControls";
@@ -27,6 +31,15 @@ import "./style.css";
 const studio = new Studio();
 const stamp = (t: number) =>
   `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+// The studio is a singleton, so these stay stable and let memoized views skip
+// the 50 updates a second that playback makes.
+const selectSong = (song: Song | undefined) => {
+  if (!song) return;
+  studio.save();
+  studio.load(song);
+};
+const seek = (position: number) => studio.seek(position);
+const setAmbience = (ambience: number) => studio.sound(ambience);
 
 function SongTitle({ title }: { title: string }) {
   const letter = /\p{L}/u.exec(title);
@@ -65,28 +78,24 @@ const shortcuts: Record<string, number> = {
   j: 71,
   k: 72,
 };
-function Piano() {
+const Piano = memo(function Piano() {
   const canvas = useRef<HTMLCanvasElement>(null),
     pointers = useRef(new Map<number, number>());
   useEffect(() => {
-    let frame = 0;
-    const render = () => {
-      if (canvas.current)
-        draw(
-          canvas.current,
-          studio.song,
-          studio.notes,
-          studio.position,
-          studio.input,
-          studio.practice,
-          studio.settings.names,
-          studio.settings.mode === "wait" && studio.transport.playing,
-          studio.settings.mode === "listen",
-        );
-      frame = requestAnimationFrame(render);
-    };
-    render();
-    return () => cancelAnimationFrame(frame);
+    const element = canvas.current!;
+    return watchCanvasRedraws(element, studio.subscribe, () =>
+      draw(
+        element,
+        studio.song,
+        studio.notes,
+        studio.position,
+        studio.input,
+        studio.practice,
+        studio.settings.names,
+        studio.settings.mode === "wait" && studio.transport.playing,
+        studio.settings.mode === "listen",
+      ),
+    );
   }, []);
   const press = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect(),
@@ -118,21 +127,28 @@ function Piano() {
       onLostPointerCapture={release}
     />
   );
-}
-function PracticeControls() {
-  const s = studio.settings;
+});
+const PracticeControls = memo(function PracticeControls({
+  mode,
+  left,
+  right,
+}: {
+  mode: Mode;
+  left: boolean;
+  right: boolean;
+}) {
   return (
     <div className="toolbar-preferences">
       <div className="tabs" role="group" aria-label="Practice mode">
-        {(["listen", "wait", "rhythm"] as const).map((mode) => (
+        {(["listen", "wait", "rhythm"] as const).map((option) => (
           <button
-            key={mode}
-            aria-pressed={s.mode === mode}
-            onClick={() => studio.mode(mode)}
+            key={option}
+            aria-pressed={mode === option}
+            onClick={() => studio.mode(option)}
           >
-            {mode === "wait"
+            {option === "wait"
               ? "Wait for me"
-              : mode === "listen"
+              : option === "listen"
                 ? "Listen"
                 : "Rhythm"}
           </button>
@@ -142,7 +158,7 @@ function PracticeControls() {
         {(["left", "right"] as const).map((hand) => (
           <button
             key={hand}
-            aria-pressed={s[hand]}
+            aria-pressed={hand === "left" ? left : right}
             onClick={() => studio.hand(hand)}
           >
             <span className={`swatch ${hand}`} />
@@ -152,13 +168,228 @@ function PracticeControls() {
       </div>
     </div>
   );
-}
+});
+const PassagePanel = memo(function PassagePanel({
+  song,
+  loopStart,
+  loopEnd,
+}: {
+  song: Song;
+  loopStart: number;
+  loopEnd: number;
+}) {
+  return (
+    <details className="panel" open>
+      <summary>
+        Make it yours <span>Tracks & passage</span>
+      </summary>
+      <div className="assignments">
+        {song.tracks
+          .filter((t) => t.count)
+          .map((track) => (
+            <label key={track.id}>
+              <span>
+                {track.name}
+                <small>{track.count} notes</small>
+              </span>
+              <select
+                aria-label={`Hand for ${track.name}`}
+                value={track.hand}
+                onChange={(e) =>
+                  studio.assign(track.id, e.target.value as Hand)
+                }
+              >
+                <option value="off">Skip</option>
+                <option value="left">Left hand</option>
+                <option value="right">Right hand</option>
+              </select>
+            </label>
+          ))}
+      </div>
+      <p className="small">
+        Choose hands explicitly. Track names are only suggestions. A single
+        track can be assigned to one hand.
+      </p>
+      <div className="loop-fields">
+        <label>
+          From{" "}
+          <LoopBoundInput
+            label="Loop start seconds"
+            value={loopStart}
+            min={0}
+            max={loopEnd - 0.2}
+            onCommit={(start) => studio.bounds(start, studio.loopEnd)}
+          />
+          <span>s</span>
+        </label>
+        <button
+          title="Set loop start to current position"
+          onClick={() => studio.bounds(studio.position, studio.loopEnd)}
+        >
+          Set A
+        </button>
+        <label>
+          To{" "}
+          <LoopBoundInput
+            label="Loop end seconds"
+            value={loopEnd}
+            min={loopStart + 0.2}
+            max={song.duration}
+            onCommit={(end) => studio.bounds(studio.loopStart, end)}
+          />
+          <span>s</span>
+        </label>
+        <button
+          title="Set loop end to current position"
+          onClick={() => studio.bounds(studio.loopStart, studio.position)}
+        >
+          Set B
+        </button>
+      </div>
+      {song.warnings.map((w) => (
+        <p className="small" key={w}>
+          {w}
+        </p>
+      ))}
+      {!isBuiltInSong(song.id) && (
+        <button className="text-button" onClick={() => void studio.remove()}>
+          Remove this local song
+        </button>
+      )}
+    </details>
+  );
+});
+// `misses` grows in place, but always together with a new `recent` item.
+const PracticeReview = memo(function PracticeReview({
+  recent,
+  misses,
+  matched,
+  missed,
+  wrong,
+  timing,
+  attempts,
+  best,
+}: {
+  recent: Feedback | undefined;
+  misses: readonly Feedback[];
+  matched: number;
+  missed: number;
+  wrong: number;
+  timing: number | undefined;
+  attempts: number;
+  best: number;
+}) {
+  return (
+    <section className="panel feedback" aria-label="Practice review">
+      <div className="panel-heading">
+        A little better each time <span>Practice review</span>
+      </div>
+      <div className="stats">
+        <div>
+          <strong>{matched}</strong>
+          <span>Matched</span>
+        </div>
+        <div>
+          <strong>{missed}</strong>
+          <span>Missed</span>
+        </div>
+        <div>
+          <strong>{timing === undefined ? "—" : timing + " ms"}</strong>
+          <span>Average timing error</span>
+        </div>
+      </div>
+      <p className="small">
+        {recent
+          ? recent.kind === "wrong"
+            ? `Try the highlighted notes. ${noteName(recent.pitch)} wasn’t in the timing window.`
+            : recent.kind === "miss"
+              ? `Missed ${noteName(recent.pitch)} at ${stamp(recent.at)}.`
+              : recent.kind === "hit"
+                ? "That’s it. Keep going."
+                : `Matched ${noteName(recent.pitch)} · ${Math.abs(Math.round((recent.offset || 0) * 1000))} ms ${recent.kind}, within tolerance.`
+          : "Your note and timing feedback will appear here. Wait for me checks notes; Rhythm adds timing."}
+      </p>
+      {misses.length > 0 && (
+        <div className="misses">
+          {misses.map((m, i) => (
+            <button
+              key={i}
+              title="Replay around this missed note"
+              onClick={() => {
+                studio.bounds(
+                  Math.max(0, m.at - 1),
+                  Math.min(studio.song.duration, m.at + 2),
+                );
+                studio.loop(true);
+              }}
+            >
+              {noteName(m.pitch)} · {stamp(m.at)} ↺
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="progress-note">
+        {wrong} wrong presses · {attempts} starts saved · Best matched {best}%
+        <span>Skipped notes are excluded after seeking.</span>
+      </div>
+    </section>
+  );
+});
+const KeyboardHelp = memo(function KeyboardHelp() {
+  const [showKeys, setShowKeys] = useState(false);
+  return (
+    <details
+      className="keyboard-help"
+      onToggle={(e) => setShowKeys(e.currentTarget.open)}
+    >
+      <summary>
+        Try the on-screen keys <span>or use your computer keyboard</span>
+      </summary>
+      <p>
+        Left hand: Z X C V B N M · Right hand: A W S E D F T G Y H U J K. You
+        can also click the piano keys. These are practice inputs; your USB piano
+        supplies its own live sound. A teal dot marks sound held by the pedal
+        after key release.
+      </p>
+      {showKeys && (
+        <div className="accessible-keys">
+          {Object.entries(shortcuts).map(([key, pitch]) => (
+            <button
+              key={key}
+              aria-label={`Play ${noteName(pitch)}`}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                studio.virtual(pitch, true);
+              }}
+              onPointerUp={() => studio.virtual(pitch, false)}
+              onPointerCancel={() => studio.virtual(pitch, false)}
+              onLostPointerCapture={() => studio.virtual(pitch, false)}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
+                  e.preventDefault();
+                  studio.virtual(pitch, true);
+                }
+              }}
+              onKeyUp={(e) => {
+                if (e.key === "Enter" || e.key === " ")
+                  studio.virtual(pitch, false);
+              }}
+            >
+              {noteName(pitch)}
+              <small>{key.toUpperCase()}</small>
+            </button>
+          ))}
+        </div>
+      )}
+    </details>
+  );
+});
 function App() {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [deviceOpen, setDeviceOpen] = useState(true),
-    [showKeys, setShowKeys] = useState(false),
     [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  const openImport = useCallback(() => file.current?.click(), []);
   const fullscreen = usePianoFullscreen(() => {
     if (!studio.transport.playing && !busy) void startPlayback();
   });
@@ -208,6 +439,7 @@ function App() {
       studio.input.clear();
       if (studio.transport.playing && studio.settings.mode !== "listen")
         studio.pause();
+      else studio.emit();
     };
     const hidden = () => {
       if (document.hidden && studio.transport.playing) studio.pause();
@@ -242,11 +474,6 @@ function App() {
     if (busy) return;
     if (studio.transport.playing) studio.pause();
     else await startPlayback();
-  };
-  const selectSong = (song: Song | undefined) => {
-    if (!song) return;
-    studio.save();
-    studio.load(song);
   };
   const navigateSong = async (song: Song | undefined) => {
     if (!song || busy) return;
@@ -329,7 +556,7 @@ function App() {
             songs={studio.songs}
             selected={studio.song.id}
             onSelect={selectSong}
-            onImport={() => file.current?.click()}
+            onImport={openImport}
           />
           <input
             ref={file}
@@ -425,7 +652,7 @@ function App() {
                     </div>
                   </div>
                 )}
-                <PracticeControls />
+                <PracticeControls mode={s.mode} left={s.left} right={s.right} />
                 <div
                   className="transport-buttons"
                   role="group"
@@ -476,7 +703,7 @@ function App() {
                 </span>
                 <PianoSoundControls
                   ambience={s.ambience}
-                  onChange={(ambience) => studio.sound(ambience)}
+                  onChange={setAmbience}
                 />
                 {fullscreen.expanded && (
                   <div
@@ -525,7 +752,7 @@ function App() {
                 hit={p.hit}
                 selectedNotes={studio.notes}
                 from={p.from}
-                onSeek={(position) => studio.seek(position)}
+                onSeek={seek}
               />
               <div className="roll">
                 <div className="roll-caption">
@@ -668,194 +895,29 @@ function App() {
             </span>
           </div>
           <section className="lower-grid">
-            <details className="panel" open>
-              <summary>
-                Make it yours <span>Tracks & passage</span>
-              </summary>
-              <div className="assignments">
-                {studio.song.tracks
-                  .filter((t) => t.count)
-                  .map((track) => (
-                    <label key={track.id}>
-                      <span>
-                        {track.name}
-                        <small>{track.count} notes</small>
-                      </span>
-                      <select
-                        aria-label={`Hand for ${track.name}`}
-                        value={track.hand}
-                        onChange={(e) =>
-                          studio.assign(track.id, e.target.value as Hand)
-                        }
-                      >
-                        <option value="off">Skip</option>
-                        <option value="left">Left hand</option>
-                        <option value="right">Right hand</option>
-                      </select>
-                    </label>
-                  ))}
-              </div>
-              <p className="small">
-                Choose hands explicitly. Track names are only suggestions. A
-                single track can be assigned to one hand.
-              </p>
-              <div className="loop-fields">
-                <label>
-                  From{" "}
-                  <LoopBoundInput
-                    label="Loop start seconds"
-                    value={studio.loopStart}
-                    min={0}
-                    max={studio.loopEnd - 0.2}
-                    onCommit={(start) => studio.bounds(start, studio.loopEnd)}
-                  />
-                  <span>s</span>
-                </label>
-                <button
-                  title="Set loop start to current position"
-                  onClick={() => studio.bounds(studio.position, studio.loopEnd)}
-                >
-                  Set A
-                </button>
-                <label>
-                  To{" "}
-                  <LoopBoundInput
-                    label="Loop end seconds"
-                    value={studio.loopEnd}
-                    min={studio.loopStart + 0.2}
-                    max={studio.song.duration}
-                    onCommit={(end) => studio.bounds(studio.loopStart, end)}
-                  />
-                  <span>s</span>
-                </label>
-                <button
-                  title="Set loop end to current position"
-                  onClick={() =>
-                    studio.bounds(studio.loopStart, studio.position)
-                  }
-                >
-                  Set B
-                </button>
-              </div>
-              {studio.song.warnings.map((w) => (
-                <p className="small" key={w}>
-                  {w}
-                </p>
-              ))}
-              {!isBuiltInSong(studio.song.id) && (
-                <button
-                  className="text-button"
-                  onClick={() => void studio.remove()}
-                >
-                  Remove this local song
-                </button>
-              )}
-            </details>
-            <section className="panel feedback" aria-label="Practice review">
-              <div className="panel-heading">
-                A little better each time <span>Practice review</span>
-              </div>
-              <div className="stats">
-                <div>
-                  <strong>{p.hit.size}</strong>
-                  <span>Matched</span>
-                </div>
-                <div>
-                  <strong>{stats.missed}</strong>
-                  <span>Missed</span>
-                </div>
-                <div>
-                  <strong>
-                    {stats.timingCount
-                      ? Math.round(
-                          (stats.timingAbsTotal / stats.timingCount) * 1000,
-                        ) + " ms"
-                      : "—"}
-                  </strong>
-                  <span>Average timing error</span>
-                </div>
-              </div>
-              <p className="small">
-                {recent
-                  ? recent.kind === "wrong"
-                    ? `Try the highlighted notes. ${noteName(recent.pitch)} wasn’t in the timing window.`
-                    : recent.kind === "miss"
-                      ? `Missed ${noteName(recent.pitch)} at ${stamp(recent.at)}.`
-                      : recent.kind === "hit"
-                        ? "That’s it. Keep going."
-                        : `Matched ${noteName(recent.pitch)} · ${Math.abs(Math.round((recent.offset || 0) * 1000))} ms ${recent.kind}, within tolerance.`
-                  : "Your note and timing feedback will appear here. Wait for me checks notes; Rhythm adds timing."}
-              </p>
-              {misses.length > 0 && (
-                <div className="misses">
-                  {misses.map((m, i) => (
-                    <button
-                      key={i}
-                      title="Replay around this missed note"
-                      onClick={() => {
-                        studio.bounds(
-                          Math.max(0, m.at - 1),
-                          Math.min(studio.song.duration, m.at + 2),
-                        );
-                        studio.loop(true);
-                      }}
-                    >
-                      {noteName(m.pitch)} · {stamp(m.at)} ↺
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="progress-note">
-                {stats.wrong} wrong presses · {studio.progress.attempts} starts
-                saved · Best matched {studio.progress.best}%
-                <span>Skipped notes are excluded after seeking.</span>
-              </div>
-            </section>
+            <PassagePanel
+              song={studio.song}
+              loopStart={studio.loopStart}
+              loopEnd={studio.loopEnd}
+            />
+            <PracticeReview
+              recent={recent}
+              misses={misses}
+              matched={p.hit.size}
+              missed={stats.missed}
+              wrong={stats.wrong}
+              timing={
+                stats.timingCount
+                  ? Math.round(
+                      (stats.timingAbsTotal / stats.timingCount) * 1000,
+                    )
+                  : undefined
+              }
+              attempts={studio.progress.attempts}
+              best={studio.progress.best}
+            />
           </section>
-          <details
-            className="keyboard-help"
-            onToggle={(e) => setShowKeys(e.currentTarget.open)}
-          >
-            <summary>
-              Try the on-screen keys <span>or use your computer keyboard</span>
-            </summary>
-            <p>
-              Left hand: Z X C V B N M · Right hand: A W S E D F T G Y H U J K.
-              You can also click the piano keys. These are practice inputs; your
-              USB piano supplies its own live sound. A teal dot marks sound held
-              by the pedal after key release.
-            </p>
-            {showKeys && (
-              <div className="accessible-keys">
-                {Object.entries(shortcuts).map(([key, pitch]) => (
-                  <button
-                    key={key}
-                    aria-label={`Play ${noteName(pitch)}`}
-                    onPointerDown={(e) => {
-                      e.currentTarget.setPointerCapture(e.pointerId);
-                      studio.virtual(pitch, true);
-                    }}
-                    onPointerUp={() => studio.virtual(pitch, false)}
-                    onPointerCancel={() => studio.virtual(pitch, false)}
-                    onLostPointerCapture={() => studio.virtual(pitch, false)}
-                    onKeyDown={(e) => {
-                      if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
-                        e.preventDefault();
-                        studio.virtual(pitch, true);
-                      }
-                    }}
-                    onKeyUp={(e) => {
-                      if (e.key === "Enter" || e.key === " ")
-                        studio.virtual(pitch, false);
-                    }}
-                  >
-                    {noteName(pitch)}
-                    <small>{key.toUpperCase()}</small>
-                  </button>
-                ))}
-              </div>
-            )}
-          </details>
+          <KeyboardHelp />
           <footer>
             Practice stays on this browser.{" "}
             <span>USB MIDI · Desktop Chrome / Edge · HTTPS required</span>

@@ -277,10 +277,6 @@ export function SheetTimeline({
     Math.min(score.measureCount - 1, score.meter.at(beat).measure),
   );
   const currentBar = score.meter.measureAt(currentMeasure);
-  // Track assignment can change in place, so use its small signature as a cache key.
-  const handSignature = song.tracks
-    .map((track) => `${track.id}:${track.hand}`)
-    .join(",");
   // Keep the staff scale steady as notes enter and leave the viewport.
   const bounds = useMemo(() => {
     const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
@@ -295,7 +291,7 @@ export function SheetTimeline({
       maximum = Math.max(maximum, y + 42);
     }
     return { minimum, height: maximum - minimum };
-  }, [song.notes, handSignature]);
+  }, [song]);
   const following = scoreViewport(
     beat,
     score.measureCount,
@@ -424,14 +420,7 @@ export function SheetTimeline({
       rests,
       condensed,
     };
-  }, [
-    score,
-    viewport.first,
-    viewport.last,
-    measureWidth,
-    handSignature,
-    song.lesson,
-  ]);
+  }, [score, viewport.first, viewport.last, measureWidth, song]);
 
   const beatInMeasure = Math.max(0, beat - currentBar.start);
   const marker = Math.max(
