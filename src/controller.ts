@@ -46,9 +46,10 @@ export class Studio {
     attempts: 0,
     updated: "",
     assignments: {},
+    loopEnabled: true,
     loop: null,
   };
-  loopEnabled = false;
+  loopEnabled = true;
   loopStart = 0;
   loopEnd = this.song.duration;
   timer: ReturnType<typeof setInterval> | null = null;
@@ -179,7 +180,8 @@ export class Studio {
       assignments: Object.fromEntries(
         this.song.tracks.map((t) => [t.id, t.hand]),
       ),
-      loop: this.loopEnabled ? [this.loopStart, this.loopEnd] : null,
+      loopEnabled: this.loopEnabled,
+      loop: [this.loopStart, this.loopEnd],
     };
     if (!write(`progress:${this.song.id}`, this.progress))
       this.storageNotice = "Progress could not be saved in this browser.";
@@ -206,7 +208,7 @@ export class Studio {
     this.transport.seek(this.position, this.audio.now());
     this.loopStart = this.progress.loop?.[0] ?? 0;
     this.loopEnd = this.progress.loop?.[1] ?? song.duration;
-    this.loopEnabled = !!this.progress.loop;
+    this.loopEnabled = this.progress.loopEnabled;
     this.syncLoop();
     this.refreshSelection();
     this.practice = new Practice(this.scoringNotes);

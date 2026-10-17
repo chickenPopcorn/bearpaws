@@ -1,4 +1,4 @@
-# Cadence · MIDI piano practice
+# BearPaws · MIDI piano practice
 
 A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, and local browser storage. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
 
@@ -20,39 +20,59 @@ npm run test:watch     # Watch tests
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173
 npm run example        # Regenerate the original downloadable MIDI exercise
+npm run midi:build     # Regenerate the beginner MIDI collection (Python 3 for ZIP)
 npm run format         # Format source, tests and documentation
 ```
 
 ## Practice
 
-The library includes **Ode to Joy** (Beethoven, easy arrangement, 80 BPM)
-and **Dancing Raindrops** (transcribed from the supplied sheet music, with an
-80 BPM practice tempo). Both use C position. Ode to Joy has one left-hand bass
-note per bar; Dancing Raindrops includes chords, rests, staccato notes and a slur.
-Each includes suggested finger numbers on the falling notes, active keys and
-Wait for me coach, plus diagrams showing the starting hand positions.
+The library includes **15 beginner arrangements**, keeping **Ode to Joy** and
+**Dancing Raindrops** and adding familiar melodies such as Mary Had a Little Lamb,
+Twinkle, Twinkle, Little Star, London Bridge, Frère Jacques, and Jingle Bells.
+Each includes suggested finger numbers on the score, falling notes, active keys
+and Wait for me coach, plus starting hand positions. The simplest pieces stay
+in C position; melodies with position changes explain the moves. Short themes
+and the Jingle Bells chorus are labelled as such. New arrangements use one held
+bass note per bar; Dancing Raindrops retains its supplied chords and articulation.
+Mama Bear’s Pops includes **好一朵茉莉花 (Jasmine Flower)** as an eight-bar chorus
+in C major, with suggested finger numbers and a simple left-hand accompaniment.
+
+Search the library by title or composer. **Download starter MIDI pack** saves all
+15 standard MIDI files as a ZIP; **Download MIDI** saves the selected arrangement.
+The files have separate left/right tracks, one full silent count-in bar, tempo,
+and finger numbers as text events. The count-in keeps musical downbeats aligned
+with barlines. The ZIP also includes a fingering manifest with `countInBeats`.
+General MIDI players may ignore these text events; the built-in lessons retain their fingering,
+but reimporting a MIDI treats it as an ordinary import without lesson metadata.
+The generated collection lives in `public/midi/`; melody references are recorded
+in `src/starterPieces.ts` and `src/popsPieces.ts`.
 The sheet-music timeline above the waterfall follows the current bar. Accepted
 notes fade to 50% opacity in practice modes; Listen marks the notes played by
 the reference audio. Disabled hands remain visible at half opacity. Written
 rhythms and rests are preserved for the built-in pieces; imported MIDI uses
 approximate note values derived from performed timing.
 Click a note or drag across the score to change playback position. The focused
-score also supports arrow keys, Shift+arrow for a bar, and Home/End. Mode,
+score also supports Shift+arrow for a bar and Home/End. Left/Right arrow keys
+select the previous/next song in the current collection and start playback,
+as do the Previous/Next buttons in full screen. Mode,
 restart, playback, speed and time controls share the row above the score.
 Full screen expands the score and waterfall and starts the selected practice
-mode. Escape returns to the page; playback controls remain available in either
-view. Clicking “Where your fingers go” toggles the optional animated bear paws;
+mode. Enter opens full screen and starts playback; it also resumes a paused
+full-screen session. Space pauses or resumes in either view. These
+shortcuts stay inactive while editing a field. Escape returns to the page;
+playback controls remain available in either view. Clicking “Where your fingers
+go” toggles the optional animated bear paws;
 that preference is saved separately in this browser, and reduced-motion settings
 disable their animation.
 On both hands, 1 means thumb and 5 means little finger. Changing a track to the
 opposite hand hides its original fingering; imported MIDI is not assigned
 guessed finger numbers.
 
-1. Choose **Ode to Joy** or **Dancing Raindrops** from the library.
+1. Choose a beginner piece from the library; use **Find a song** to filter it.
 2. Click **Connect piano** to grant MIDI permission the first time. On later visits, saved browser permission automatically connects the first available MIDI input. You can choose a different input when more than one is available. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
 3. Import `.mid` / `.midi` files. Assign each note-bearing track to **Left**, **Right**, or **Skip** under _Make it yours_. Multiple-track imports start unassigned. A single-track import starts assigned to Right; a single track cannot be split by pitch in this MVP.
 4. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Import and Listen work without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
-5. Slow down (25–150%), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Enable the loop button to repeat that passage.
+5. Slow down (25–150%), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
 **Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. “Hear next notes” provides a reference without accepting the notes for you.
 

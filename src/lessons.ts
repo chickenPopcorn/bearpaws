@@ -1,16 +1,6 @@
 import { tempoConverter, type Finger, type Note, type Song } from "./song";
-
-type Step = readonly [pitch: number | null, beats: number];
-type Lesson = {
-  id: string;
-  title: string;
-  composer: string;
-  description: string;
-  bpm: number;
-  beatsPerBar: number;
-  melody: readonly (readonly Step[])[];
-  bass: readonly number[];
-};
+import { starterPieces, type StarterPiece } from "./starterPieces";
+import { popsPieces } from "./popsPieces";
 
 const rightFingers: Record<number, Finger> = {
   60: 1,
@@ -29,15 +19,24 @@ const leftFingers: Record<number, Finger> = {
 const builtInIds = new Set([
   "cadence-ode-to-joy-v1",
   "cadence-dancing-raindrops-v1",
+  ...starterPieces.map((piece) => piece.id),
+  ...popsPieces.map((piece) => piece.id),
 ]);
 
-function makeLesson(lesson: Lesson): Song {
+function makeLesson(lesson: StarterPiece): Song {
   const ppq = 480;
   const tempos = [{ tick: 0, microseconds: 60_000_000 / lesson.bpm }];
   const time = tempoConverter(ppq, tempos);
   const notes: Note[] = [];
   const counts = [0, 0];
-  const add = (pitch: number, beat: number, beats: number, track: 0 | 1) => {
+  const melodyFingers = { ...rightFingers, ...lesson.rightFingers };
+  const add = (
+    pitch: number,
+    beat: number,
+    beats: number,
+    track: 0 | 1,
+    finger?: Finger,
+  ) => {
     const start = time((beat + 1) * ppq);
     // Small release gaps keep repeated notes distinct, without shortening long phrases.
     const end = time((beat + 1 + beats) * ppq) - 0.055;
@@ -50,15 +49,15 @@ function makeLesson(lesson: Lesson): Song {
       velocity: track === 1 ? 0.7 : 0.48,
       track,
       channel: track,
-      finger: (track === 1 ? rightFingers : leftFingers)[pitch],
+      finger: finger ?? (track === 1 ? melodyFingers : leftFingers)[pitch],
       fingerHand: track === 1 ? "right" : "left",
       notatedBeats: beats,
     });
   };
   lesson.melody.forEach((bar, index) => {
     let beat = index * lesson.beatsPerBar;
-    for (const [pitch, beats] of bar) {
-      if (pitch !== null) add(pitch, beat, beats, 1);
+    for (const [pitch, beats, finger] of bar) {
+      if (pitch !== null) add(pitch, beat, beats, 1, finger);
       beat += beats;
     }
     add(lesson.bass[index], index * lesson.beatsPerBar, lesson.beatsPerBar, 0);
@@ -85,17 +84,17 @@ function makeLesson(lesson: Lesson): Song {
     lesson: {
       composer: lesson.composer,
       description: lesson.description,
-      level: "Beginner · five-finger position",
+      level: lesson.level ?? "Beginner · five-finger position",
       bpm: lesson.bpm,
       handPositions: {
         left: "C position · C3 (5) to G3 (1)",
-        right: "C position · C4 (1) to G4 (5)",
+        right: lesson.rightPosition ?? "C position · C4 (1) to G4 (5)",
       },
     },
   };
 }
 
-const odeToJoy: Lesson = {
+const odeToJoy: StarterPiece = {
   id: "cadence-ode-to-joy-v1",
   title: "Ode to Joy",
   composer: "Ludwig van Beethoven · easy arrangement",
@@ -230,7 +229,12 @@ function dancingRaindrops(): Song {
 
 /** Fresh objects keep track assignments and library edits local to each caller. */
 export function builtInSongs(): Song[] {
-  return [makeLesson(odeToJoy), dancingRaindrops()];
+  return [
+    makeLesson(odeToJoy),
+    dancingRaindrops(),
+    ...starterPieces.map(makeLesson),
+    ...popsPieces.map(makeLesson),
+  ];
 }
 
 export function isBuiltInSong(id: string): boolean {

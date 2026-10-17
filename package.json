@@ -1,5 +1,5 @@
 {
-  "name": "cadence-midi",
+  "name": "bearpaws",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "preview": "vite preview --host 0.0.0.0",
     "format": "prettier --write src tests scripts *.json *.ts index.html README.md docs/verification.md",
-    "example": "node scripts/create-example.mjs"
+    "example": "node scripts/create-example.mjs",
+    "midi:build": "node scripts/create-library.mjs"
   },
   "dependencies": {
     "midi-file": "^1.2.4",

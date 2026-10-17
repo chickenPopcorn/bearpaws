@@ -65,6 +65,22 @@ it("migrates the removed 500ms tolerance to the widest available setting", () =>
   write("settings", { tolerance: 0.5 });
   expect(settings().tolerance).toBe(0.35);
 });
+it.each([undefined, { loop: null }, { loop: [1, 4] }])(
+  "defaults new and legacy progress to looping on: %j",
+  (saved) => {
+    if (saved) write("progress:loop-default", saved);
+    const restored = progress("loop-default", 5);
+    expect(restored.loopEnabled).toBe(true);
+    expect(restored.loop).toEqual(saved?.loop ?? null);
+  },
+);
+it("preserves an explicit loop preference separately from its custom range", () => {
+  write("progress:loop-off", { loopEnabled: false, loop: [1, 4] });
+  expect(progress("loop-off", 5)).toMatchObject({
+    loopEnabled: false,
+    loop: [1, 4],
+  });
+});
 it("reports quota or denied storage instead of throwing", () => {
   vi.stubGlobal("localStorage", {
     getItem: () => {

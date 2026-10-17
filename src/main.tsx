@@ -7,11 +7,20 @@ import React, {
 import { createRoot } from "react-dom/client";
 import { Studio } from "./controller";
 import { draw, pianoKeyAt } from "./render";
-import { noteName, suggestedFinger, fingerNames, type Hand } from "./song";
+import {
+  noteName,
+  suggestedFinger,
+  fingerNames,
+  type Hand,
+  type Song,
+} from "./song";
 import { FingerGuide } from "./FingerGuide";
+import { SongLibrary } from "./SongLibrary";
 import { SheetTimeline } from "./SheetTimeline";
 import { usePianoFullscreen } from "./usePianoFullscreen";
+import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { isBuiltInSong } from "./lessons";
+import { collectionForSong } from "./collections";
 import "./style.css";
 const studio = new Studio();
 const stamp = (t: number) =>
@@ -164,6 +173,15 @@ function App() {
       playing &&
       !!gate &&
       Math.abs(gate.start - studio.position) < 0.002;
+  const collection = collectionForSong(studio.song.id);
+  const collectionSongs = studio.songs.filter(
+    (song) => collectionForSong(song.id).id === collection.id,
+  );
+  const songIndex = collectionSongs.findIndex(
+    (song) => song.id === studio.song.id,
+  );
+  const previousSong = collectionSongs[songIndex - 1];
+  const nextSong = collectionSongs[songIndex + 1];
   useEffect(() => {
     void studio.init();
     const down = (e: KeyboardEvent) => {
@@ -228,22 +246,43 @@ function App() {
     }
   };
   const toggle = async () => {
-    if (playing) studio.pause();
+    if (busy) return;
+    if (studio.transport.playing) studio.pause();
     else await startPlayback();
   };
+  const selectSong = (song: Song | undefined) => {
+    if (!song) return;
+    studio.save();
+    studio.load(song);
+  };
+  const navigateSong = async (song: Song | undefined) => {
+    if (!song || busy) return;
+    selectSong(song);
+    await startPlayback();
+  };
+  usePracticeShortcuts({
+    expanded: fullscreen.expanded,
+    busy,
+    onEnter: () => void fullscreen.enter(),
+    onTogglePlayback: () => void toggle(),
+    onPreviousSong: () => void navigateSong(previousSong),
+    onNextSong: () => void navigateSong(nextSong),
+  });
   const misses = p.recentMisses,
     stats = p.stats,
     recent = p.feedback.at(-1);
   return (
     <div className="app">
       <header className="top">
-        <a className="brand" href="./" aria-label="Cadence home">
-          <span className="brand-mark" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
-          cadence
+        <a className="brand" href="./" aria-label="BearPaws home">
+          <img
+            className="brand-mark"
+            src={`${import.meta.env.BASE_URL}bearpaws.svg?v=3`}
+            alt=""
+            width="40"
+            height="40"
+          />
+          BearPaws
         </a>
         <span className="eyebrow">A little practice. Every day.</span>
         <button
@@ -299,32 +338,12 @@ function App() {
       )}
       <div className="body">
         <aside className="sidebar">
-          <div className="nav-label">
-            Your library <span>{studio.songs.length}</span>
-          </div>
-          {studio.songs.map((song) => (
-            <button
-              key={song.id}
-              className="song"
-              aria-pressed={song.id === studio.song.id}
-              onClick={() => {
-                studio.save();
-                studio.load(song);
-              }}
-            >
-              {song.title}
-              <small>
-                {song.lesson
-                  ? `${song.lesson.level} · ${song.lesson.bpm} BPM · Fingering`
-                  : isBuiltInSong(song.id)
-                    ? "Original exercise · Both hands"
-                    : "Imported MIDI · On this browser"}
-              </small>
-            </button>
-          ))}
-          <button className="import" onClick={() => file.current?.click()}>
-            ＋ Import MIDI
-          </button>
+          <SongLibrary
+            songs={studio.songs}
+            selected={studio.song.id}
+            onSelect={selectSong}
+            onImport={() => file.current?.click()}
+          />
           <input
             ref={file}
             className="sr-only"
@@ -362,7 +381,19 @@ function App() {
                     : `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`}
               </p>
             </div>
-            <span className="chip">Saved on this browser</span>
+            <div className="song-tools">
+              <span className="chip">Saved on this browser</span>
+              {isBuiltInSong(studio.song.id) && (
+                <a
+                  className="song-midi-download"
+                  href={`${import.meta.env.BASE_URL}midi/${studio.song.id}.mid`}
+                  download
+                  aria-label={`Download ${studio.song.title} MIDI`}
+                >
+                  Download MIDI
+                </a>
+              )}
+            </div>
           </div>
           {studio.storageNotice && (
             <p className="alert" role="status">
@@ -382,9 +413,18 @@ function App() {
             >
               <div className="practice-toolbar" aria-label="Practice controls">
                 {fullscreen.expanded && (
-                  <strong className="fullscreen-song-title">
-                    <SongTitle title={studio.song.title} />
-                  </strong>
+                  <div
+                    className="fullscreen-song-heading"
+                    title={studio.song.title}
+                  >
+                    <strong className="fullscreen-song-title">
+                      <SongTitle title={studio.song.title} />
+                    </strong>
+                    <div className="fullscreen-collection">
+                      {collection.title} · {songIndex + 1} of{" "}
+                      {collectionSongs.length}
+                    </div>
+                  </div>
                 )}
                 <PracticeControls />
                 <div
@@ -405,6 +445,8 @@ function App() {
                   <button
                     className="primary play"
                     disabled={busy}
+                    title={playing ? "Pause (Space)" : "Play (Space)"}
+                    aria-keyshortcuts="Space"
                     onClick={() => void toggle()}
                   >
                     {busy ? "Loading piano…" : playing ? "Ⅱ Pause" : "▷ Play"}
@@ -435,6 +477,40 @@ function App() {
                 <span className="time">
                   {stamp(studio.position)} / {stamp(studio.song.duration)}
                 </span>
+                {fullscreen.expanded && (
+                  <div
+                    className="song-navigation"
+                    role="group"
+                    aria-label="Collection navigation"
+                  >
+                    <button
+                      aria-label="Previous song"
+                      aria-keyshortcuts="ArrowLeft"
+                      title={
+                        previousSong
+                          ? `Previous: ${previousSong.title} (Left arrow)`
+                          : "First song in this collection"
+                      }
+                      disabled={!previousSong || busy}
+                      onClick={() => void navigateSong(previousSong)}
+                    >
+                      <span aria-hidden="true">←</span> Previous
+                    </button>
+                    <button
+                      aria-label="Next song"
+                      aria-keyshortcuts="ArrowRight"
+                      title={
+                        nextSong
+                          ? `Next: ${nextSong.title} (Right arrow)`
+                          : "Last song in this collection"
+                      }
+                      disabled={!nextSong || busy}
+                      onClick={() => void navigateSong(nextSong)}
+                    >
+                      Next <span aria-hidden="true">→</span>
+                    </button>
+                  </div>
+                )}
               </div>
               {stageNotice && (
                 <div className="piano-notice" role="status">
@@ -470,10 +546,13 @@ function App() {
                       }
                       aria-expanded={fullscreen.expanded}
                       aria-controls="piano-stage"
+                      aria-keyshortcuts={
+                        fullscreen.expanded ? "Escape" : "Enter"
+                      }
                       title={
                         fullscreen.expanded
                           ? "Exit full screen (Esc)"
-                          : "Full screen and play"
+                          : "Full screen and play (Enter)"
                       }
                       onClick={() => void fullscreen.toggle()}
                     >

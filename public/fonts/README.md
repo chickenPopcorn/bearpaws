@@ -1,4 +1,4 @@
-# Fonts used by Cadence
+# Fonts used by BearPaws
 
 These fonts are served locally with the app and do not require an external font service.
 

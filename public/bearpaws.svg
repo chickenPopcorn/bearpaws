@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72" fill="none">
+  <title>BearPaws</title>
+  <path d="M15 49C7 47 3 40 6 33C8 28 12 25 17 25C16 17 22 10 29 10C32 10 35 12 36 14C39 11 42 10 46 10C55 10 60 18 58 26C66 27 70 34 68 41C67 47 63 51 58 52C56 63 47 68 36 68C25 68 16 61 15 49Z" fill="#fcfaff" stroke="#9473bf" stroke-width="3.4" stroke-linejoin="round"/>
+  <g fill="#bea4e0">
+    <circle cx="26" cy="23" r="5.7"/>
+    <circle cx="46" cy="23" r="5.7"/>
+    <circle cx="13.5" cy="37.5" r="5.7"/>
+    <circle cx="59" cy="38.5" r="5.7"/>
+    <path d="M23 52C23 47 29 39 36 39C43 39 49 47 49 52C49 58 43 61 36 61C29 61 23 58 23 52Z"/>
+  </g>
+</svg>

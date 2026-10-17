@@ -21,6 +21,10 @@ export function usePianoFullscreen(onEnter: () => void) {
   const enter = async () => {
     const element = stage.current;
     if (!element) return;
+    if (wanted.current || document.fullscreenElement === element) {
+      onEnter();
+      return;
+    }
     previousFocus.current = document.activeElement as HTMLElement | null;
     wanted.current = true;
     setExpanded(true);
@@ -99,5 +103,5 @@ export function usePianoFullscreen(onEnter: () => void) {
       previousFocus.current?.focus();
     };
   }, [expanded]);
-  return { stage, expanded, toggle: expanded ? leave : enter };
+  return { stage, expanded, enter, toggle: expanded ? leave : enter };
 }
