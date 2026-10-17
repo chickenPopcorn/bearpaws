@@ -388,7 +388,7 @@ const KeyboardHelp = memo(function KeyboardHelp() {
 });
 function App() {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
-  const [deviceOpen, setDeviceOpen] = useState(true),
+  const [deviceOpen, setDeviceOpen] = useState(false),
     [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const openImport = useCallback(() => file.current?.click(), []);
@@ -514,7 +514,13 @@ function App() {
         >
           <span className={`dot ${connected ? "connected" : ""}`} />
           {connected ? "Piano connected" : "Connect your piano"}
-          <span aria-hidden="true">⌄</span>
+          <svg
+            className="device-chevron"
+            viewBox="0 0 12 12"
+            aria-hidden="true"
+          >
+            <path d="m2.5 4.5 3.5 3.5 3.5-3.5" />
+          </svg>
         </button>
       </header>
       {deviceOpen && (
