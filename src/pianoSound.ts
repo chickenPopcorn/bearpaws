@@ -79,6 +79,21 @@ const NATURAL_COMPRESSOR = {
   attack: 0.012,
   release: 0.32,
 };
+/** A fast limiter after the room mix, so the summed output cannot clip. */
+const SAFETY_LIMITER: typeof NATURAL_COMPRESSOR = {
+  threshold: -3,
+  knee: 0,
+  ratio: 20,
+  attack: 0.001,
+  release: 0.08,
+};
+function configure(
+  node: DynamicsCompressorNode,
+  settings: typeof NATURAL_COMPRESSOR,
+) {
+  for (const key of Object.keys(settings) as (keyof typeof settings)[])
+    node[key].value = settings[key];
+}
 export interface PianoSoundBus {
   input: AudioNode;
   setSound(settings: PianoSoundSettings): void;
@@ -110,32 +125,20 @@ export function createPianoSoundBus(
     const impulse = createRoomImpulse(context);
     const makeConvolver = () => {
       const node = context.createConvolver();
-      try {
-        node.normalize = false;
-        node.buffer = impulse;
-        node.connect(wet);
-        return node;
-      } catch (error) {
-        node.disconnect();
-        throw error;
-      }
+      node.normalize = false;
+      node.buffer = impulse;
+      node.connect(wet);
+      return node;
     };
     convolver = makeConvolver();
     compressor.connect(dry).connect(safety);
     compressor.connect(convolver);
     wet.connect(safety);
     safety.connect(master).connect(context.destination);
-    for (const key of Object.keys(
-      NATURAL_COMPRESSOR,
-    ) as (keyof typeof NATURAL_COMPRESSOR)[])
-      compressor[key].value = NATURAL_COMPRESSOR[key];
+    configure(compressor, NATURAL_COMPRESSOR);
+    configure(safety, SAFETY_LIMITER);
     dry.gain.value = 1;
     master.gain.value = 0.92;
-    safety.threshold.value = -3;
-    safety.knee.value = 0;
-    safety.ratio.value = 20;
-    safety.attack.value = 0.001;
-    safety.release.value = 0.08;
 
     const update = (settings: PianoSoundSettings, immediate: boolean) => {
       const sound = normalizePianoSound(settings);
