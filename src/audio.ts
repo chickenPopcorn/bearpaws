@@ -41,9 +41,10 @@ interface Voice {
   source: AudioBufferSourceNode;
   gain: GainNode;
   file: string;
-  /** Context times of the attack and of the scheduled stop. */
+  /** Context times of the attack, the scheduled stop, and the fade (if any). */
   start: number;
   end: number;
+  fadeAt: number;
   /** The scheduled notes this voice plays, and the set that records them. */
   ids: readonly string[];
   pass: Set<string>;
@@ -305,6 +306,7 @@ export class ReferenceAudio {
   private fade(voice: Voice, at: number) {
     this.voices.delete(voice);
     this.fading.add(voice);
+    voice.fadeAt = at;
     // A voice that stops by itself first needs no fade.
     if (voice.end <= at) return;
     try {
@@ -332,13 +334,21 @@ export class ReferenceAudio {
     return oldest !== undefined;
   }
   /**
+   * Voices that still play now: active ones, and ones stolen for a later
+   * attack, which sound until that attack.
+   */
+  private *playing(now: number) {
+    yield* this.voices;
+    for (const voice of this.fading) if (voice.fadeAt > now) yield voice;
+  }
+  /**
    * Cancel scheduled voices that have not started, so the next schedule()
    * plays their notes at a new speed. Sounding notes ring on instead of being
    * struck again.
    */
   reschedule() {
     const now = this.now();
-    for (const voice of this.voices) {
+    for (const voice of [...this.playing(now)]) {
       if (voice.start <= now || !voice.ids.length) continue;
       for (const id of voice.ids) voice.pass.delete(id);
       this.fade(voice, now);
@@ -347,7 +357,7 @@ export class ReferenceAudio {
   stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) this.playbackFiles.clear();
     const now = this.now();
-    for (const voice of this.voices) this.fade(voice, now);
+    for (const voice of [...this.playing(now)]) this.fade(voice, now);
     this.scheduled.clear();
     this.ahead.clear();
     this.aheadStart = Infinity;
@@ -436,6 +446,7 @@ export class ReferenceAudio {
         file: region.file,
         start: when,
         end,
+        fadeAt: Infinity,
         ids,
         pass,
       };

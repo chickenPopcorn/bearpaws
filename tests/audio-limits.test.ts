@@ -361,6 +361,41 @@ describe("bounded reference audio", () => {
     expect(gain(0).setTargetAtTime).toHaveBeenLastCalledWith(0, 0.5, 0.008);
     expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(0.55);
   });
+  it("lets a stop before the attack cancel a voice stolen for that attack", () => {
+    const { audio, context, nodes } = fixture();
+    const gain = (index: number) =>
+      context.createGain.mock.results[index].value.gain;
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      audio.tone(36 + (i % 60), 0.8, i / 100, 10);
+    context.currentTime = 0.4;
+    audio.tone(100, 0.8, 0.5, 1);
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenLastCalledWith(0.5);
+    context.currentTime = 0.45;
+    audio.stop();
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenLastCalledWith(0.45);
+    expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(0.5);
+  });
+  it("moves a voice stolen before its own attack to a new speed", () => {
+    const { audio, transport, context } = fixture();
+    const gain = (index: number) =>
+      context.createGain.mock.results[index].value.gain;
+    const notes = [
+      ...Array.from({ length: MAX_REFERENCE_VOICES }, (_, i) => ({
+        ...note(i, 30 + i),
+        start: 0.05,
+      })),
+      { ...note(MAX_REFERENCE_VOICES, 100), start: 0.1 },
+    ];
+    audio.schedule(notes, transport, true);
+    // The new note took the slot of note 0, which waits to start at 0.05.
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenLastCalledWith(0.1);
+    expect(audio.scheduled.has("0")).toBe(true);
+    context.currentTime = 0.01;
+    transport.setSpeed(0.5, 0.01);
+    audio.reschedule();
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenLastCalledWith(0.01);
+    expect(audio.scheduled.has("0")).toBe(false);
+  });
   it("retries a note the voice cap refused once a voice is free", () => {
     const { audio, transport, context, nodes } = fixture();
     const notes = Array.from({ length: MAX_REFERENCE_VOICES + 1 }, (_, i) => ({
