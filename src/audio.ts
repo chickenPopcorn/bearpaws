@@ -16,6 +16,8 @@ import {
 export const MAX_REFERENCE_VOICES = 64;
 export const MAX_PIANO_CACHE_BYTES = 512 * 1024 * 1024;
 type PianoNote = Pick<Note, "pitch" | "velocity">;
+/** How far ahead of the clock schedule() starts notes, in seconds at 1x. */
+const LOOKAHEAD_SECONDS = 0.12;
 /** Explicit stops fade sounding voices this quickly instead of cutting them. */
 const FADE_SECONDS = 0.008;
 /** Six fade time constants leave less than 0.3% gain when the source stops. */
@@ -65,6 +67,8 @@ export class ReferenceAudio {
   /** Whether the room has received sound since it was last rebuilt. */
   private roomUsed = false;
   scheduled = new Set<string>();
+  /** Notes of the next loop pass, scheduled before the transport wraps. */
+  private ahead = new Set<string>();
   private cycle = -1;
   error = "";
   get loading() {
@@ -323,6 +327,7 @@ export class ReferenceAudio {
     const now = this.now();
     for (const voice of this.voices) this.fade(voice, now);
     this.scheduled.clear();
+    this.ahead.clear();
     // Rebuilding the room flushes its tail. Skip it when there is no tail,
     // such as while dragging the playhead with nothing playing.
     try {
@@ -427,29 +432,53 @@ export class ReferenceAudio {
   schedule(notes: Note[], transport: Transport, enabled: boolean) {
     if (!enabled || !transport.playing || !this.context) return;
     if (this.cycle !== transport.cycle) {
-      // A new pass schedules its notes again. The last pass's voices end by
-      // the loop end, so they ring out, and so does the room tail. Explicit
-      // pause, seek and song changes fade voices and reset the room in stop().
-      this.scheduled = new Set();
+      // A new pass keeps the notes scheduled ahead for it. The last pass's
+      // voices end by the loop end, so they ring out, and so does the room
+      // tail. Pause, seek and song changes call stop(), which clears both.
+      this.scheduled = this.ahead;
+      this.ahead = new Set();
       this.cycle = transport.cycle;
     }
     const now = this.now(),
       position = transport.at(now),
-      lookahead = 0.12 * transport.speed;
+      loop = transport.loop;
+    this.schedulePass(notes, transport, now, position, this.scheduled);
+    // Start the next pass within the lookahead too. Waiting for the tick
+    // that observes the wrap would strike its first notes up to a tick late.
+    if (loop && position + LOOKAHEAD_SECONDS * transport.speed >= loop[1])
+      this.schedulePass(
+        notes,
+        transport,
+        now,
+        position - (loop[1] - loop[0]),
+        this.ahead,
+      );
+  }
+  /**
+   * Schedule one pass's notes that start within the lookahead. `position` is
+   * measured from the start of that pass, so for the next loop pass it is
+   * one loop length earlier than the transport position.
+   */
+  private schedulePass(
+    notes: Note[],
+    transport: Transport,
+    now: number,
+    position: number,
+    pass: Set<string>,
+  ) {
+    const [from, to] = transport.loop ?? [-Infinity, Infinity];
+    // A note that sounds into the pass is struck where the pass begins.
+    const head = Math.max(position, from);
     const attacks = new Map<string, Note & { ids: string[] }>();
     for (const n of notes) {
       if (
-        this.scheduled.has(n.id) ||
-        n.soundEnd <= position ||
-        n.start > position + lookahead
+        pass.has(n.id) ||
+        n.soundEnd <= head ||
+        n.start > position + LOOKAHEAD_SECONDS * transport.speed ||
+        n.start >= to
       )
         continue;
-      if (
-        transport.loop &&
-        (n.start >= transport.loop[1] || n.soundEnd <= transport.loop[0])
-      )
-        continue;
-      this.scheduled.add(n.id);
+      pass.add(n.id);
       const key = `${n.pitch}:${n.start}`,
         previous = attacks.get(key);
       // Duplicate tracks at the same onset need one sound, with the longest pedal tail.
@@ -461,12 +490,10 @@ export class ReferenceAudio {
       }
     }
     for (const n of attacks.values()) {
-      const start = Math.max(0, (n.start - position) / transport.speed),
-        end =
-          (Math.min(n.soundEnd, transport.loop?.[1] ?? Infinity) - position) /
-          transport.speed;
+      const start = (Math.max(n.start, head) - position) / transport.speed,
+        end = (Math.min(n.soundEnd, to) - position) / transport.speed;
       if (end > 0)
-        this.tone(n.pitch, n.velocity, now + start, end - start, n.ids);
+        this.tone(n.pitch, n.velocity, now + start, end - start, n.ids, pass);
     }
   }
 }

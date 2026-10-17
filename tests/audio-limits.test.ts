@@ -383,6 +383,68 @@ describe("bounded reference audio", () => {
     expect(nodes[3].start.mock.calls[0][0]).toBeCloseTo(0.15);
     expect(nodes[0].stop).toHaveBeenCalledOnce();
   });
+  describe("across loop passes", () => {
+    // The loop [0.5, 1.5] at 1x wraps when the clock reaches 1 s.
+    const loopNotes = [
+      { ...note(1, 60, 2), start: 0.2 }, // Sounds into the loop from before it.
+      { ...note(2, 64, 0.9), start: 0.5 },
+      { ...note(3, 67, 1.4), start: 0.55 },
+      { ...note(4, 71, 1.5), start: 1.45 },
+    ];
+    function loopFixture() {
+      const result = fixture();
+      const transport = new Transport(2);
+      transport.loop = [0.5, 1.5];
+      transport.seek(0.5, 0);
+      transport.play(0);
+      /** One controller tick: observe the wrap, then schedule. */
+      const tick = (now: number) => {
+        result.context.currentTime = now;
+        transport.update(now);
+        result.audio.schedule(loopNotes, transport, true);
+      };
+      return { ...result, transport, tick };
+    }
+    const starts = (nodes: ReturnType<typeof fixture>["nodes"]) =>
+      nodes.map((osc) => osc.start.mock.calls[0][0]);
+
+    it("schedules the first notes of the next pass on time, before the wrap, once", () => {
+      const { nodes, tick } = loopFixture();
+      tick(0);
+      expect(starts(nodes)).toEqual([0, 0, expect.closeTo(0.05)]);
+      tick(0.9);
+      // Note 4 ends this pass. Notes 1 and 2 start the next one at the wrap.
+      expect(starts(nodes).slice(3)).toEqual([
+        expect.closeTo(0.95),
+        expect.closeTo(1),
+        expect.closeTo(1),
+      ]);
+      tick(1.02);
+      expect(starts(nodes).slice(6)).toEqual([expect.closeTo(1.05)]);
+      tick(1.04);
+      expect(nodes).toHaveLength(7);
+    });
+
+    it("moves next-pass voices to a new speed before the wrap", () => {
+      const { audio, transport, context, nodes, tick } = loopFixture();
+      tick(0);
+      tick(0.9);
+      context.currentTime = 0.94;
+      transport.setSpeed(0.5, 0.94);
+      audio.reschedule();
+      tick(0.94);
+      tick(0.96);
+      // 0.06 of the loop remains before the wrap, played at half speed.
+      expect(starts(nodes).slice(6)).toEqual([
+        expect.closeTo(0.96),
+        expect.closeTo(1.06),
+        expect.closeTo(1.06),
+      ]);
+      // After the wrap only note 3 is new.
+      tick(1.07);
+      expect(starts(nodes).slice(9)).toEqual([expect.closeTo(1.16)]);
+    });
+  });
   it("applies the same cap to direct previews and future-scheduled voices, then reuses freed slots", () => {
     const { audio, context, nodes } = fixture();
     for (let i = 0; i < 5000; i++) audio.tone(i % 128, 0.8, 100, 10);
