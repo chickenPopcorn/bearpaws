@@ -726,6 +726,7 @@ function App() {
                 <label>
                   From{" "}
                   <LoopBoundInput
+                    key={studio.song.id}
                     label="Loop start seconds"
                     value={studio.loopStart}
                     min={0}
@@ -743,6 +744,7 @@ function App() {
                 <label>
                   To{" "}
                   <LoopBoundInput
+                    key={studio.song.id}
                     label="Loop end seconds"
                     value={studio.loopEnd}
                     min={studio.loopStart + 0.2}
