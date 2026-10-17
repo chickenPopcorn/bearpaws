@@ -1202,6 +1202,35 @@ describe("practice studio integration", () => {
     expect(restored.transport.loop).toEqual([0.5, 2.5]);
   });
 
+  it("ignores MIDI clock and active sensing without notifying views", async () => {
+    const studio = create(song([[60, 1]]));
+    studio.mode("listen");
+    await studio.play();
+    const listener = vi.fn();
+    studio.subscribe(listener);
+    const revision = studio.revision;
+    // Clock, start, continue, stop, active sensing and reset.
+    for (const status of [0xf8, 0xfa, 0xfb, 0xfc, 0xfe, 0xff])
+      midi(studio, [status]);
+    expect(listener).not.toHaveBeenCalled();
+    expect(studio.revision).toBe(revision);
+    midi(studio, [0x90, 60, 80]);
+    expect(listener).toHaveBeenCalled();
+    expect(studio.input.down.has(60)).toBe(true);
+    expect(studio.lastVelocity).toBe(80);
+  });
+
+  it("replaces the song on hand assignment so views can memoize on it", () => {
+    const studio = create(song([[60, 1]]));
+    const before = studio.song;
+    studio.assign(0, "left");
+    expect(studio.song).not.toBe(before);
+    expect(before.tracks[0].hand).toBe("right");
+    expect(studio.song.tracks[0].hand).toBe("left");
+    expect(studio.song.notes).toBe(before.notes);
+    expect(studio.notes).toHaveLength(1);
+  });
+
   it("persists position, speed, hand assignments, loop and feedback settings per song", () => {
     const fixture = song([
       [60, 1],

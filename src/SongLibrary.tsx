@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { memo, useEffect, useEffectEvent, useState } from "react";
 import {
   collections,
   collectionForSong,
@@ -19,7 +19,7 @@ const allExpanded = () =>
     boolean
   >;
 
-export function SongLibrary({
+export const SongLibrary = memo(function SongLibrary({
   songs,
   selected,
   onSelect,
@@ -133,4 +133,4 @@ export function SongLibrary({
       </a>
     </>
   );
-}
+});

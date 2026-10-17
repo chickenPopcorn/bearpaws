@@ -266,7 +266,13 @@ export class Studio {
   }
   assign(track: number, hand: Hand) {
     this.pause();
-    this.song.tracks.find((t) => t.id === track)!.hand = hand;
+    // Replace rather than mutate, so views can memoize on the song's identity.
+    this.song = {
+      ...this.song,
+      tracks: this.song.tracks.map((t) =>
+        t.id === track ? { ...t, hand } : t,
+      ),
+    };
     this.rebuild();
   }
   speed(speed: number) {
@@ -468,6 +474,9 @@ export class Studio {
     }
   }
   receive(data: Uint8Array, timestamp: number) {
+    // System real-time messages (clock, active sensing) can arrive dozens of
+    // times a second and never change keys, pedals or scoring.
+    if (data[0] >= 0xf8) return;
     const wasPlaying = this.transport.playing,
       now = this.audio.now(),
       event = Math.min(now, this.audio.eventTime(timestamp)),

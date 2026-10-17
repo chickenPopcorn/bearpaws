@@ -1,7 +1,8 @@
+import { memo } from "react";
 import { fingerNames, type Song } from "./song";
 import { BearPaw } from "./BearPaw";
 
-export function FingerGuide({
+export const FingerGuide = memo(function FingerGuide({
   song,
   left,
   right,
@@ -54,4 +55,4 @@ export function FingerGuide({
       })}
     </section>
   );
-}
+});
