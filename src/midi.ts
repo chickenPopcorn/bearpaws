@@ -25,6 +25,10 @@ export interface MidiNavigator {
   };
 }
 
+const OPEN_FAILED =
+  "This MIDI input could not be opened. Check the USB connection and choose it again.";
+const label = (input: MIDIInput) => input.name || "MIDI input";
+
 export class MidiConnection {
   status: MidiConnectionStatus;
   message: string;
@@ -110,7 +114,7 @@ export class MidiConnection {
     try {
       const access = await this.source!.requestMIDIAccess({ sysex: false });
       if (this.disposed) return;
-      if (this.access) this.access.onstatechange = null;
+      this.releaseAccess();
       this.detach();
       this.access = access;
       this.failedInput = undefined;
@@ -120,8 +124,7 @@ export class MidiConnection {
       this.refresh();
     } catch (error) {
       if (this.disposed) return;
-      if (this.access) this.access.onstatechange = null;
-      this.access = undefined;
+      this.releaseAccess();
       this.detach();
       this.devices = [];
       const name =
@@ -156,7 +159,7 @@ export class MidiConnection {
     });
     this.devices = inputs.map((input) => ({
       id: input.id,
-      name: input.name || "MIDI input",
+      name: label(input),
     }));
     if (!this.selectedId && inputs.length) this.selectedId = inputs[0].id;
     const selected = inputs.find((input) => input.id === this.selectedId);
@@ -169,8 +172,7 @@ export class MidiConnection {
         : "No MIDI input found. Plug in a USB piano; it will appear here automatically. Import and Listen still work.";
     } else if (this.failedInput === selected) {
       this.status = "disconnected";
-      this.message =
-        "This MIDI input could not be opened. Check the USB connection and choose it again.";
+      this.message = OPEN_FAILED;
     } else if (this.input !== selected) this.bind(selected);
     this.callbacks.onChange();
   }
@@ -185,7 +187,7 @@ export class MidiConnection {
       this.input === input &&
       this.bindingGeneration === generation;
     this.status = "opening";
-    this.message = `Connecting to ${input.name || "MIDI input"}…`;
+    this.message = `Connecting to ${label(input)}…`;
     input.onmidimessage = (event) => {
       if (!current() || input.state !== "connected" || !event.data) return;
       // DOM event timestamps share performance.now()'s clock. Never substitute animation-frame time.
@@ -199,7 +201,7 @@ export class MidiConnection {
           return;
         }
         this.status = "connected";
-        this.message = `Connected to ${input.name || "MIDI input"}.`;
+        this.message = `Connected to ${label(input)}.`;
         this.callbacks.onChange();
       },
       () => {
@@ -207,8 +209,7 @@ export class MidiConnection {
         this.failedInput = input;
         this.detach();
         this.status = "disconnected";
-        this.message =
-          "This MIDI input could not be opened. Check the USB connection and choose it again.";
+        this.message = OPEN_FAILED;
         this.callbacks.onChange();
       },
     );
@@ -228,11 +229,15 @@ export class MidiConnection {
     if (input || forceReset) this.callbacks.onReset();
   }
 
+  private releaseAccess(): void {
+    if (this.access) this.access.onstatechange = null;
+    this.access = undefined;
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    if (this.access) this.access.onstatechange = null;
-    this.access = undefined;
+    this.releaseAccess();
     this.detach(true);
     this.devices = [];
   }
