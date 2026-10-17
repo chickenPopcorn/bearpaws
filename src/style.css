@@ -965,13 +965,10 @@ h1 {
   padding: 18px;
   min-width: 0;
 }
-.panel summary,
 .panel-heading {
   font-size: 13px;
   font-weight: 500;
-  cursor: pointer;
 }
-.panel summary span,
 .panel-heading > span {
   font-size: 10px;
   float: right;
@@ -1304,7 +1301,6 @@ footer {
   .panel {
     padding: 15px;
   }
-  .panel summary span,
   .panel-heading > span {
     font-size: 9px;
   }

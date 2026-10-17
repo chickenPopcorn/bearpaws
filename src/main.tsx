@@ -173,10 +173,10 @@ const PassagePanel = memo(function PassagePanel({
   loopEnd: number;
 }) {
   return (
-    <details className="panel" open>
-      <summary>
+    <section className="panel" aria-label="Tracks and passage">
+      <div className="panel-heading">
         Make it yours <span>Tracks & passage</span>
-      </summary>
+      </div>
       <div className="assignments">
         {song.tracks
           .filter((t) => t.count)
@@ -252,7 +252,7 @@ const PassagePanel = memo(function PassagePanel({
           Remove this local song
         </button>
       )}
-    </details>
+    </section>
   );
 });
 // `misses` grows in place, but always together with a new `recent` item.
@@ -826,11 +826,6 @@ function App() {
             </span>
           </div>
           <section className="lower-grid">
-            <PassagePanel
-              song={studio.song}
-              loopStart={studio.loopStart}
-              loopEnd={studio.loopEnd}
-            />
             <PracticeReview
               recent={recent}
               misses={misses}
@@ -846,6 +841,11 @@ function App() {
               }
               attempts={studio.progress.attempts}
               best={studio.progress.best}
+            />
+            <PassagePanel
+              song={studio.song}
+              loopStart={studio.loopStart}
+              loopEnd={studio.loopEnd}
             />
           </section>
           <KeyboardHelp />
