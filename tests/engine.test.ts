@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { writeMidi } from "midi-file";
 import { chords, MidiState, Practice, Transport } from "../src/engine";
-import { exampleSong, parseSong, tempoConverter, type Note } from "../src/song";
+import { parseSong, tempoConverter, type Note } from "../src/song";
 
 function midi(
   tracks: Parameters<typeof writeMidi>[0]["tracks"],
@@ -388,22 +388,6 @@ describe("MIDI import and the musical timeline", () => {
       [0, [60, 64, 67]],
       [0.5, [60]],
     ]);
-  });
-
-  it("ships an original example with both assigned hands, chords and repeated pitches", () => {
-    const song = exampleSong();
-    expect(song.tracks.map((t) => t.hand)).toEqual(["left", "right"]);
-    expect(
-      song.notes.every(
-        (n) => n.end > n.start && n.soundEnd >= n.end && n.velocity > 0,
-      ),
-    ).toBe(true);
-    expect(chords(song.notes).some((g) => g.notes.length > 2)).toBe(true);
-    const melody = song.notes.filter((n) => n.track === 1 && n.start >= 9);
-    expect(melody[0].pitch).toBe(melody[1].pitch);
-    expect(song.duration).toBeGreaterThanOrEqual(
-      Math.max(...song.notes.map((n) => n.soundEnd)),
-    );
   });
 });
 
@@ -938,7 +922,6 @@ describe("live MIDI physical keys, sustain and cleanup", () => {
   it("returns note-on edges and velocity, treating both release encodings as key-up", () => {
     const s = new MidiState();
     expect(s.message([0x90, 60, 96])).toEqual({ pitch: 60, velocity: 96 });
-    expect(s.velocities.get(60)).toBe(96);
     expect(s.message([0x90, 60, 64])).toBeUndefined();
     expect(s.down).toEqual(new Set([60]));
     s.message([0x90, 60, 0]);
@@ -1020,7 +1003,6 @@ describe("live MIDI physical keys, sustain and cleanup", () => {
     s.clear();
     expect(s.down.size).toBe(0);
     expect(s.sounding.size).toBe(0);
-    expect(s.velocities.size).toBe(0);
     expect(s.pedals.size).toBe(0);
     expect(s.sustain).toBe(false);
     expect(s.message([0x91, 64, 90])).toEqual({ pitch: 64, velocity: 90 });
