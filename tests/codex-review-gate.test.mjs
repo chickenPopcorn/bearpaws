@@ -80,6 +80,8 @@ const nullCodeState = () => ({
 });
 const receipt = (overrides = {}) => ({
   id: "review-1",
+  databaseId: 101,
+  comments: { totalCount: 1 },
   submittedAt: FINISH,
   state: "COMMENTED",
   body: "<!-- codex-review-receipt:v1 -->\nCode Review",
@@ -106,6 +108,7 @@ const reviewThread = (overrides = {}) => ({
   comments: {
     nodes: [
       {
+        databaseId: 201,
         body: "A finding\n<!-- codex-code-review-finding:v1 -->",
         pullRequestReview: receipt(),
         author: {
@@ -146,12 +149,13 @@ function setup(comments = [], events = [], statuses = []) {
   const get = vi.fn().mockResolvedValue({ data: pullRequest });
   const publish = vi.fn().mockResolvedValue({});
   const listComments = vi.fn();
+  const listCommentsForReview = vi.fn();
   const listEvents = vi.fn();
   const listCommitStatusesForRef = vi.fn();
   const github = {
     graphql: vi.fn(),
     rest: {
-      pulls: { get },
+      pulls: { get, listCommentsForReview },
       issues: { listComments, listEvents },
       repos: { createCommitStatus: publish, listCommitStatusesForRef },
     },
@@ -182,11 +186,27 @@ function setup(comments = [], events = [], statuses = []) {
   };
 }
 
+const findingComment = (overrides = {}) => ({
+  id: 201,
+  body: "A finding\n<!-- codex-code-review-finding:v1 -->",
+  pull_request_review_id: 101,
+  original_commit_id: HEAD,
+  user: { id: 199175422, login: "chatgpt-codex-connector[bot]", type: "Bot" },
+  ...overrides,
+});
+
 function setupFallback() {
   const fixture = setup(
     [withTimes(nullCodeState())],
     [],
     [checkpoint({ rc: Date.parse(START) })],
+  );
+  const originalPaginate = fixture.github.paginate.getMockImplementation();
+  const reviewComments = vi.fn().mockResolvedValue([findingComment()]);
+  fixture.github.paginate.mockImplementation((method, parameters) =>
+    method === fixture.github.rest.pulls.listCommentsForReview
+      ? reviewComments(parameters)
+      : originalPaginate(method, parameters),
   );
   const reviewGraphql = vi.fn().mockResolvedValue(receiptPage());
   const threadGraphql = vi.fn();
@@ -195,7 +215,7 @@ function setupFallback() {
       ? reviewGraphql(query, variables)
       : threadGraphql(query, variables),
   );
-  return { ...fixture, reviewGraphql, threadGraphql };
+  return { ...fixture, reviewGraphql, threadGraphql, reviewComments };
 }
 
 describe("Codex review merge gate", () => {
@@ -902,12 +922,127 @@ describe("Codex review merge gate", () => {
     expect(github.graphql).not.toHaveBeenCalled();
   });
 
+  it.each(["missing", "unresolved", "resolved"])(
+    "verifies every finding in the selected review when another thread is %s",
+    async (state) => {
+      const { run, reviewGraphql, threadGraphql, reviewComments, github } =
+        setupFallback();
+      reviewGraphql.mockResolvedValue(
+        receiptPage([receipt({ comments: { totalCount: 2 } })]),
+      );
+      reviewComments.mockResolvedValue([
+        findingComment(),
+        findingComment({ id: 202 }),
+      ]);
+      const threads = [reviewThread()];
+      if (state !== "missing") {
+        const second = reviewThread({ isResolved: state === "resolved" });
+        second.comments.nodes[0].databaseId = 202;
+        threads.push(second);
+      }
+      threadGraphql.mockResolvedValue(threadPage(threads));
+      await expect(run()).resolves.toMatchObject({
+        state:
+          state === "missing"
+            ? "pending"
+            : state === "unresolved"
+              ? "failure"
+              : "success",
+      });
+      expect(github.paginate).toHaveBeenCalledWith(
+        github.rest.pulls.listCommentsForReview,
+        {
+          owner: "chickenPopcorn",
+          repo: "bearpaws",
+          pull_number: 7,
+          review_id: 101,
+          per_page: 100,
+        },
+      );
+    },
+  );
+
+  it("keeps partial REST comment propagation pending even when the visible thread is resolved", async () => {
+    const { run, reviewGraphql, threadGraphql } = setupFallback();
+    reviewGraphql.mockResolvedValue(
+      receiptPage([receipt({ comments: { totalCount: 2 } })]),
+    );
+    threadGraphql.mockResolvedValue(threadPage());
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("rejects a thread set that contains an unenumerated current finding", async () => {
+    const { run, threadGraphql } = setupFallback();
+    const second = reviewThread();
+    second.comments.nodes[0].databaseId = 202;
+    threadGraphql.mockResolvedValue(threadPage([reviewThread(), second]));
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("requires a marked trusted finding in the complete receipt comment set", async () => {
+    const { run, threadGraphql, reviewComments } = setupFallback();
+    reviewComments.mockResolvedValue([
+      findingComment({ body: "Not a finding" }),
+    ]);
+    threadGraphql.mockResolvedValue(threadPage());
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it.each([
+    { body: "An unclassified comment" },
+    { user: { id: 123, login: "someone", type: "User" } },
+    { in_reply_to_id: 201 },
+  ])(
+    "does not silently exclude an unexpected receipt comment: %j",
+    async (extra) => {
+      const { run, reviewGraphql, threadGraphql, reviewComments } =
+        setupFallback();
+      reviewGraphql.mockResolvedValue(
+        receiptPage([receipt({ comments: { totalCount: 2 } })]),
+      );
+      reviewComments.mockResolvedValue([
+        findingComment(),
+        findingComment({ id: 202, ...extra }),
+      ]);
+      threadGraphql.mockResolvedValue(threadPage());
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    },
+  );
+
+  it.each([
+    undefined,
+    [findingComment({ pull_request_review_id: 999 })],
+    [findingComment({ original_commit_id: OLD_HEAD })],
+    [findingComment({ user: null })],
+    [findingComment({ id: null })],
+    [findingComment(), findingComment()],
+  ])(
+    "fails closed for incomplete finding comment lists: %j",
+    async (comments) => {
+      const { run, reviewComments, publish } = setupFallback();
+      reviewComments.mockResolvedValue(comments);
+      await expect(run()).rejects.toThrow();
+      expect(publish).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          context: "Codex review gate",
+          state: "failure",
+        }),
+      );
+    },
+  );
+
+  it("fails closed when fetching the complete review comment list fails", async () => {
+    const { run, reviewComments } = setupFallback();
+    reviewComments.mockRejectedValue(new Error("Review comments unavailable"));
+    await expect(run()).rejects.toThrow("Review comments unavailable");
+  });
+
   it.each([
     { commit: { oid: OLD_HEAD } },
     { submittedAt: BEFORE },
     { submittedAt: START },
     { submittedAt: "2026-10-17T06:04:00Z" },
-    { state: "DISMISSED" },
+    { state: "PENDING" },
     { body: "A quoted or unrelated review receipt" },
     { author: { __typename: "Bot", login: "attacker", databaseId: 199175422 } },
     {
@@ -924,6 +1059,20 @@ describe("Codex review merge gate", () => {
       reviewGraphql.mockResolvedValue(receiptPage([receipt(values)]));
       threadGraphql.mockResolvedValue(threadPage());
       await expect(run()).resolves.toMatchObject({ state: "pending" });
+    },
+  );
+
+  it.each(["COMMENTED", "DISMISSED"])(
+    "keeps task completion independent of a %s GitHub review decision",
+    async (state) => {
+      const { run, reviewGraphql, threadGraphql } = setupFallback();
+      reviewGraphql.mockResolvedValue(receiptPage([receipt({ state })]));
+      threadGraphql.mockResolvedValue(threadPage());
+      await expect(run()).resolves.toMatchObject({ state: "success" });
+      threadGraphql.mockResolvedValue(
+        threadPage([reviewThread({ isResolved: false })]),
+      );
+      await expect(run()).resolves.toMatchObject({ state: "failure" });
     },
   );
 
@@ -1006,6 +1155,8 @@ describe("Codex review merge gate", () => {
     { errors: [{ message: "Partial result" }], ...receiptPage() },
     receiptPage([null]),
     receiptPage([receipt({ submittedAt: null })]),
+    receiptPage([receipt({ databaseId: null })]),
+    receiptPage([receipt({ comments: { totalCount: null } })]),
     receiptPage([receipt({ commit: null })]),
     receiptPage([receipt({ author: null })]),
     receiptPage([receipt()], true, null),
@@ -1115,6 +1266,7 @@ describe("Codex review merge gate", () => {
           comments: {
             nodes: [
               {
+                databaseId: 202,
                 body: "No finding marker",
                 pullRequestReview: receipt(),
                 author: {
@@ -1194,6 +1346,7 @@ describe("Codex review merge gate", () => {
         comments: {
           nodes: [
             {
+              databaseId: 202,
               body: "unknown bot",
               author: {
                 __typename: "Bot",

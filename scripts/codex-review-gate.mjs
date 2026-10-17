@@ -313,7 +313,8 @@ async function latestCodexReceipt(github, repo, number, sha) {
       pullRequest(number:$number) {
         reviews(first:100,after:$cursor,author:"chatgpt-codex-connector[bot]",states:[COMMENTED,APPROVED,CHANGES_REQUESTED,DISMISSED]) {
           nodes {
-            id submittedAt state body commit { oid }
+            id databaseId submittedAt state body commit { oid }
+            comments(first:1) { totalCount }
             author { __typename login ... on Bot { databaseId } }
           }
           pageInfo { hasNextPage endCursor }
@@ -344,6 +345,10 @@ async function latestCodexReceipt(github, repo, number, sha) {
       if (
         typeof review?.id !== "string" ||
         !review.id ||
+        !Number.isSafeInteger(review.databaseId) ||
+        review.databaseId <= 0 ||
+        !Number.isSafeInteger(review.comments?.totalCount) ||
+        review.comments.totalCount < 0 ||
         typeof review.body !== "string" ||
         typeof review.state !== "string" ||
         typeof review.commit?.oid !== "string" ||
@@ -390,13 +395,65 @@ async function codexThreadResolution(
   completed,
 ) {
   const latest = await latestCodexReceipt(github, repo, number, sha);
+  // A dismissal changes GitHub's review decision, not the Codex task's
+  // completion. The summary is the completion authority; this receipt only
+  // identifies its published findings, all of which still need resolution.
   const currentReview =
     latest &&
-    ["COMMENTED", "APPROVED", "CHANGES_REQUESTED"].includes(latest.state) &&
+    ["COMMENTED", "APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(
+      latest.state,
+    ) &&
     Date.parse(latest.submittedAt) > started &&
     Date.parse(latest.submittedAt) <= completed
       ? latest
       : undefined;
+  const expectedFindings = new Set();
+  let commentsComplete = false;
+  if (currentReview) {
+    const comments = await github.paginate(
+      github.rest.pulls.listCommentsForReview,
+      {
+        ...repo,
+        pull_number: number,
+        review_id: currentReview.databaseId,
+        per_page: 100,
+      },
+    );
+    if (!Array.isArray(comments))
+      throw new Error("Incomplete GitHub review-comment response.");
+    const ids = new Set();
+    for (const comment of comments) {
+      if (
+        !Number.isSafeInteger(comment?.id) ||
+        comment.id <= 0 ||
+        ids.has(comment.id) ||
+        typeof comment.body !== "string" ||
+        !Number.isSafeInteger(comment.user?.id) ||
+        comment.user.id <= 0 ||
+        typeof comment.user.login !== "string" ||
+        typeof comment.user.type !== "string" ||
+        comment.pull_request_review_id !== currentReview.databaseId
+      )
+        throw new Error("Incomplete GitHub review comment.");
+      ids.add(comment.id);
+      if (
+        comment.in_reply_to_id == null &&
+        comment.user?.id === TRUSTED_BOT.id &&
+        comment.user.login === TRUSTED_BOT.login &&
+        comment.user.type === TRUSTED_BOT.type &&
+        comment.body.includes("<!-- codex-code-review-finding:v1 -->")
+      ) {
+        if (comment.original_commit_id !== sha)
+          throw new Error("Mismatched Codex finding commit.");
+        expectedFindings.add(comment.id);
+      }
+    }
+    // Unknown comment kinds cannot be silently excluded from this narrow
+    // fallback: every published comment must be a trusted finding root.
+    commentsComplete =
+      comments.length === currentReview.comments.totalCount &&
+      expectedFindings.size === comments.length;
+  }
   const query = `query($owner:String!,$name:String!,$number:Int!,$cursor:String) {
     repository(owner:$owner,name:$name) {
       pullRequest(number:$number) {
@@ -405,7 +462,7 @@ async function codexThreadResolution(
             isResolved isOutdated
             comments(first:1) {
               nodes {
-                body author { __typename login ... on Bot { databaseId } }
+                databaseId body author { __typename login ... on Bot { databaseId } }
                 pullRequestReview {
                   id submittedAt commit { oid }
                   author { __typename login ... on Bot { databaseId } }
@@ -419,7 +476,7 @@ async function codexThreadResolution(
     }
   }`;
   let cursor = null;
-  let findings = 0;
+  const findings = new Set();
   let unresolved = false;
   const seen = new Set();
   do {
@@ -445,6 +502,8 @@ async function codexThreadResolution(
         typeof thread.isOutdated !== "boolean" ||
         !Array.isArray(roots) ||
         roots.length !== 1 ||
+        !Number.isSafeInteger(root?.databaseId) ||
+        root.databaseId <= 0 ||
         typeof root?.body !== "string" ||
         typeof root.author?.__typename !== "string" ||
         typeof root.author.login !== "string" ||
@@ -469,7 +528,7 @@ async function codexThreadResolution(
           review.submittedAt === currentReview.submittedAt &&
           root.body.includes("<!-- codex-code-review-finding:v1 -->")
         )
-          findings += 1;
+          findings.add(root.databaseId);
         // Outdated findings still need an explicit resolution.
         if (!thread.isResolved) unresolved = true;
       }
@@ -480,7 +539,14 @@ async function codexThreadResolution(
       throw new Error("Incomplete GitHub review-thread pagination.");
     seen.add(cursor);
   } while (true);
-  return unresolved ? "failure" : findings > 0 ? "success" : "pending";
+  return unresolved
+    ? "failure"
+    : commentsComplete &&
+        expectedFindings.size > 0 &&
+        findings.size === expectedFindings.size &&
+        [...expectedFindings].every((id) => findings.has(id))
+      ? "success"
+      : "pending";
 }
 
 export async function runCodexReviewGate({ github, context, core }) {
