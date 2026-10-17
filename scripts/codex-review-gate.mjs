@@ -291,6 +291,7 @@ function needsThreadResolution(summary, sha, checkpoint) {
     code.status === "completed" &&
     code.has_any_findings === true &&
     code.has_unresolved_findings === null &&
+    checkpoint.rc > 0 &&
     security?.commit_sha === sha &&
     security.status === "completed" &&
     security.has_unresolved_findings === false &&
@@ -298,7 +299,104 @@ function needsThreadResolution(summary, sha, checkpoint) {
   );
 }
 
-async function codexThreadResolution(github, repo, number) {
+function isCodexActor(author) {
+  return (
+    author?.__typename === "Bot" &&
+    author.databaseId === TRUSTED_BOT.id &&
+    author.login === "chatgpt-codex-connector"
+  );
+}
+
+async function latestCodexReceipt(github, repo, number, sha) {
+  const query = `query($owner:String!,$name:String!,$number:Int!,$cursor:String) {
+    repository(owner:$owner,name:$name) {
+      pullRequest(number:$number) {
+        reviews(first:100,after:$cursor,author:"chatgpt-codex-connector[bot]",states:[COMMENTED,APPROVED,CHANGES_REQUESTED,DISMISSED]) {
+          nodes {
+            id submittedAt state body commit { oid }
+            author { __typename login ... on Bot { databaseId } }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    }
+  }`;
+  let latest;
+  let ambiguous = false;
+  let cursor = null;
+  const seen = new Set();
+  do {
+    const response = await github.graphql(query, {
+      owner: repo.owner,
+      name: repo.repo,
+      number,
+      cursor,
+    });
+    const reviews = response?.repository?.pullRequest?.reviews;
+    if (
+      (response?.errors &&
+        (!Array.isArray(response.errors) || response.errors.length > 0)) ||
+      !Array.isArray(reviews?.nodes) ||
+      typeof reviews.pageInfo?.hasNextPage !== "boolean"
+    )
+      throw new Error("Incomplete GitHub review-receipt response.");
+    for (const review of reviews.nodes) {
+      if (
+        typeof review?.id !== "string" ||
+        !review.id ||
+        typeof review.body !== "string" ||
+        typeof review.state !== "string" ||
+        typeof review.commit?.oid !== "string" ||
+        typeof review.submittedAt !== "string" ||
+        !Date.parse(review.submittedAt) ||
+        typeof review.author?.__typename !== "string" ||
+        typeof review.author.login !== "string" ||
+        (review.author.__typename === "Bot" &&
+          !Number.isSafeInteger(review.author.databaseId))
+      )
+        throw new Error("Incomplete GitHub review receipt.");
+      if (
+        isCodexActor(review.author) &&
+        review.commit.oid === sha &&
+        review.body.trimStart().startsWith("<!-- codex-review-receipt:v1 -->")
+      ) {
+        const at = Date.parse(review.submittedAt);
+        if (!latest || at > Date.parse(latest.submittedAt)) {
+          latest = review;
+          ambiguous = false;
+        } else if (
+          at === Date.parse(latest.submittedAt) &&
+          review.id !== latest.id
+        )
+          ambiguous = true;
+      }
+    }
+    if (!reviews.pageInfo.hasNextPage) break;
+    cursor = reviews.pageInfo.endCursor;
+    if (typeof cursor !== "string" || !cursor || seen.has(cursor))
+      throw new Error("Incomplete GitHub review-receipt pagination.");
+    seen.add(cursor);
+  } while (true);
+  if (ambiguous) throw new Error("Ambiguous latest Codex review receipt.");
+  return latest;
+}
+
+async function codexThreadResolution(
+  github,
+  repo,
+  number,
+  sha,
+  started,
+  completed,
+) {
+  const latest = await latestCodexReceipt(github, repo, number, sha);
+  const currentReview =
+    latest &&
+    ["COMMENTED", "APPROVED", "CHANGES_REQUESTED"].includes(latest.state) &&
+    Date.parse(latest.submittedAt) > started &&
+    Date.parse(latest.submittedAt) <= completed
+      ? latest
+      : undefined;
   const query = `query($owner:String!,$name:String!,$number:Int!,$cursor:String) {
     repository(owner:$owner,name:$name) {
       pullRequest(number:$number) {
@@ -306,7 +404,13 @@ async function codexThreadResolution(github, repo, number) {
           nodes {
             isResolved isOutdated
             comments(first:1) {
-              nodes { body author { __typename login ... on Bot { databaseId } } }
+              nodes {
+                body author { __typename login ... on Bot { databaseId } }
+                pullRequestReview {
+                  id submittedAt commit { oid }
+                  author { __typename login ... on Bot { databaseId } }
+                }
+              }
             }
           }
           pageInfo { hasNextPage endCursor }
@@ -349,12 +453,22 @@ async function codexThreadResolution(github, repo, number) {
             root.author.databaseId <= 0))
       )
         throw new Error("Incomplete GitHub review-thread root.");
-      if (
-        root.author.__typename === "Bot" &&
-        root.author.databaseId === TRUSTED_BOT.id &&
-        root.author.login === "chatgpt-codex-connector"
-      ) {
-        if (root.body.includes("<!-- codex-code-review-finding:v1 -->"))
+      if (isCodexActor(root.author)) {
+        const review = root.pullRequestReview;
+        if (
+          typeof review?.id !== "string" ||
+          typeof review.commit?.oid !== "string" ||
+          !Date.parse(review.submittedAt) ||
+          !isCodexActor(review.author)
+        )
+          throw new Error("Incomplete Codex finding review provenance.");
+        if (
+          currentReview &&
+          review.id === currentReview.id &&
+          review.commit.oid === sha &&
+          review.submittedAt === currentReview.submittedAt &&
+          root.body.includes("<!-- codex-code-review-finding:v1 -->")
+        )
           findings += 1;
         // Outdated findings still need an explicit resolution.
         if (!thread.isResolved) unresolved = true;
@@ -445,7 +559,14 @@ export async function runCodexReviewGate({ github, context, core }) {
     ) {
       // Some connector versions emit null after findings are resolved. Only
       // that exact state may fall back to complete, trusted GitHub thread data.
-      threadResolution = await codexThreadResolution(github, repo, number);
+      threadResolution = await codexThreadResolution(
+        github,
+        repo,
+        number,
+        initialSha,
+        checkpoint.rc,
+        reviewTime(summary, "code_review"),
+      );
       ({ data: pullRequest } = await getPullRequest());
     }
   } catch (error) {
