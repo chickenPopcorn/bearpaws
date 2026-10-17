@@ -5,6 +5,8 @@ on:
     types: [opened, reopened, synchronize, ready_for_review, edited]
   issue_comment:
     types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
   workflow_dispatch:
     inputs:
       pull_request_number:
@@ -22,7 +24,8 @@ jobs:
   publish-gate:
     if: >-
       (github.event_name != 'issue_comment' &&
-       (github.event.action != 'edited' || github.event.changes.base)) ||
+       (github.event_name != 'pull_request_target' ||
+        github.event.action != 'edited' || github.event.changes.base)) ||
       (github.event.issue.pull_request &&
        (github.event.comment.user.id == 199175422 ||
         ((contains(github.event.comment.body, '@codex') ||

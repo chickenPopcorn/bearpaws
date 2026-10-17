@@ -224,7 +224,12 @@ function latestSummary(comments, context) {
   })[0];
 }
 
-function evaluateSummary(summary, sha, checkpoint) {
+function evaluateSummary(
+  summary,
+  sha,
+  checkpoint,
+  codeThreadsResolved = false,
+) {
   const pending = {
     state: "pending",
     description: "Waiting for Code Review and Security Review on this commit.",
@@ -232,7 +237,11 @@ function evaluateSummary(summary, sha, checkpoint) {
   const state = summaryState(summary);
   if (!state) return pending;
   const kinds = Object.keys(REVIEW_LABELS);
-  const reviews = kinds.map((kind) => state[kind]);
+  const reviews = kinds.map((kind) =>
+    kind === "code_review" && codeThreadsResolved
+      ? { ...state[kind], has_unresolved_findings: false }
+      : state[kind],
+  );
   // An older clean result must never satisfy a newer commit or a split review.
   if (reviews.some((review) => !review || review.commit_sha !== sha))
     return pending;
@@ -273,6 +282,93 @@ function evaluateSummary(summary, sha, checkpoint) {
   return pending;
 }
 
+function needsThreadResolution(summary, sha, checkpoint) {
+  const state = summaryState(summary);
+  const code = state?.code_review;
+  const security = state?.security_review;
+  return (
+    code?.commit_sha === sha &&
+    code.status === "completed" &&
+    code.has_any_findings === true &&
+    code.has_unresolved_findings === null &&
+    security?.commit_sha === sha &&
+    security.status === "completed" &&
+    security.has_unresolved_findings === false &&
+    evaluateSummary(summary, sha, checkpoint, true).state === "success"
+  );
+}
+
+async function codexThreadResolution(github, repo, number) {
+  const query = `query($owner:String!,$name:String!,$number:Int!,$cursor:String) {
+    repository(owner:$owner,name:$name) {
+      pullRequest(number:$number) {
+        reviewThreads(first:100,after:$cursor) {
+          nodes {
+            isResolved isOutdated
+            comments(first:1) {
+              nodes { body author { __typename login ... on Bot { databaseId } } }
+            }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    }
+  }`;
+  let cursor = null;
+  let findings = 0;
+  let unresolved = false;
+  const seen = new Set();
+  do {
+    const response = await github.graphql(query, {
+      owner: repo.owner,
+      name: repo.repo,
+      number,
+      cursor,
+    });
+    const threads = response?.repository?.pullRequest?.reviewThreads;
+    if (
+      (response?.errors &&
+        (!Array.isArray(response.errors) || response.errors.length > 0)) ||
+      !Array.isArray(threads?.nodes) ||
+      typeof threads.pageInfo?.hasNextPage !== "boolean"
+    )
+      throw new Error("Incomplete GitHub review-thread response.");
+    for (const thread of threads.nodes) {
+      const roots = thread?.comments?.nodes;
+      const root = roots?.[0];
+      if (
+        typeof thread?.isResolved !== "boolean" ||
+        typeof thread.isOutdated !== "boolean" ||
+        !Array.isArray(roots) ||
+        roots.length !== 1 ||
+        typeof root?.body !== "string" ||
+        typeof root.author?.__typename !== "string" ||
+        typeof root.author.login !== "string" ||
+        (root.author.__typename === "Bot" &&
+          (!Number.isSafeInteger(root.author.databaseId) ||
+            root.author.databaseId <= 0))
+      )
+        throw new Error("Incomplete GitHub review-thread root.");
+      if (
+        root.author.__typename === "Bot" &&
+        root.author.databaseId === TRUSTED_BOT.id &&
+        root.author.login === "chatgpt-codex-connector"
+      ) {
+        if (root.body.includes("<!-- codex-code-review-finding:v1 -->"))
+          findings += 1;
+        // Outdated findings still need an explicit resolution.
+        if (!thread.isResolved) unresolved = true;
+      }
+    }
+    if (!threads.pageInfo.hasNextPage) break;
+    cursor = threads.pageInfo.endCursor;
+    if (typeof cursor !== "string" || !cursor || seen.has(cursor))
+      throw new Error("Incomplete GitHub review-thread pagination.");
+    seen.add(cursor);
+  } while (true);
+  return unresolved ? "failure" : findings > 0 ? "success" : "pending";
+}
+
 export async function runCodexReviewGate({ github, context, core }) {
   const number = pullRequestNumber(context);
   const repo = { owner: context.repo.owner, repo: context.repo.repo };
@@ -309,6 +405,7 @@ export async function runCodexReviewGate({ github, context, core }) {
   });
   let summary;
   let checkpoint;
+  let threadResolution;
   try {
     const parameters = { ...repo, issue_number: number, per_page: 100 };
     const [comments, events, statuses] = await Promise.all([
@@ -340,6 +437,17 @@ export async function runCodexReviewGate({ github, context, core }) {
     // A push during the comments request must get a fresh pending result, not
     // inherit the successful result we just read for the previous head.
     ({ data: pullRequest } = await getPullRequest());
+    if (
+      pullRequest.state === "open" &&
+      pullRequest.base?.ref === "main" &&
+      pullRequest.head.sha === initialSha &&
+      needsThreadResolution(summary, initialSha, checkpoint)
+    ) {
+      // Some connector versions emit null after findings are resolved. Only
+      // that exact state may fall back to complete, trusted GitHub thread data.
+      threadResolution = await codexThreadResolution(github, repo, number);
+      ({ data: pullRequest } = await getPullRequest());
+    }
   } catch (error) {
     await publish({
       state: "failure",
@@ -361,8 +469,21 @@ export async function runCodexReviewGate({ github, context, core }) {
       description:
         "Pull request changed; waiting for Codex reviews of the new commit.",
     });
+  if (threadResolution === "failure")
+    return publish(
+      {
+        state: "failure",
+        description: "Codex finding threads still require resolution.",
+      },
+      summary?.html_url,
+    );
   return publish(
-    evaluateSummary(summary, initialSha, checkpoint),
+    evaluateSummary(
+      summary,
+      initialSha,
+      checkpoint,
+      threadResolution === "success",
+    ),
     summary?.html_url,
   );
 }

@@ -70,6 +70,42 @@ const checkpoint = (values = {}) => ({
   created_at: FINISH,
   id: 100,
 });
+const nullCodeState = () => ({
+  code_review: {
+    ...cleanReview(),
+    has_any_findings: true,
+    has_unresolved_findings: null,
+  },
+  security_review: cleanReview(),
+});
+const reviewThread = (overrides = {}) => ({
+  isResolved: true,
+  isOutdated: false,
+  comments: {
+    nodes: [
+      {
+        body: "A finding\n<!-- codex-code-review-finding:v1 -->",
+        author: {
+          __typename: "Bot",
+          login: "chatgpt-codex-connector",
+          databaseId: 199175422,
+        },
+      },
+    ],
+  },
+  ...overrides,
+});
+const threadPage = (
+  nodes = [reviewThread()],
+  hasNextPage = false,
+  endCursor = null,
+) => ({
+  repository: {
+    pullRequest: {
+      reviewThreads: { nodes, pageInfo: { hasNextPage, endCursor } },
+    },
+  },
+});
 const savedCheckpoint = (publish) =>
   JSON.parse(
     publish.mock.calls.findLast(
@@ -90,6 +126,7 @@ function setup(comments = [], events = [], statuses = []) {
   const listEvents = vi.fn();
   const listCommitStatusesForRef = vi.fn();
   const github = {
+    graphql: vi.fn(),
     rest: {
       pulls: { get },
       issues: { listComments, listEvents },
@@ -800,6 +837,244 @@ describe("Codex review merge gate", () => {
         c: Date.parse(REQUEST),
         s: Date.parse(REQUEST),
       });
+    },
+  );
+
+  it("accepts null unresolved metadata only with complete resolved Codex finding threads", async () => {
+    const { run, github, get } = setup([summary(nullCodeState())]);
+    github.graphql.mockResolvedValue(threadPage());
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+    expect(github.graphql).toHaveBeenCalledTimes(1);
+    expect(github.graphql).toHaveBeenCalledWith(
+      expect.stringContaining("reviewThreads(first:100"),
+      {
+        owner: "chickenPopcorn",
+        name: "bearpaws",
+        number: 7,
+        cursor: null,
+      },
+    );
+    expect(get).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    { code: { has_unresolved_findings: true }, expected: "failure" },
+    { code: { has_any_findings: false }, expected: "pending" },
+    { code: { has_unresolved_findings: undefined }, expected: "pending" },
+    { code: { commit_sha: OLD_HEAD }, expected: "pending" },
+    { code: { status: "running" }, expected: "pending" },
+    { security: { has_unresolved_findings: null }, expected: "pending" },
+    { security: { has_unresolved_findings: true }, expected: "failure" },
+    { security: { commit_sha: OLD_HEAD }, expected: "pending" },
+    { security: { status: "running" }, expected: "pending" },
+  ])(
+    "never broadens the thread fallback prerequisites: %j",
+    async ({ code, security, expected }) => {
+      const state = nullCodeState();
+      Object.assign(state.code_review, code);
+      Object.assign(state.security_review, security);
+      const { run, github } = setup([summary(state)]);
+      await expect(run()).resolves.toMatchObject({ state: expected });
+      expect(github.graphql).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not use thread resolution to bypass review freshness", async () => {
+    const { run, github } = setup(
+      [withTimes(nullCodeState())],
+      [],
+      [checkpoint({ b: Date.parse(REQUEST) })],
+    );
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    expect(github.graphql).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    "unresolved Codex threads fail even when outdated=%s",
+    async (isOutdated) => {
+      const { run, github } = setup([summary(nullCodeState())]);
+      github.graphql.mockResolvedValue(
+        threadPage([
+          reviewThread(),
+          reviewThread({ isResolved: false, isOutdated }),
+        ]),
+      );
+      await expect(run()).resolves.toMatchObject({ state: "failure" });
+    },
+  );
+
+  it("includes unmarked unresolved Codex threads once findings provenance is established", async () => {
+    const unmarked = reviewThread({ isResolved: false });
+    unmarked.comments.nodes[0].body = "Another Codex thread";
+    const { run, github } = setup([summary(nullCodeState())]);
+    github.graphql.mockResolvedValue(threadPage([reviewThread(), unmarked]));
+    await expect(run()).resolves.toMatchObject({ state: "failure" });
+  });
+
+  it.each([
+    { threads: [] },
+    {
+      threads: [
+        reviewThread({
+          comments: {
+            nodes: [
+              {
+                body: "No finding marker",
+                author: {
+                  __typename: "Bot",
+                  login: "chatgpt-codex-connector",
+                  databaseId: 199175422,
+                },
+              },
+            ],
+          },
+        }),
+      ],
+    },
+  ])(
+    "requires at least one proven Codex finding, not merely an empty clean thread list",
+    async ({ threads }) => {
+      const { run, github } = setup([summary(nullCodeState())]);
+      github.graphql.mockResolvedValue(threadPage(threads));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    },
+  );
+
+  it.each([
+    {
+      __typename: "User",
+      login: "chatgpt-codex-connector",
+      databaseId: 199175422,
+    },
+    { __typename: "Bot", login: "chatgpt-codex-connector", databaseId: 123 },
+    { __typename: "Bot", login: "attacker", databaseId: 199175422 },
+  ])("rejects spoofed finding authors: %j", async (author) => {
+    const thread = reviewThread();
+    thread.comments.nodes[0].author = author;
+    const { run, github } = setup([summary(nullCodeState())]);
+    github.graphql.mockResolvedValue(threadPage([thread]));
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("reads all thread pages before passing and checks later unresolved findings", async () => {
+    const { run, github } = setup([summary(nullCodeState())]);
+    github.graphql
+      .mockResolvedValueOnce(threadPage([reviewThread()], true, "page-2"))
+      .mockResolvedValueOnce(
+        threadPage([reviewThread({ isResolved: false, isOutdated: true })]),
+      );
+    await expect(run()).resolves.toMatchObject({ state: "failure" });
+    expect(github.graphql).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({ cursor: "page-2" }),
+    );
+  });
+
+  it("accepts resolved findings only after every page finishes successfully", async () => {
+    const { run, github } = setup([summary(nullCodeState())]);
+    github.graphql
+      .mockResolvedValueOnce(threadPage([reviewThread()], true, "next"))
+      .mockResolvedValueOnce(threadPage([reviewThread({ isOutdated: true })]));
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+    expect(github.graphql).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    undefined,
+    { repository: null },
+    { errors: [{ message: "Partial result" }], ...threadPage() },
+    threadPage([null]),
+    threadPage([reviewThread({ comments: { nodes: [] } })]),
+    threadPage([reviewThread({ isResolved: null })]),
+    threadPage([
+      reviewThread({
+        comments: { nodes: [{ body: "missing author", author: null }] },
+      }),
+    ]),
+    threadPage([
+      reviewThread({
+        comments: {
+          nodes: [
+            {
+              body: "unknown bot",
+              author: {
+                __typename: "Bot",
+                login: "chatgpt-codex-connector",
+                databaseId: null,
+              },
+            },
+          ],
+        },
+      }),
+    ]),
+    threadPage([reviewThread()], true, null),
+  ])(
+    "fails closed for partial or malformed thread responses: %j",
+    async (response) => {
+      const { run, github, publish } = setup([summary(nullCodeState())]);
+      github.graphql.mockResolvedValue(response);
+      await expect(run()).rejects.toThrow();
+      expect(publish).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          context: "Codex review gate",
+          state: "failure",
+        }),
+      );
+    },
+  );
+
+  it("fails closed if a later thread page errors after resolved findings were read", async () => {
+    const { run, github, publish } = setup([summary(nullCodeState())]);
+    github.graphql
+      .mockResolvedValueOnce(threadPage([reviewThread()], true, "next"))
+      .mockRejectedValueOnce(new Error("GraphQL unavailable"));
+    await expect(run()).rejects.toThrow("GraphQL unavailable");
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        context: "Codex review gate",
+        state: "failure",
+      }),
+    );
+  });
+
+  it("fails closed if pagination repeats a cursor", async () => {
+    const { run, github } = setup([summary(nullCodeState())]);
+    github.graphql.mockResolvedValue(
+      threadPage([reviewThread()], true, "loop"),
+    );
+    await expect(run()).rejects.toThrow("pagination");
+    expect(github.graphql).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["head", "base", "closed"])(
+    "rechecks the PR after thread resolution when its %s changes",
+    async (change) => {
+      const { run, github, get, pullRequest, publish } = setup([
+        summary(nullCodeState()),
+      ]);
+      const current =
+        change === "head"
+          ? { ...pullRequest, head: { sha: OLD_HEAD } }
+          : change === "base"
+            ? { ...pullRequest, base: { ref: "release" } }
+            : { ...pullRequest, state: "closed" };
+      get
+        .mockResolvedValueOnce({ data: pullRequest })
+        .mockResolvedValueOnce({ data: pullRequest })
+        .mockResolvedValueOnce({ data: current });
+      github.graphql.mockResolvedValue(threadPage());
+      await expect(run()).resolves.toMatchObject(
+        change === "head"
+          ? { state: "pending", sha: OLD_HEAD }
+          : { skipped: true },
+      );
+      expect(publish).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: "Codex review gate",
+          state: "success",
+        }),
+      );
     },
   );
 });
