@@ -1,6 +1,7 @@
 import { noteName, suggestedFinger, type Note, type Song } from "./song";
 import type { Group, MidiState, Practice } from "./engine";
-import { createBeatClock, createMeterMap } from "./notation";
+import { createMeterMap } from "./notation";
+import { createBeatClock } from "./timeline";
 const scoreFont = '"Libre Baskerville", Baskerville, Georgia, serif';
 const ranges = new WeakMap<Song, [number, number]>();
 const beatTimelines = new WeakMap<
@@ -189,7 +190,7 @@ export function draw(
     beatTimelines.set(song, timeline);
   }
   const { clock, meter } = timeline;
-  const leadIn = song.leadInBeats ?? 0;
+  const leadIn = meter.leadIn;
   const currentBeat = clock.at(position) - leadIn;
   const initialBar = meter.at(currentBeat);
   let beat =

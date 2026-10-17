@@ -237,7 +237,7 @@ describe("bundled beginner music", () => {
       expect(
         scoreTimeAtX(
           x,
-          { ...viewport, beatsPerBar: score.meter },
+          { ...viewport, meter: score.meter },
           score.clock,
           score.leadInBeats,
           song.duration,
