@@ -290,7 +290,6 @@ export class Practice {
 export class MidiState {
   down = new Set<number>();
   sounding = new Set<number>();
-  velocities = new Map<number, number>();
   pedals = new Set<number>();
   private keys = new Map<string, number>();
   private sustained = new Map<string, number>();
@@ -300,7 +299,6 @@ export class MidiState {
   clear() {
     this.down.clear();
     this.sounding.clear();
-    this.velocities.clear();
     this.pedals.clear();
     this.keys.clear();
     this.sustained.clear();
@@ -342,7 +340,6 @@ export class MidiState {
       const edge = !this.keys.has(key);
       this.keys.set(key, pitch);
       this.sustained.delete(key);
-      this.velocities.set(pitch, value);
       this.refresh();
       if (edge) return { pitch, velocity: value };
     } else if (type === 0x80 || (type === 0x90 && value === 0)) {

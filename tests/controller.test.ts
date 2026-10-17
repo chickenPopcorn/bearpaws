@@ -66,8 +66,6 @@ vi.mock("../src/storage", () => ({
     env.values.set(key, structuredClone(value));
     return true;
   },
-  read: (key: string, fallback: unknown) =>
-    structuredClone(env.values.get(key) ?? fallback),
   progress: (id: string, _duration: number) =>
     structuredClone({
       position: 0,
@@ -82,6 +80,8 @@ vi.mock("../src/storage", () => ({
   library: vi.fn(async () => env.songs),
   saveSong: vi.fn(async () => {}),
   deleteSong: vi.fn(async () => {}),
+  removeProgress: (id: string) =>
+    localStorage.removeItem(`cadence:progress:${id}`),
   songId: vi.fn(async () => "fixture-hash"),
 }));
 

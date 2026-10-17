@@ -67,6 +67,11 @@ const MAX_EVENTS = 500000;
 const MAX_TRACKS = 256;
 const NOTE_LIMIT_MESSAGE =
   "This MIDI file has more than 50,000 notes. Export a smaller passage for practice.";
+/** Reject an oversized file before reading or parsing it. */
+export function checkMidiSize(bytes: number) {
+  if (bytes > 10 * 1024 * 1024)
+    throw new Error("Please choose a MIDI file smaller than 10 MB.");
+}
 
 /** Count attacks without constructing parser events or normalized notes. */
 function preflightTrack(
@@ -146,8 +151,7 @@ export function tempoConverter(ppq: number, changes: Tempo[]) {
   return (tick: number) => clock.time(tick / ppq);
 }
 export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
-  if (bytes.length > 10 * 1024 * 1024)
-    throw new Error("Please choose a MIDI file smaller than 10 MB.");
+  checkMidiSize(bytes.length);
   if (String.fromCharCode(...bytes.slice(0, 4)) !== "MThd")
     throw new Error("This is not a standard MIDI file (.mid).");
   // Validate chunk boundaries because permissive parsers may accept a truncated header.
@@ -343,48 +347,6 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     ppq,
     timeSignatures: timeSignatures.sort((a, b) => a.tick - b.tick),
     warnings: [...new Set(warnings)],
-  };
-}
-export function exampleSong(): Song {
-  const notes: Note[] = [];
-  let id = 0;
-  const add = (pitch: number, start: number, duration: number, track: number) =>
-    notes.push({
-      id: `ex-${id++}`,
-      pitch,
-      start,
-      end: start + duration,
-      soundEnd: start + duration,
-      velocity: 0.7,
-      channel: track,
-      track,
-    });
-  // Original exercise: four slow chord changes, then a repeated-note melody.
-  [
-    [60, 64, 67],
-    [60, 65, 69],
-    [59, 62, 67],
-    [60, 64, 67],
-  ].forEach((chord, i) => {
-    chord.forEach((p) => add(p, 1 + i * 2, 0.95, 1));
-    add([48, 53, 55, 48][i], 1 + i * 2, 1.7, 0);
-  });
-  [60, 60, 62, 64, 65, 64, 62, 60].forEach((p, i) =>
-    add(p, 9 + i * 0.75, 0.55, 1),
-  );
-  [48, 53, 55, 48].forEach((p, i) => add(p, 9 + i * 1.5, 1.2, 0));
-  return {
-    id: "cadence-first-steps-v1",
-    title: "First steps",
-    notes: notes.sort((a, b) => a.start - b.start),
-    duration: 15.5,
-    tracks: [
-      { id: 0, name: "Left · steady foundations", hand: "left", count: 8 },
-      { id: 1, name: "Right · chords & melody", hand: "right", count: 20 },
-    ],
-    tempos: [{ tick: 0, microseconds: 750000 }],
-    ppq: 480,
-    warnings: [],
   };
 }
 export const noteName = (n: number) =>

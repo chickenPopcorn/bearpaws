@@ -1,7 +1,7 @@
 import { Practice, Transport, MidiState, type Mode } from "./engine";
 import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
-import { parseSong, type Song, type Hand } from "./song";
+import { checkMidiSize, parseSong, type Song, type Hand } from "./song";
 import { builtInSongs, isBuiltInSong } from "./lessons";
 import { normalizePianoSound } from "./pianoSound";
 import {
@@ -11,9 +11,11 @@ import {
   library,
   saveSong,
   deleteSong,
+  removeProgress,
   songId,
   type Progress,
 } from "./storage";
+const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
 export class Studio {
   settings = settings();
   savedSelection = this.settings.selected;
@@ -88,17 +90,33 @@ export class Studio {
         (n.start >= this.loopStart - 0.001 && n.start < this.loopEnd),
     );
   }
+  /** Whether the reference recording plays in the current mode. */
+  private get referenceAudible() {
+    return (
+      this.settings.mode === "listen" ||
+      (this.settings.mode === "rhythm" && this.settings.reference)
+    );
+  }
   private get referenceNotes() {
-    if (
-      this.settings.mode !== "listen" &&
-      !(this.settings.mode === "rhythm" && this.settings.reference)
-    )
-      return [];
+    if (!this.referenceAudible) return [];
     return this.notes.filter(
       (note) =>
         !this.loopEnabled ||
         (note.start < this.loopEnd && note.soundEnd > this.loopStart),
     );
+  }
+  /** Wait mode holds the transport at the next chord. */
+  private get waitGate() {
+    return this.settings.mode === "wait"
+      ? this.practice.gate?.start
+      : undefined;
+  }
+  /** Score afresh from the current position, with no keys held. */
+  private restartScoring() {
+    this.scoringEpoch = this.audio.now();
+    this.input.clear();
+    this.practice = new Practice(this.scoringNotes);
+    this.practice.reset(this.position);
   }
   private cancelPlaybackPreparation() {
     this.playGeneration++;
@@ -197,7 +215,6 @@ export class Studio {
     this.cancelPlaybackPreparation();
     if (this.transport.playing) this.pause();
     this.audio.stop();
-    this.input.clear();
     this.song = { ...song, tracks: song.tracks.map((t) => ({ ...t })) };
     this.settings.selected = song.id;
     this.persist();
@@ -218,9 +235,7 @@ export class Studio {
     this.loopEnabled = this.progress.loopEnabled;
     this.syncLoop();
     this.refreshSelection();
-    this.practice = new Practice(this.scoringNotes);
-    this.practice.reset(this.position);
-    this.scoringEpoch = this.audio.now();
+    this.restartScoring();
     this.notice = "";
     this.emit();
   }
@@ -228,10 +243,7 @@ export class Studio {
     this.cancelPlaybackPreparation();
     this.refreshSelection();
     this.audio.stop();
-    this.scoringEpoch = this.audio.now();
-    this.input.clear();
-    this.practice = new Practice(this.scoringNotes);
-    this.practice.reset(this.position);
+    this.restartScoring();
     this.transport.seek(this.position, this.audio.now());
     this.save();
     this.persist();
@@ -292,17 +304,14 @@ export class Studio {
   seek(position: number) {
     this.cancelPlaybackPreparation();
     this.audio.stop(!this.transport.playing);
-    this.scoringEpoch = this.audio.now();
     if (this.loopEnabled)
       position = Math.min(
         this.loopEnd - 0.001,
         Math.max(this.loopStart, position),
       );
-    this.input.clear();
     this.transport.seek(position, this.audio.now());
     this.position = this.transport.at(this.audio.now());
-    this.practice = new Practice(this.scoringNotes);
-    this.practice.reset(this.position);
+    this.restartScoring();
     this.notice = "";
     this.save();
     this.emit();
@@ -410,10 +419,7 @@ export class Studio {
     const playing = this.transport.playing,
       cycle = this.transport.cycle;
     if (playing) {
-      this.position = this.transport.update(
-        now,
-        this.settings.mode === "wait" ? this.practice.gate?.start : undefined,
-      );
+      this.position = this.transport.update(now, this.waitGate);
       if (cycle !== this.transport.cycle) {
         // Replace note scheduling without rebuilding the room on each pass.
         this.audio.stop(false, false);
@@ -424,10 +430,7 @@ export class Studio {
         // Replay this pass from its actual clock boundary so a late callback
         // records the first Wait hold at its true arrival time.
         this.transport.seek(this.loopStart, this.scoringEpoch);
-        this.position = this.transport.update(
-          now,
-          this.settings.mode === "wait" ? this.practice.gate?.start : undefined,
-        );
+        this.position = this.transport.update(now, this.waitGate);
       }
       if (this.settings.mode === "rhythm")
         this.practice.expire(
@@ -435,12 +438,7 @@ export class Studio {
           this.settings.tolerance,
           this.settings.speed,
         );
-      this.audio.schedule(
-        this.notes,
-        this.transport,
-        this.settings.mode === "listen" ||
-          (this.settings.mode === "rhythm" && this.settings.reference),
-      );
+      this.audio.schedule(this.notes, this.transport, this.referenceAudible);
       if (this.audio.error) this.notice = this.audio.error;
       const total = this.practice.notes.filter(
         (n) => n.start >= this.practice.from - 0.001,
@@ -517,8 +515,7 @@ export class Studio {
         })
         .catch(() => {
           if (generation !== this.playGeneration) return;
-          this.notice =
-            this.audio.error || "Piano sound is unavailable. Please try again.";
+          this.notice = this.audio.error || SOUND_UNAVAILABLE;
           this.emit();
         });
     }
@@ -535,15 +532,13 @@ export class Studio {
         this.audio.tone(n.pitch, n.velocity, this.audio.now(), 0.7);
     } catch {
       if (generation !== this.playGeneration) return;
-      this.notice =
-        this.audio.error || "Piano sound is unavailable. Please try again.";
+      this.notice = this.audio.error || SOUND_UNAVAILABLE;
       this.emit();
     }
   }
   async import(file: File) {
     try {
-      if (file.size > 10 * 1024 * 1024)
-        throw new Error("Please choose a MIDI file smaller than 10 MB.");
+      checkMidiSize(file.size);
       const bytes = new Uint8Array(await file.arrayBuffer()),
         song = parseSong(
           bytes,
@@ -585,7 +580,7 @@ export class Studio {
     }
     // IndexedDB deletion has committed. Progress cleanup must not undo the UI result.
     try {
-      localStorage.removeItem(`cadence:progress:${id}`);
+      removeProgress(id);
     } catch {
       this.storageNotice =
         "Song removed. Saved progress could not be cleared in this browser.";
