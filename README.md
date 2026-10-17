@@ -86,6 +86,20 @@ Reference audio coalesces duplicate pitches at the same onset and allows at most
 
 Your physical piano supplies live piano sound. The browser does not echo incoming USB notes; Listen, optional Rhythm reference, and on-screen previews use Accurate-Salamander Grand Piano 6.2a: eight recorded intensity layers of a Yamaha C5, in lossless 24-bit stereo FLAC. The player preserves the source preset’s per-key tuning, attack offsets and volume balance, with natural release tails. Only the recordings needed for the selected notes and velocities load before playback; decoded samples are reused within a 512 MiB cache. Very large selections may need one hand or a shorter loop. The complete bundled sample bank is about 358 MiB, but it is not downloaded in full on page load. No external audio service is contacted. Recording credits, adaptation details and the CC BY 3.0 license are in [the sample credits](public/audio/accurate-salamander/CREDITS.md). Key-down highlights are separate from pedal-sustained sound (teal dots). Switching inputs or disconnecting clears key/pedal state and pauses Wait/Rhythm; Listen continues. Seek/restart and loop transitions clear transient input and cancel scheduled reference audio. Leaving the page hidden pauses playback to avoid invisible practice and background scheduling gaps.
 
+### Piano sound
+
+Open **Piano sound** above the score in either normal or fullscreen view.
+**Natural**, the default, uses gentler compression and subtle stereo room ambience.
+Adjust **Room** while listening, or choose **Original · dry** to compare the previous
+sound. The selection and room amount are remembered in this browser, across songs.
+Changes do not restart notes or the practice timeline. Pause, seek and song changes
+clear the room tail as well as scheduled notes.
+
+This first tuning pass retains the same eight-layer recordings. The room is a
+small synthetic convolution ambience, not additional piano release samples or
+physical pedal/string resonance. Full 16-layer playback and sampled resonance
+remain separate enhancements.
+
 ## Local data and file support
 
 Settings and per-song position, track assignments, passage, number of starts, and best matched-note proportion are stored in localStorage. Best proportion uses all eligible notes in the current passage, including upcoming notes. Imported normalized songs are stored in IndexedDB, keyed by a SHA-256 hash of their contents. Removing a local song removes its stored song/progress. Storage failures show a message and allow session-only use. Browser storage is specific to the origin/browser/profile; clearing it removes your library and progress.

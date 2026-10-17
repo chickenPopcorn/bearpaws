@@ -3,6 +3,7 @@ import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
 import { parseSong, type Song, type Hand } from "./song";
 import { builtInSongs, isBuiltInSong } from "./lessons";
+import { normalizePianoSound, type PianoSoundProfile } from "./pianoSound";
 import {
   settings,
   write,
@@ -54,6 +55,10 @@ export class Studio {
   loopEnd = this.song.duration;
   timer: ReturnType<typeof setInterval> | null = null;
   constructor() {
+    this.audio.setSound({
+      profile: this.settings.soundProfile,
+      ambience: this.settings.ambience,
+    });
     this.midi = this.createMidi();
     this.load(this.song);
   }
@@ -274,6 +279,14 @@ export class Studio {
     this.persist();
     this.emit();
     if (resume) void this.play();
+  }
+  sound(profile: PianoSoundProfile, ambience: number) {
+    const sound = normalizePianoSound({ profile, ambience });
+    this.settings.soundProfile = sound.profile;
+    this.settings.ambience = sound.ambience;
+    this.audio.setSound(sound);
+    this.persist();
+    this.emit();
   }
   seek(position: number) {
     this.cancelPlaybackPreparation();

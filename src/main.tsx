@@ -16,6 +16,7 @@ import {
 } from "./song";
 import { FingerGuide } from "./FingerGuide";
 import { SongLibrary } from "./SongLibrary";
+import { PianoSoundControls } from "./PianoSoundControls";
 import { SheetTimeline } from "./SheetTimeline";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
@@ -491,6 +492,13 @@ function App() {
                 <span className="time">
                   {stamp(studio.position)} / {stamp(studio.song.duration)}
                 </span>
+                <PianoSoundControls
+                  profile={s.soundProfile}
+                  ambience={s.ambience}
+                  onChange={(profile, ambience) =>
+                    studio.sound(profile, ambience)
+                  }
+                />
                 {fullscreen.expanded && (
                   <div
                     className="song-navigation"

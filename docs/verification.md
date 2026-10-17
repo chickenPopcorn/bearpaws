@@ -1,10 +1,10 @@
 # Verification record
 
-Updated October 17, 2026 for the BearPaws library, practice controls, and full An Jing arrangement.
+Updated October 17, 2026 for the BearPaws library, practice controls, full An Jing arrangement, and Natural piano sound.
 
 ## Automated checks
 
-- `npm test`: 426 tests across 24 suites passed.
+- `npm test`: 456 tests across 26 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: 6 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
@@ -41,9 +41,25 @@ verify all hashes against the recorded source metadata. Runtime loading remains
 selective, with a 512 MiB decoded cache limit; a full-bank download is not needed
 to open the page. The CI artifact includes the complete bank.
 
+The sound tests cover preference migration and validation, live updates without
+restarting playback or cancelling sample preparation, one shared sound bus,
+deterministic sample-rate-aware stereo room responses, post-mix peak protection,
+room-tail flushing, and recovery after allocation failures.
+
 ## Local browser checks
 
-The latest production build was checked in the in-app browser at
+The Natural sound development build was checked at `http://127.0.0.1:4189/`:
+Natural/Original switches and Room adjustments kept playback running; preferences
+are global; the native sound popover remains visible in fullscreen; Escape
+closes it without leaving fullscreen. A native OfflineAudioContext rendered the
+same Ode passage through both sound profiles and a 64-voice chord with maximum
+room. All three renders had finite samples and no samples exceeding full scale
+(peak levels approximately -6.91, -7.00 and -0.04 dBFS respectively). These are
+measurements of those fixtures, not a universal true-peak guarantee or a claim
+of subjective sound quality. The comparison WAVs use the same recordings and
+input gain, without loudness normalization.
+
+The preceding production build was checked in the in-app browser at
 `http://127.0.0.1:4188/nested/piano/`: composer search finds An Jing, the source
 credit and individual download are visible, fullscreen starts practice, and
 score seeking reaches the last of 99 measures.

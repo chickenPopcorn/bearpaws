@@ -65,6 +65,31 @@ it("migrates the removed 500ms tolerance to the widest available setting", () =>
   write("settings", { tolerance: 0.5 });
   expect(settings().tolerance).toBe(0.35);
 });
+it("restores sound preferences and gives legacy settings the Natural preset", () => {
+  expect(settings()).toMatchObject({ soundProfile: "natural", ambience: 0.22 });
+  write("settings", { soundProfile: "original", ambience: 0.37 });
+  expect(settings()).toMatchObject({
+    soundProfile: "original",
+    ambience: 0.37,
+  });
+});
+it.each([
+  [
+    { soundProfile: "unknown", ambience: "loud" },
+    { soundProfile: "natural", ambience: 0.22 },
+  ],
+  [
+    { soundProfile: "natural", ambience: -1 },
+    { soundProfile: "natural", ambience: 0 },
+  ],
+  [
+    { soundProfile: "original", ambience: 8 },
+    { soundProfile: "original", ambience: 1 },
+  ],
+])("normalizes invalid sound preferences: %j", (saved, expected) => {
+  write("settings", saved);
+  expect(settings()).toMatchObject(expected);
+});
 it.each([undefined, { loop: null }, { loop: [1, 4] }])(
   "defaults new and legacy progress to looping on: %j",
   (saved) => {
