@@ -434,7 +434,25 @@ describe("practice studio integration", () => {
     },
   );
 
-  it.each(["speed", "seek", "inactive bounds", "loop wrap"] as const)(
+  it("keeps sounding notes when loop bounds change while the loop is off", async () => {
+    const studio = create(
+      song([
+        [60, 0.5],
+        [63, 1.5],
+      ]),
+    );
+    studio.mode("listen");
+    studio.loop(false);
+    await studio.play();
+    advance(studio, 0.6);
+    vi.mocked(studio.audio.stop).mockClear();
+    studio.bounds(0, 3);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.audio.stop).not.toHaveBeenCalled();
+    expect(studio.transport.loop).toBeNull();
+  });
+
+  it.each(["speed", "seek", "loop wrap"] as const)(
     "retains prepared passage recordings through %s during playback",
     async (change) => {
       const studio = create(
@@ -444,7 +462,6 @@ describe("practice studio integration", () => {
         ]),
       );
       studio.mode("listen");
-      if (change === "inactive bounds") studio.loop(false);
       if (change === "loop wrap") {
         studio.bounds(0, 2);
         studio.loop(true);
@@ -453,7 +470,6 @@ describe("practice studio integration", () => {
       vi.mocked(studio.audio.stop).mockClear();
       if (change === "speed") studio.speed(0.75);
       else if (change === "seek") studio.seek(1);
-      else if (change === "inactive bounds") studio.bounds(0, 3);
       else advance(studio, 2.1);
       expect(studio.transport.playing).toBe(true);
       expect(studio.audio.stop).toHaveBeenCalled();

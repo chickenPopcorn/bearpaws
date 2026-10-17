@@ -399,7 +399,8 @@ export class Studio {
       Math.min(this.song.duration, end),
     );
     this.syncLoop();
-    this.audio.stop(!this.transport.playing);
+    // An enabled loop restarts from its new start. A disabled one does not
+    // change playback, so sounding notes must not be stopped and re-struck.
     if (this.loopEnabled) this.seek(this.loopStart);
     this.save();
     this.emit();
