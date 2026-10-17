@@ -16,6 +16,10 @@ import {
 export const MAX_REFERENCE_VOICES = 64;
 export const MAX_PIANO_CACHE_BYTES = 512 * 1024 * 1024;
 type PianoNote = Pick<Note, "pitch" | "velocity">;
+/** Explicit stops fade sounding voices this quickly instead of cutting them. */
+const FADE_SECONDS = 0.008;
+/** Six fade time constants leave less than 0.3% gain when the source stops. */
+const FADE_STOP_SECONDS = 0.05;
 const MEMORY_MESSAGE =
   "This passage needs too many piano samples. Try one hand or a shorter loop.";
 /** The recordings that play these notes. */
@@ -35,6 +39,8 @@ interface Voice {
   source: AudioBufferSourceNode;
   gain: GainNode;
   file: string;
+  /** Context time of the attack. */
+  start: number;
 }
 class PianoMemoryError extends Error {}
 /** Audio and MIDI timestamps share performance.timeOrigin. Frames never advance time. */
@@ -42,6 +48,8 @@ export class ReferenceAudio {
   context: AudioContext | null = null;
   samples = new Map<string, AudioBuffer>();
   voices = new Set<Voice>();
+  /** Voices fading out after a stop, until their sources end. */
+  private fading = new Set<Voice>();
   private output: PianoSoundBus | null = null;
   private sound: PianoSoundSettings = { ...DEFAULT_PIANO_SOUND };
   private pending = new Map<string, SampleRequest>();
@@ -99,7 +107,7 @@ export class ReferenceAudio {
     return new Set([
       ...this.playbackFiles,
       ...this.pins.keys(),
-      ...[...this.voices].map((voice) => voice.file),
+      ...[...this.voices, ...this.fading].map((voice) => voice.file),
     ]);
   }
   private makeRoom(bytes: number) {
@@ -267,17 +275,29 @@ export class ReferenceAudio {
   }
   private disconnect(voice: Voice) {
     this.voices.delete(voice);
+    this.fading.delete(voice);
     voice.source.disconnect();
     voice.gain.disconnect();
   }
-  stop(releasePrepared = true, resetRoom = true) {
-    if (releasePrepared) this.playbackFiles.clear();
-    for (const voice of this.voices) {
+  /** Cutting a sounding sample clicks. Fade it, and disconnect it once it ends. */
+  private fade(voice: Voice, at: number) {
+    this.voices.delete(voice);
+    try {
+      voice.gain.gain.cancelAndHoldAtTime(at);
+      voice.gain.gain.setTargetAtTime(0, at, FADE_SECONDS);
+      voice.source.stop(at + FADE_STOP_SECONDS);
+      this.fading.add(voice);
+    } catch {
       try {
         voice.source.stop();
       } catch {}
       this.disconnect(voice);
     }
+  }
+  stop(releasePrepared = true, resetRoom = true) {
+    if (releasePrepared) this.playbackFiles.clear();
+    const now = this.now();
+    for (const voice of this.voices) this.fade(voice, now);
     this.scheduled.clear();
     // Rebuilding the room flushes its tail. Skip it when there is no tail,
     // such as while dragging the playhead with nothing playing.
@@ -315,6 +335,8 @@ export class ReferenceAudio {
       const rate = pianoPlaybackRate(region, pitch);
       source.playbackRate.value = rate;
       gain = context.createGain();
+      // Silent until the attack, including when a fade cancels the attack.
+      gain.gain.value = 0;
       const level = pianoLevel(region, velocity);
       const releaseAt = when + Math.max(0.04, duration);
       // Lower strings take longer to damp. A time constant retains a gentle
@@ -333,7 +355,7 @@ export class ReferenceAudio {
         gain.gain.setTargetAtTime(0, releaseAt, releaseTime);
       source.connect(gain).connect(this.output?.input ?? context.destination);
       this.roomUsed = true;
-      const voice = { source, gain, file: region.file };
+      const voice = { source, gain, file: region.file, start: when };
       this.voices.add(voice);
       source.onended = () => this.disconnect(voice);
       source.start(when, region.offset);

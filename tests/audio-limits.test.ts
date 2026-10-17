@@ -291,6 +291,42 @@ describe("bounded reference audio", () => {
     expect(audio.scheduled.size).toBe(0);
     for (const osc of nodes) expect(osc.stop).toHaveBeenCalledTimes(2);
   });
+  it("fades sounding and waiting voices on an explicit stop and disconnects each when it ends", () => {
+    const { audio, context, nodes } = fixture();
+    audio.tone(60, 0.8, 0, 2);
+    audio.tone(64, 0.8, 1.02, 2);
+    context.currentTime = 1;
+    audio.stop();
+    expect(audio.voices.size).toBe(0);
+    expect(audio.scheduled.size).toBe(0);
+    nodes.forEach((osc, index) => {
+      const gain = context.createGain.mock.results[index].value;
+      // Silent before its attack, so a fade cannot start a waiting voice loud.
+      expect(gain.gain.value).toBe(0);
+      expect(gain.gain.cancelAndHoldAtTime).toHaveBeenCalledWith(1);
+      expect(gain.gain.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, 0.008);
+      expect(osc.stop).toHaveBeenCalledTimes(2);
+      expect(osc.stop.mock.lastCall![0]).toBeCloseTo(1.05);
+      expect(osc.disconnect).not.toHaveBeenCalled();
+      osc.onended!();
+      expect(osc.disconnect).toHaveBeenCalledOnce();
+      expect(gain.disconnect).toHaveBeenCalledOnce();
+    });
+  });
+  it("stops a voice outright when the browser cannot fade it", () => {
+    const { audio, context, nodes } = fixture();
+    audio.tone(60, 0.8, 0, 2);
+    context.createGain.mock.results[0].value.gain.cancelAndHoldAtTime.mockImplementation(
+      () => {
+        throw new TypeError("Unsupported");
+      },
+    );
+    context.currentTime = 1;
+    expect(() => audio.stop()).not.toThrow();
+    expect(nodes[0].stop).toHaveBeenLastCalledWith();
+    expect(nodes[0].disconnect).toHaveBeenCalledOnce();
+    expect(audio.voices.size).toBe(0);
+  });
   it("applies the same cap to direct previews and future-scheduled voices, then reuses freed slots", () => {
     const { audio, context, nodes } = fixture();
     for (let i = 0; i < 5000; i++) audio.tone(i % 128, 0.8, 100, 10);
