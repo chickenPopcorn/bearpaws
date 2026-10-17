@@ -15,6 +15,7 @@ Open the printed local URL, normally `http://localhost:5173`. Desktop Chrome or 
 
 ```sh
 npm test               # Deterministic engine, MIDI lifecycle, controller, storage, audio/Canvas checks
+python3 -m unittest discover -s tests -p 'test_*.py' # Offline soundbank importer checks
 npm run test:watch     # Watch tests
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173
@@ -24,19 +25,46 @@ npm run format         # Format source, tests and documentation
 
 ## Practice
 
-1. Start with **First steps**, an original exercise included in the app. A downloadable standard MIDI copy is at `public/examples/first-steps.mid` and in the library sidebar.
-2. Click **Connect piano** to request MIDI permission. Choose an input when more than one is available. No permission is requested at page load. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically.
+The library includes **Ode to Joy** (Beethoven, easy arrangement, 80 BPM)
+and **Dancing Raindrops** (transcribed from the supplied sheet music, with an
+80 BPM practice tempo). Both use C position. Ode to Joy has one left-hand bass
+note per bar; Dancing Raindrops includes chords, rests, staccato notes and a slur.
+Each includes suggested finger numbers on the falling notes, active keys and
+Wait for me coach, plus diagrams showing the starting hand positions.
+The sheet-music timeline above the waterfall follows the current bar. Accepted
+notes fade to 50% opacity in practice modes; Listen marks the notes played by
+the reference audio. Disabled hands remain visible at half opacity. Written
+rhythms and rests are preserved for the built-in pieces; imported MIDI uses
+approximate note values derived from performed timing.
+Click a note or drag across the score to change playback position. The focused
+score also supports arrow keys, Shift+arrow for a bar, and Home/End. Mode,
+restart, playback, speed and time controls share the row above the score.
+Full screen expands the score and waterfall and starts the selected practice
+mode. Escape returns to the page; playback controls remain available in either
+view. Clicking “Where your fingers go” toggles the optional animated bear paws;
+that preference is saved separately in this browser, and reduced-motion settings
+disable their animation.
+On both hands, 1 means thumb and 5 means little finger. Changing a track to the
+opposite hand hides its original fingering; imported MIDI is not assigned
+guessed finger numbers.
+
+1. Choose **Ode to Joy** or **Dancing Raindrops** from the library.
+2. Click **Connect piano** to grant MIDI permission the first time. On later visits, saved browser permission automatically connects the first available MIDI input. You can choose a different input when more than one is available. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
 3. Import `.mid` / `.midi` files. Assign each note-bearing track to **Left**, **Right**, or **Skip** under _Make it yours_. Multiple-track imports start unassigned. A single-track import starts assigned to Right; a single track cannot be split by pitch in this MVP.
 4. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Import and Listen work without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
 5. Slow down (25–150%), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Enable the loop button to repeat that passage.
 
-**Listen** uses browser reference sound. **Wait for me** holds the shared timeline at each selected note/chord until every chord pitch has been pressed and is physically held. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. “Hear next notes” provides a reference without accepting the notes for you.
+**Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. “Hear next notes” provides a reference without accepting the notes for you.
 
 **Rhythm** keeps moving and matches note onsets using MIDI event timestamps. Timing tolerance is configurable (±120, ±220 or ±350 ms of real time, independent of playback speed). Feedback identifies missed/wrong notes and early/late matched notes; click a missed note to loop a short passage around it. This MVP scores pitch and onset timing, not fingering or held-note duration.
 
 Reference audio coalesces duplicate pitches at the same onset and allows at most 64 active or scheduled voices, including previews. Extremely dense material can omit excess reference voices; MIDI input and scoring remain independent. The waterfall coalesces duplicate note shapes and draws at most 4,096 distinct visible rectangles per frame; the full note set still drives scoring. Recent feedback is limited to 256 entries and six missed-note replay anchors, with full-passage note counts, wrong-press totals and average timing retained separately.
 
-Your physical piano supplies live piano sound. The browser does not echo incoming USB notes; it supplies a simple synthesized reference for Listen, optional Rhythm reference, and on-screen previews. Key-down highlights are separate from pedal-sustained sound (teal dots). Switching inputs or disconnecting clears key/pedal state and pauses Wait/Rhythm; Listen continues. Seek/restart and loop transitions clear transient input and cancel scheduled reference audio. Leaving the page hidden pauses playback to avoid invisible practice and background scheduling gaps.
+Your physical piano supplies live piano sound. The browser does not echo incoming USB notes; Listen, optional Rhythm reference, and on-screen previews use Accurate-Salamander Grand Piano 6.2a: eight recorded intensity layers of a Yamaha C5, in lossless 24-bit stereo FLAC. The player preserves the source preset’s per-key tuning, attack offsets and volume balance, with natural release tails. Only the recordings needed for the selected notes and velocities load before playback; decoded samples are reused within a 512 MiB cache. Very large selections may need one hand or a shorter loop. The complete bundled sample bank is about 358 MiB, but it is not downloaded in full on page load. No external audio service is contacted. Recording credits, adaptation details and the CC BY 3.0 license are in [the sample credits](public/audio/accurate-salamander/CREDITS.md). Key-down highlights are separate from pedal-sustained sound (teal dots). Switching inputs or disconnecting clears key/pedal state and pauses Wait/Rhythm; Listen continues. Seek/restart and loop transitions clear transient input and cancel scheduled reference audio. Leaving the page hidden pauses playback to avoid invisible practice and background scheduling gaps.
+
+## Illustration credit
+
+The finger guide adapts [Hand external anatomy, dorsum](https://commons.wikimedia.org/wiki/File:Hand_external_anatomy,_dorsum.svg) by Darryl Leja / the National Human Genome Research Institute, a public-domain US government work. The app omits fine joint markings, crops the wrist, recolors and mirrors the outline, and adds upright fingering numbers.
 
 ## Local data and file support
 
@@ -55,7 +83,9 @@ Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, in
 - `src/controller.ts`: shared practice timeline, transport actions and local progress.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings/progress and IndexedDB song library.
-- `src/main.tsx`: compact Practice studio with the beginner Wait for me coach.
+- `src/main.tsx`: Practice studio with the beginner Wait for me coach.
+- `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
+- `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.
 
 Once audio is unlocked, AudioContext time is the musical clock; MIDI event timestamps are mapped from the performance clock into it. Transport position is derived from anchors and speed, never accumulated frame deltas. Rendering, audio scheduling and scoring use that timeline. Audio uses a short look-ahead and cancels on discontinuities. Timestamp history preserves event positions across speed changes; queued events from before a seek/song/loop reset are excluded from the new passage. Rhythm reconciles a delayed in-window timestamp even if the current clock already marked that note missed.
 
@@ -65,6 +95,9 @@ See [docs/verification.md](docs/verification.md) for checks run, limitations, an
 
 The production output is the static `dist/` directory. The GitHub checks workflow uploads that directory and the hosting manifest as a `cadence-static` artifact after a successful CI build. `.openai/hosting.json` declares it for ChatGPT Sites. Sites registration was attempted but failed with `Project owner is not linked to an account`; no project ID or deployed URL was returned. **Deployment is pending**, with a prepared static archive. After account linkage is repaired, create an owner-private Site, persist its returned project ID, synchronize the exact source commit, package `.openai/hosting.json` plus `dist/`, and deploy that saved version privately.
 
-Interactive browser QA was unavailable because this session exposed no browser-control tool. Fake Canvas/AudioContext and synthetic MIDI tests are not real browser or USB hardware validation. **Web MIDI at a published URL and the actual USB piano remain unverified.** Do not infer hardware compatibility from passing automated tests.
+Local Chrome verification confirmed automatic connection to the available USB MIDI
+input after refresh, fullscreen autoplay, score seeking and the saved paw preference.
+This does not establish end-to-end physical-key timing or published-origin MIDI
+compatibility. See the verification document for that distinction.
 
-The reference images and HTML remain unchanged in `docs/design/`. The repository is delivered on a feature branch for a draft PR; it is not merged into main.
+The reference images and HTML remain unchanged in `docs/design/`.

@@ -1,18 +1,28 @@
-/** Web MIDI stays behind an explicit user gesture; no access request happens at construction. */
+/** New MIDI permission stays behind Connect; saved permission can reconnect at startup. */
 export type MidiConnectionStatus =
-  "unsupported" | "denied" | "no-device" | "disconnected" | "connected";
+  | "unsupported"
+  | "denied"
+  | "no-device"
+  | "disconnected"
+  | "opening"
+  | "connected";
 export interface MidiDevice {
   id: string;
   name: string;
 }
 export interface MidiCallbacks {
   onMessage(data: Uint8Array, timeStamp: number): void;
-  /** Clear physical keys, pedal state, and pending practice input whenever the source changes. */
+  /** Clear physical keys, pedals, and pending input when a bound source changes or is disposed. */
   onReset(): void;
   onChange(): void;
 }
 export interface MidiNavigator {
   requestMIDIAccess(options?: MIDIOptions): Promise<MIDIAccess>;
+  permissions?: {
+    query(descriptor: { name: "midi"; sysex: false }): Promise<{
+      state: PermissionState;
+    }>;
+  };
 }
 
 export class MidiConnection {
@@ -24,7 +34,9 @@ export class MidiConnection {
   private input: MIDIInput | undefined;
   private disposed = false;
   private failedInput: MIDIInput | undefined;
+  private bindingGeneration = 0;
   private pending: Promise<void> | undefined;
+  private automatic: Promise<void> | undefined;
   private source: MidiNavigator | undefined;
 
   constructor(
@@ -43,7 +55,43 @@ export class MidiConnection {
       : "Web MIDI is unavailable. Use desktop Chrome or Edge over HTTPS. Import and Listen still work.";
   }
 
-  /** Request access only from the Connect piano button. Permission failures are visible states. */
+  /** Reuse saved permission without opening a permission prompt on page load. */
+  autoConnect(): Promise<void> {
+    if (this.automatic) return this.automatic;
+    if (
+      this.disposed ||
+      this.access ||
+      this.pending ||
+      !this.source?.permissions
+    )
+      return Promise.resolve();
+    this.automatic = this.connectIfAllowed().finally(() => {
+      this.automatic = undefined;
+    });
+    return this.automatic;
+  }
+
+  private async connectIfAllowed(): Promise<void> {
+    const generation = this.bindingGeneration;
+    try {
+      const permission = await this.source!.permissions!.query({
+        name: "midi",
+        sysex: false,
+      });
+      if (
+        permission.state === "granted" &&
+        !this.disposed &&
+        !this.access &&
+        !this.pending &&
+        generation === this.bindingGeneration
+      )
+        await this.connect();
+    } catch {
+      // Browsers without MIDI permission queries keep the explicit Connect button.
+    }
+  }
+
+  /** Explicit connection also handles the first permission request and retries. */
   connect(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (this.pending) return this.pending;
@@ -123,40 +171,51 @@ export class MidiConnection {
       this.status = "disconnected";
       this.message =
         "This MIDI input could not be opened. Check the USB connection and choose it again.";
-    } else {
-      if (this.input !== selected) this.bind(selected);
-      this.status = "connected";
-      this.message = `Connected to ${selected.name || "MIDI input"}.`;
-    }
+    } else if (this.input !== selected) this.bind(selected);
     this.callbacks.onChange();
   }
 
   private bind(input: MIDIInput): void {
     this.detach();
     this.input = input;
+    // A port can be selected again before an earlier open attempt completes.
+    const generation = this.bindingGeneration;
+    const current = () =>
+      !this.disposed &&
+      this.input === input &&
+      this.bindingGeneration === generation;
+    this.status = "opening";
+    this.message = `Connecting to ${input.name || "MIDI input"}…`;
     input.onmidimessage = (event) => {
-      if (
-        this.disposed ||
-        this.input !== input ||
-        input.state !== "connected" ||
-        !event.data
-      )
-        return;
+      if (!current() || input.state !== "connected" || !event.data) return;
       // DOM event timestamps share performance.now()'s clock. Never substitute animation-frame time.
       this.callbacks.onMessage(new Uint8Array(event.data), event.timeStamp);
     };
-    void input.open().catch(() => {
-      if (this.disposed || this.input !== input) return;
-      this.failedInput = input;
-      this.detach();
-      this.status = "disconnected";
-      this.message =
-        "This MIDI input could not be opened. Check the USB connection and choose it again.";
-      this.callbacks.onChange();
-    });
+    void input.open().then(
+      () => {
+        if (!current()) return;
+        if (input.state !== "connected") {
+          this.refresh();
+          return;
+        }
+        this.status = "connected";
+        this.message = `Connected to ${input.name || "MIDI input"}.`;
+        this.callbacks.onChange();
+      },
+      () => {
+        if (!current()) return;
+        this.failedInput = input;
+        this.detach();
+        this.status = "disconnected";
+        this.message =
+          "This MIDI input could not be opened. Check the USB connection and choose it again.";
+        this.callbacks.onChange();
+      },
+    );
   }
 
-  private detach(): void {
+  private detach(forceReset = false): void {
+    this.bindingGeneration++;
     const input = this.input;
     this.input = undefined;
     if (input) {
@@ -164,7 +223,9 @@ export class MidiConnection {
       // Closing a disconnected port can reject; cleanup must still clear held keys and pedals.
       void input.close().catch(() => {});
     }
-    this.callbacks.onReset();
+    // Initial access and an empty scan have no physical state to clear. In
+    // particular, automatic connection must not cancel a pending Play request.
+    if (input || forceReset) this.callbacks.onReset();
   }
 
   dispose(): void {
@@ -172,7 +233,7 @@ export class MidiConnection {
     this.disposed = true;
     if (this.access) this.access.onstatechange = null;
     this.access = undefined;
-    this.detach();
+    this.detach(true);
     this.devices = [];
   }
 }

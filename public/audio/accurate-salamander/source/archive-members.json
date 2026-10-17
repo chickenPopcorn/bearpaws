@@ -1,0 +1,1926 @@
+{
+  "archiveUrl": "https://archive.org/download/httpswww.ir.isas.jaxa.jpcyamauchaccuratesalamander/AccurateSalamanderGrandPianoV6.2a_48khz24bit_flac.zip",
+  "archiveBytes": 784289077,
+  "files": {
+    "021_A0v01.flac": {
+      "member": "48khz24bit/021_A0v01.flac",
+      "compressed": 2856269,
+      "size": 2864158,
+      "compression": 8,
+      "crc32": 1742809721,
+      "offset": 69
+    },
+    "021_A0v03.flac": {
+      "member": "48khz24bit/021_A0v03.flac",
+      "compressed": 2725926,
+      "size": 2733949,
+      "compression": 8,
+      "crc32": 1640364617,
+      "offset": 5472267
+    },
+    "021_A0v05.flac": {
+      "member": "48khz24bit/021_A0v05.flac",
+      "compressed": 2900655,
+      "size": 2908728,
+      "compression": 8,
+      "crc32": 1982250188,
+      "offset": 11148531
+    },
+    "021_A0v07.flac": {
+      "member": "48khz24bit/021_A0v07.flac",
+      "compressed": 2935346,
+      "size": 2943541,
+      "compression": 8,
+      "crc32": 560140320,
+      "offset": 16891711
+    },
+    "021_A0v09.flac": {
+      "member": "48khz24bit/021_A0v09.flac",
+      "compressed": 2833542,
+      "size": 2841712,
+      "compression": 8,
+      "crc32": 2201537653,
+      "offset": 22633974
+    },
+    "021_A0v11.flac": {
+      "member": "48khz24bit/021_A0v11.flac",
+      "compressed": 2750952,
+      "size": 2759229,
+      "compression": 8,
+      "crc32": 3195360092,
+      "offset": 28337343
+    },
+    "021_A0v13.flac": {
+      "member": "48khz24bit/021_A0v13.flac",
+      "compressed": 2742230,
+      "size": 2750650,
+      "compression": 8,
+      "crc32": 1190082912,
+      "offset": 33863253
+    },
+    "021_A0v16.flac": {
+      "member": "48khz24bit/021_A0v16.flac",
+      "compressed": 2634091,
+      "size": 2642912,
+      "compression": 8,
+      "crc32": 456886474,
+      "offset": 41835203
+    },
+    "024_C1v01.flac": {
+      "member": "48khz24bit/024_C1v01.flac",
+      "compressed": 970893,
+      "size": 1040058,
+      "compression": 8,
+      "crc32": 2422169636,
+      "offset": 44469377
+    },
+    "024_C1v03.flac": {
+      "member": "48khz24bit/024_C1v03.flac",
+      "compressed": 2807900,
+      "size": 2816005,
+      "compression": 8,
+      "crc32": 3747400174,
+      "offset": 48248336
+    },
+    "024_C1v05.flac": {
+      "member": "48khz24bit/024_C1v05.flac",
+      "compressed": 2673236,
+      "size": 2681350,
+      "compression": 8,
+      "crc32": 1787685441,
+      "offset": 53743143
+    },
+    "024_C1v07.flac": {
+      "member": "48khz24bit/024_C1v07.flac",
+      "compressed": 2648278,
+      "size": 2656389,
+      "compression": 8,
+      "crc32": 1029821128,
+      "offset": 59084201
+    },
+    "024_C1v09.flac": {
+      "member": "48khz24bit/024_C1v09.flac",
+      "compressed": 2576346,
+      "size": 2584714,
+      "compression": 8,
+      "crc32": 2043664636,
+      "offset": 64346609
+    },
+    "024_C1v11.flac": {
+      "member": "48khz24bit/024_C1v11.flac",
+      "compressed": 2555976,
+      "size": 2564288,
+      "compression": 8,
+      "crc32": 2234640742,
+      "offset": 69509283
+    },
+    "024_C1v13.flac": {
+      "member": "48khz24bit/024_C1v13.flac",
+      "compressed": 2482099,
+      "size": 2490728,
+      "compression": 8,
+      "crc32": 753551095,
+      "offset": 74580874
+    },
+    "024_C1v16.flac": {
+      "member": "48khz24bit/024_C1v16.flac",
+      "compressed": 2386891,
+      "size": 2395731,
+      "compression": 8,
+      "crc32": 3831424519,
+      "offset": 81997287
+    },
+    "027_Ds1v01.flac": {
+      "member": "48khz24bit/027_D#1v01.flac",
+      "compressed": 944164,
+      "size": 976393,
+      "compression": 8,
+      "crc32": 1303064355,
+      "offset": 84384261
+    },
+    "027_Ds1v03.flac": {
+      "member": "48khz24bit/027_D#1v03.flac",
+      "compressed": 2762800,
+      "size": 2770544,
+      "compression": 8,
+      "crc32": 1393515956,
+      "offset": 88091243
+    },
+    "027_Ds1v05.flac": {
+      "member": "48khz24bit/027_D#1v05.flac",
+      "compressed": 2988468,
+      "size": 2996208,
+      "compression": 8,
+      "crc32": 519584996,
+      "offset": 93625057
+    },
+    "027_Ds1v07.flac": {
+      "member": "48khz24bit/027_D#1v07.flac",
+      "compressed": 2910503,
+      "size": 2918288,
+      "compression": 8,
+      "crc32": 1987918695,
+      "offset": 99607201
+    },
+    "027_Ds1v09.flac": {
+      "member": "48khz24bit/027_D#1v09.flac",
+      "compressed": 2886682,
+      "size": 2894557,
+      "compression": 8,
+      "crc32": 531947594,
+      "offset": 105440275
+    },
+    "027_Ds1v11.flac": {
+      "member": "48khz24bit/027_D#1v11.flac",
+      "compressed": 2851943,
+      "size": 2859735,
+      "compression": 8,
+      "crc32": 1939797571,
+      "offset": 111164120
+    },
+    "027_Ds1v13.flac": {
+      "member": "48khz24bit/027_D#1v13.flac",
+      "compressed": 2792970,
+      "size": 2800848,
+      "compression": 8,
+      "crc32": 1831002406,
+      "offset": 116819281
+    },
+    "027_Ds1v16.flac": {
+      "member": "48khz24bit/027_D#1v16.flac",
+      "compressed": 2698466,
+      "size": 2706538,
+      "compression": 8,
+      "crc32": 45357771,
+      "offset": 125085942
+    },
+    "030_Fs1v01.flac": {
+      "member": "48khz24bit/030_F#1v01.flac",
+      "compressed": 2792186,
+      "size": 2799988,
+      "compression": 8,
+      "crc32": 195707321,
+      "offset": 127784492
+    },
+    "030_Fs1v03.flac": {
+      "member": "48khz24bit/030_F#1v03.flac",
+      "compressed": 2515635,
+      "size": 2523482,
+      "compression": 8,
+      "crc32": 1063145973,
+      "offset": 133136341
+    },
+    "030_Fs1v05.flac": {
+      "member": "48khz24bit/030_F#1v05.flac",
+      "compressed": 2557265,
+      "size": 2565113,
+      "compression": 8,
+      "crc32": 3388418018,
+      "offset": 138069894
+    },
+    "030_Fs1v07.flac": {
+      "member": "48khz24bit/030_F#1v07.flac",
+      "compressed": 2775620,
+      "size": 2783491,
+      "compression": 8,
+      "crc32": 1591049341,
+      "offset": 143184592
+    },
+    "030_Fs1v09.flac": {
+      "member": "48khz24bit/030_F#1v09.flac",
+      "compressed": 2749233,
+      "size": 2757130,
+      "compression": 8,
+      "crc32": 588877685,
+      "offset": 148718780
+    },
+    "030_Fs1v11.flac": {
+      "member": "48khz24bit/030_F#1v11.flac",
+      "compressed": 2702817,
+      "size": 2710769,
+      "compression": 8,
+      "crc32": 1316995356,
+      "offset": 154212110
+    },
+    "030_Fs1v13.flac": {
+      "member": "48khz24bit/030_F#1v13.flac",
+      "compressed": 2681179,
+      "size": 2689158,
+      "compression": 8,
+      "crc32": 2350857211,
+      "offset": 159617912
+    },
+    "030_Fs1v16.flac": {
+      "member": "48khz24bit/030_F#1v16.flac",
+      "compressed": 2578397,
+      "size": 2586506,
+      "compression": 8,
+      "crc32": 1671210099,
+      "offset": 167561518
+    },
+    "033_A1v01.flac": {
+      "member": "48khz24bit/033_A1v01.flac",
+      "compressed": 2805521,
+      "size": 2813465,
+      "compression": 8,
+      "crc32": 3054425887,
+      "offset": 170139999
+    },
+    "033_A1v03.flac": {
+      "member": "48khz24bit/033_A1v03.flac",
+      "compressed": 2532545,
+      "size": 2540480,
+      "compression": 8,
+      "crc32": 483625329,
+      "offset": 175519535
+    },
+    "033_A1v05.flac": {
+      "member": "48khz24bit/033_A1v05.flac",
+      "compressed": 2573034,
+      "size": 2580915,
+      "compression": 8,
+      "crc32": 1046252001,
+      "offset": 180484965
+    },
+    "033_A1v07.flac": {
+      "member": "48khz24bit/033_A1v07.flac",
+      "compressed": 2789901,
+      "size": 2797737,
+      "compression": 8,
+      "crc32": 2536106455,
+      "offset": 185631199
+    },
+    "033_A1v09.flac": {
+      "member": "48khz24bit/033_A1v09.flac",
+      "compressed": 2764815,
+      "size": 2772665,
+      "compression": 8,
+      "crc32": 2427428128,
+      "offset": 191194521
+    },
+    "033_A1v11.flac": {
+      "member": "48khz24bit/033_A1v11.flac",
+      "compressed": 2718914,
+      "size": 2726792,
+      "compression": 8,
+      "crc32": 4191037485,
+      "offset": 196722188
+    },
+    "033_A1v13.flac": {
+      "member": "48khz24bit/033_A1v13.flac",
+      "compressed": 2693808,
+      "size": 2701651,
+      "compression": 8,
+      "crc32": 336399349,
+      "offset": 202160182
+    },
+    "033_A1v16.flac": {
+      "member": "48khz24bit/033_A1v16.flac",
+      "compressed": 2594000,
+      "size": 2601935,
+      "compression": 8,
+      "crc32": 4151969997,
+      "offset": 210155937
+    },
+    "036_C2v01.flac": {
+      "member": "48khz24bit/036_C2v01.flac",
+      "compressed": 2699740,
+      "size": 2707614,
+      "compression": 8,
+      "crc32": 3587252282,
+      "offset": 212750020
+    },
+    "036_C2v03.flac": {
+      "member": "48khz24bit/036_C2v03.flac",
+      "compressed": 2579716,
+      "size": 2587516,
+      "compression": 8,
+      "crc32": 2423651460,
+      "offset": 217968887
+    },
+    "036_C2v05.flac": {
+      "member": "48khz24bit/036_C2v05.flac",
+      "compressed": 2763124,
+      "size": 2770947,
+      "compression": 8,
+      "crc32": 2775495845,
+      "offset": 223028685
+    },
+    "036_C2v07.flac": {
+      "member": "48khz24bit/036_C2v07.flac",
+      "compressed": 2723309,
+      "size": 2731112,
+      "compression": 8,
+      "crc32": 1244337683,
+      "offset": 228545820
+    },
+    "036_C2v09.flac": {
+      "member": "48khz24bit/036_C2v09.flac",
+      "compressed": 2683820,
+      "size": 2691647,
+      "compression": 8,
+      "crc32": 1436571929,
+      "offset": 233977225
+    },
+    "036_C2v11.flac": {
+      "member": "48khz24bit/036_C2v11.flac",
+      "compressed": 2636944,
+      "size": 2644782,
+      "compression": 8,
+      "crc32": 1287076504,
+      "offset": 239316383
+    },
+    "036_C2v13.flac": {
+      "member": "48khz24bit/036_C2v13.flac",
+      "compressed": 2572018,
+      "size": 2579962,
+      "compression": 8,
+      "crc32": 4131347604,
+      "offset": 244570178
+    },
+    "036_C2v16.flac": {
+      "member": "48khz24bit/036_C2v16.flac",
+      "compressed": 2486131,
+      "size": 2494075,
+      "compression": 8,
+      "crc32": 1787285935,
+      "offset": 252211477
+    },
+    "039_Ds2v01.flac": {
+      "member": "48khz24bit/039_D#2v01.flac",
+      "compressed": 879084,
+      "size": 916191,
+      "compression": 8,
+      "crc32": 2457018035,
+      "offset": 254697691
+    },
+    "039_Ds2v03.flac": {
+      "member": "48khz24bit/039_D#2v03.flac",
+      "compressed": 2660220,
+      "size": 2668017,
+      "compression": 8,
+      "crc32": 97437910,
+      "offset": 258237107
+    },
+    "039_Ds2v05.flac": {
+      "member": "48khz24bit/039_D#2v05.flac",
+      "compressed": 2742013,
+      "size": 2749858,
+      "compression": 8,
+      "crc32": 3523824744,
+      "offset": 263565359
+    },
+    "039_Ds2v07.flac": {
+      "member": "48khz24bit/039_D#2v07.flac",
+      "compressed": 2694078,
+      "size": 2701904,
+      "compression": 8,
+      "crc32": 1448603554,
+      "offset": 269042298
+    },
+    "039_Ds2v09.flac": {
+      "member": "48khz24bit/039_D#2v09.flac",
+      "compressed": 2626569,
+      "size": 2634445,
+      "compression": 8,
+      "crc32": 2560090358,
+      "offset": 274422754
+    },
+    "039_Ds2v11.flac": {
+      "member": "48khz24bit/039_D#2v11.flac",
+      "compressed": 2589442,
+      "size": 2597366,
+      "compression": 8,
+      "crc32": 3760906202,
+      "offset": 279692241
+    },
+    "039_Ds2v13.flac": {
+      "member": "48khz24bit/039_D#2v13.flac",
+      "compressed": 2533518,
+      "size": 2541456,
+      "compression": 8,
+      "crc32": 3652922501,
+      "offset": 284845856
+    },
+    "039_Ds2v16.flac": {
+      "member": "48khz24bit/039_D#2v16.flac",
+      "compressed": 2450008,
+      "size": 2458164,
+      "compression": 8,
+      "crc32": 3264668660,
+      "offset": 292374961
+    },
+    "042_Fs2v01.flac": {
+      "member": "48khz24bit/042_F#2v01.flac",
+      "compressed": 791877,
+      "size": 854162,
+      "compression": 8,
+      "crc32": 3941639919,
+      "offset": 294825053
+    },
+    "042_Fs2v03.flac": {
+      "member": "48khz24bit/042_F#2v03.flac",
+      "compressed": 2483646,
+      "size": 2491516,
+      "compression": 8,
+      "crc32": 383952352,
+      "offset": 298013957
+    },
+    "042_Fs2v05.flac": {
+      "member": "48khz24bit/042_F#2v05.flac",
+      "compressed": 2583802,
+      "size": 2591620,
+      "compression": 8,
+      "crc32": 980349028,
+      "offset": 303041223
+    },
+    "042_Fs2v07.flac": {
+      "member": "48khz24bit/042_F#2v07.flac",
+      "compressed": 2533348,
+      "size": 2541170,
+      "compression": 8,
+      "crc32": 2046428441,
+      "offset": 308151594
+    },
+    "042_Fs2v09.flac": {
+      "member": "48khz24bit/042_F#2v09.flac",
+      "compressed": 2453723,
+      "size": 2461567,
+      "compression": 8,
+      "crc32": 785168519,
+      "offset": 313207643
+    },
+    "042_Fs2v11.flac": {
+      "member": "48khz24bit/042_F#2v11.flac",
+      "compressed": 2471195,
+      "size": 2479101,
+      "compression": 8,
+      "crc32": 3201339732,
+      "offset": 318126848
+    },
+    "042_Fs2v13.flac": {
+      "member": "48khz24bit/042_F#2v13.flac",
+      "compressed": 2376646,
+      "size": 2384592,
+      "compression": 8,
+      "crc32": 3754905387,
+      "offset": 323012787
+    },
+    "042_Fs2v16.flac": {
+      "member": "48khz24bit/042_F#2v16.flac",
+      "compressed": 2339969,
+      "size": 2347912,
+      "compression": 8,
+      "crc32": 3235151610,
+      "offset": 330069031
+    },
+    "045_A2v01.flac": {
+      "member": "48khz24bit/045_A2v01.flac",
+      "compressed": 2179197,
+      "size": 2187414,
+      "compression": 8,
+      "crc32": 3159126447,
+      "offset": 332409084
+    },
+    "045_A2v03.flac": {
+      "member": "48khz24bit/045_A2v03.flac",
+      "compressed": 1998636,
+      "size": 2006523,
+      "compression": 8,
+      "crc32": 3739104794,
+      "offset": 336668470
+    },
+    "045_A2v05.flac": {
+      "member": "48khz24bit/045_A2v05.flac",
+      "compressed": 1977509,
+      "size": 1985432,
+      "compression": 8,
+      "crc32": 4066466271,
+      "offset": 340677583
+    },
+    "045_A2v07.flac": {
+      "member": "48khz24bit/045_A2v07.flac",
+      "compressed": 1949578,
+      "size": 1957478,
+      "compression": 8,
+      "crc32": 2932818386,
+      "offset": 344610769
+    },
+    "045_A2v09.flac": {
+      "member": "48khz24bit/045_A2v09.flac",
+      "compressed": 1963554,
+      "size": 1971508,
+      "compression": 8,
+      "crc32": 4223342017,
+      "offset": 348504863
+    },
+    "045_A2v11.flac": {
+      "member": "48khz24bit/045_A2v11.flac",
+      "compressed": 1888265,
+      "size": 1896213,
+      "compression": 8,
+      "crc32": 946430123,
+      "offset": 352356848
+    },
+    "045_A2v13.flac": {
+      "member": "48khz24bit/045_A2v13.flac",
+      "compressed": 1872619,
+      "size": 1880575,
+      "compression": 8,
+      "crc32": 3906840801,
+      "offset": 356167272
+    },
+    "045_A2v16.flac": {
+      "member": "48khz24bit/045_A2v16.flac",
+      "compressed": 1816635,
+      "size": 1824806,
+      "compression": 8,
+      "crc32": 747743332,
+      "offset": 361716640
+    },
+    "048_C3v01.flac": {
+      "member": "48khz24bit/048_C3v01.flac",
+      "compressed": 2083288,
+      "size": 2091556,
+      "compression": 8,
+      "crc32": 3413580342,
+      "offset": 363533358
+    },
+    "048_C3v03.flac": {
+      "member": "48khz24bit/048_C3v03.flac",
+      "compressed": 1924537,
+      "size": 1932440,
+      "compression": 8,
+      "crc32": 241837288,
+      "offset": 367621718
+    },
+    "048_C3v05.flac": {
+      "member": "48khz24bit/048_C3v05.flac",
+      "compressed": 1895033,
+      "size": 1902984,
+      "compression": 8,
+      "crc32": 3784145158,
+      "offset": 371479791
+    },
+    "048_C3v07.flac": {
+      "member": "48khz24bit/048_C3v07.flac",
+      "compressed": 1857637,
+      "size": 1865608,
+      "compression": 8,
+      "crc32": 1979352604,
+      "offset": 375241866
+    },
+    "048_C3v09.flac": {
+      "member": "48khz24bit/048_C3v09.flac",
+      "compressed": 1874691,
+      "size": 1882616,
+      "compression": 8,
+      "crc32": 1559093748,
+      "offset": 378958489
+    },
+    "048_C3v11.flac": {
+      "member": "48khz24bit/048_C3v11.flac",
+      "compressed": 1802108,
+      "size": 1810118,
+      "compression": 8,
+      "crc32": 353385990,
+      "offset": 382635468
+    },
+    "048_C3v13.flac": {
+      "member": "48khz24bit/048_C3v13.flac",
+      "compressed": 1790210,
+      "size": 1798267,
+      "compression": 8,
+      "crc32": 1545706147,
+      "offset": 386271737
+    },
+    "048_C3v16.flac": {
+      "member": "48khz24bit/048_C3v16.flac",
+      "compressed": 1736195,
+      "size": 1744287,
+      "compression": 8,
+      "crc32": 1915000004,
+      "offset": 391574357
+    },
+    "051_Ds3v01.flac": {
+      "member": "48khz24bit/051_D#3v01.flac",
+      "compressed": 632883,
+      "size": 659215,
+      "compression": 8,
+      "crc32": 2746560954,
+      "offset": 393310635
+    },
+    "051_Ds3v03.flac": {
+      "member": "48khz24bit/051_D#3v03.flac",
+      "compressed": 1911480,
+      "size": 1919409,
+      "compression": 8,
+      "crc32": 2631266037,
+      "offset": 395843523
+    },
+    "051_Ds3v05.flac": {
+      "member": "48khz24bit/051_D#3v05.flac",
+      "compressed": 1898010,
+      "size": 1905893,
+      "compression": 8,
+      "crc32": 1214888466,
+      "offset": 399609256
+    },
+    "051_Ds3v07.flac": {
+      "member": "48khz24bit/051_D#3v07.flac",
+      "compressed": 1871139,
+      "size": 1879026,
+      "compression": 8,
+      "crc32": 3017653492,
+      "offset": 403447916
+    },
+    "051_Ds3v09.flac": {
+      "member": "48khz24bit/051_D#3v09.flac",
+      "compressed": 1857391,
+      "size": 1865323,
+      "compression": 8,
+      "crc32": 3826260708,
+      "offset": 407203744
+    },
+    "051_Ds3v11.flac": {
+      "member": "48khz24bit/051_D#3v11.flac",
+      "compressed": 1882650,
+      "size": 1890579,
+      "compression": 8,
+      "crc32": 2005153743,
+      "offset": 410940235
+    },
+    "051_Ds3v13.flac": {
+      "member": "48khz24bit/051_D#3v13.flac",
+      "compressed": 1793322,
+      "size": 1801323,
+      "compression": 8,
+      "crc32": 1032762124,
+      "offset": 414644077
+    },
+    "051_Ds3v16.flac": {
+      "member": "48khz24bit/051_D#3v16.flac",
+      "compressed": 1753747,
+      "size": 1761846,
+      "compression": 8,
+      "crc32": 319319352,
+      "offset": 420070593
+    },
+    "054_Fs3v01.flac": {
+      "member": "48khz24bit/054_F#3v01.flac",
+      "compressed": 789932,
+      "size": 817226,
+      "compression": 8,
+      "crc32": 1800241828,
+      "offset": 421824424
+    },
+    "054_Fs3v03.flac": {
+      "member": "48khz24bit/054_F#3v03.flac",
+      "compressed": 2078556,
+      "size": 2086392,
+      "compression": 8,
+      "crc32": 1237356766,
+      "offset": 424500727
+    },
+    "054_Fs3v05.flac": {
+      "member": "48khz24bit/054_F#3v05.flac",
+      "compressed": 2088251,
+      "size": 2096065,
+      "compression": 8,
+      "crc32": 1167444886,
+      "offset": 428639248
+    },
+    "054_Fs3v07.flac": {
+      "member": "48khz24bit/054_F#3v07.flac",
+      "compressed": 2040465,
+      "size": 2048288,
+      "compression": 8,
+      "crc32": 2370896388,
+      "offset": 432786166
+    },
+    "054_Fs3v09.flac": {
+      "member": "48khz24bit/054_F#3v09.flac",
+      "compressed": 1986066,
+      "size": 1993945,
+      "compression": 8,
+      "crc32": 3195674782,
+      "offset": 436833531
+    },
+    "054_Fs3v11.flac": {
+      "member": "48khz24bit/054_F#3v11.flac",
+      "compressed": 1917933,
+      "size": 1925797,
+      "compression": 8,
+      "crc32": 977151760,
+      "offset": 440781722
+    },
+    "054_Fs3v13.flac": {
+      "member": "48khz24bit/054_F#3v13.flac",
+      "compressed": 1892973,
+      "size": 1900845,
+      "compression": 8,
+      "crc32": 91452474,
+      "offset": 444607318
+    },
+    "054_Fs3v16.flac": {
+      "member": "48khz24bit/054_F#3v16.flac",
+      "compressed": 1834908,
+      "size": 1842843,
+      "compression": 8,
+      "crc32": 3554346312,
+      "offset": 450190262
+    },
+    "057_A3v01.flac": {
+      "member": "48khz24bit/057_A3v01.flac",
+      "compressed": 2064833,
+      "size": 2072703,
+      "compression": 8,
+      "crc32": 1258098387,
+      "offset": 452025254
+    },
+    "057_A3v03.flac": {
+      "member": "48khz24bit/057_A3v03.flac",
+      "compressed": 2095227,
+      "size": 2103082,
+      "compression": 8,
+      "crc32": 24612781,
+      "offset": 456143199
+    },
+    "057_A3v05.flac": {
+      "member": "48khz24bit/057_A3v05.flac",
+      "compressed": 2059975,
+      "size": 2067845,
+      "compression": 8,
+      "crc32": 3149324920,
+      "offset": 460239836
+    },
+    "057_A3v07.flac": {
+      "member": "48khz24bit/057_A3v07.flac",
+      "compressed": 1970142,
+      "size": 1977990,
+      "compression": 8,
+      "crc32": 2647154635,
+      "offset": 464284561
+    },
+    "057_A3v09.flac": {
+      "member": "48khz24bit/057_A3v09.flac",
+      "compressed": 1871093,
+      "size": 1878966,
+      "compression": 8,
+      "crc32": 3884816645,
+      "offset": 468156009
+    },
+    "057_A3v11.flac": {
+      "member": "48khz24bit/057_A3v11.flac",
+      "compressed": 1846934,
+      "size": 1854833,
+      "compression": 8,
+      "crc32": 1123141306,
+      "offset": 471889584
+    },
+    "057_A3v13.flac": {
+      "member": "48khz24bit/057_A3v13.flac",
+      "compressed": 1836511,
+      "size": 1844399,
+      "compression": 8,
+      "crc32": 791110143,
+      "offset": 475570327
+    },
+    "057_A3v16.flac": {
+      "member": "48khz24bit/057_A3v16.flac",
+      "compressed": 1847614,
+      "size": 1855521,
+      "compression": 8,
+      "crc32": 1705902433,
+      "offset": 481060286
+    },
+    "060_C4v01.flac": {
+      "member": "48khz24bit/060_C4v01.flac",
+      "compressed": 1612912,
+      "size": 1620836,
+      "compression": 8,
+      "crc32": 314732747,
+      "offset": 482907983
+    },
+    "060_C4v03.flac": {
+      "member": "48khz24bit/060_C4v03.flac",
+      "compressed": 1896771,
+      "size": 1904636,
+      "compression": 8,
+      "crc32": 3258400296,
+      "offset": 486243857
+    },
+    "060_C4v05.flac": {
+      "member": "48khz24bit/060_C4v05.flac",
+      "compressed": 1835040,
+      "size": 1842934,
+      "compression": 8,
+      "crc32": 1407507489,
+      "offset": 489949895
+    },
+    "060_C4v07.flac": {
+      "member": "48khz24bit/060_C4v07.flac",
+      "compressed": 1809723,
+      "size": 1817680,
+      "compression": 8,
+      "crc32": 3588180633,
+      "offset": 493648836
+    },
+    "060_C4v09.flac": {
+      "member": "48khz24bit/060_C4v09.flac",
+      "compressed": 1816701,
+      "size": 1824639,
+      "compression": 8,
+      "crc32": 248471925,
+      "offset": 497328077
+    },
+    "060_C4v11.flac": {
+      "member": "48khz24bit/060_C4v11.flac",
+      "compressed": 1819836,
+      "size": 1827764,
+      "compression": 8,
+      "crc32": 338497931,
+      "offset": 500961645
+    },
+    "060_C4v13.flac": {
+      "member": "48khz24bit/060_C4v13.flac",
+      "compressed": 1722525,
+      "size": 1730506,
+      "compression": 8,
+      "crc32": 2284223335,
+      "offset": 504567366
+    },
+    "060_C4v16.flac": {
+      "member": "48khz24bit/060_C4v16.flac",
+      "compressed": 1671561,
+      "size": 1679630,
+      "compression": 8,
+      "crc32": 1962716530,
+      "offset": 509641749
+    },
+    "063_Ds4v01.flac": {
+      "member": "48khz24bit/063_D#4v01.flac",
+      "compressed": 772396,
+      "size": 790532,
+      "compression": 8,
+      "crc32": 2218593634,
+      "offset": 511313393
+    },
+    "063_Ds4v03.flac": {
+      "member": "48khz24bit/063_D#4v03.flac",
+      "compressed": 1552717,
+      "size": 1560754,
+      "compression": 8,
+      "crc32": 2742798815,
+      "offset": 513768650
+    },
+    "063_Ds4v05.flac": {
+      "member": "48khz24bit/063_D#4v05.flac",
+      "compressed": 1717197,
+      "size": 1725089,
+      "compression": 8,
+      "crc32": 3616568281,
+      "offset": 517111789
+    },
+    "063_Ds4v07.flac": {
+      "member": "48khz24bit/063_D#4v07.flac",
+      "compressed": 1697859,
+      "size": 1705836,
+      "compression": 8,
+      "crc32": 1870049794,
+      "offset": 520525443
+    },
+    "063_Ds4v09.flac": {
+      "member": "48khz24bit/063_D#4v09.flac",
+      "compressed": 1658909,
+      "size": 1666900,
+      "compression": 8,
+      "crc32": 2534318634,
+      "offset": 523982497
+    },
+    "063_Ds4v11.flac": {
+      "member": "48khz24bit/063_D#4v11.flac",
+      "compressed": 1619253,
+      "size": 1627258,
+      "compression": 8,
+      "crc32": 1879383789,
+      "offset": 527254454
+    },
+    "063_Ds4v13.flac": {
+      "member": "48khz24bit/063_D#4v13.flac",
+      "compressed": 1673172,
+      "size": 1681199,
+      "compression": 8,
+      "crc32": 3698745227,
+      "offset": 530546157
+    },
+    "063_Ds4v16.flac": {
+      "member": "48khz24bit/063_D#4v16.flac",
+      "compressed": 1485708,
+      "size": 1493973,
+      "compression": 8,
+      "crc32": 1980535979,
+      "offset": 535398173
+    },
+    "066_Fs4v01.flac": {
+      "member": "48khz24bit/066_F#4v01.flac",
+      "compressed": 1657243,
+      "size": 1665138,
+      "compression": 8,
+      "crc32": 3671643520,
+      "offset": 536883965
+    },
+    "066_Fs4v03.flac": {
+      "member": "48khz24bit/066_F#4v03.flac",
+      "compressed": 1649831,
+      "size": 1657778,
+      "compression": 8,
+      "crc32": 829128947,
+      "offset": 540250424
+    },
+    "066_Fs4v05.flac": {
+      "member": "48khz24bit/066_F#4v05.flac",
+      "compressed": 1642859,
+      "size": 1650790,
+      "compression": 8,
+      "crc32": 1774231303,
+      "offset": 543455461
+    },
+    "066_Fs4v07.flac": {
+      "member": "48khz24bit/066_F#4v07.flac",
+      "compressed": 1643810,
+      "size": 1651800,
+      "compression": 8,
+      "crc32": 2256747502,
+      "offset": 546740955
+    },
+    "066_Fs4v09.flac": {
+      "member": "48khz24bit/066_F#4v09.flac",
+      "compressed": 1589475,
+      "size": 1597534,
+      "compression": 8,
+      "crc32": 1453510214,
+      "offset": 550019415
+    },
+    "066_Fs4v11.flac": {
+      "member": "48khz24bit/066_F#4v11.flac",
+      "compressed": 1597991,
+      "size": 1606048,
+      "compression": 8,
+      "crc32": 962401716,
+      "offset": 553156546
+    },
+    "066_Fs4v13.flac": {
+      "member": "48khz24bit/066_F#4v13.flac",
+      "compressed": 1528104,
+      "size": 1536257,
+      "compression": 8,
+      "crc32": 442700011,
+      "offset": 556251681
+    },
+    "066_Fs4v16.flac": {
+      "member": "48khz24bit/066_F#4v16.flac",
+      "compressed": 1403765,
+      "size": 1412075,
+      "compression": 8,
+      "crc32": 2637229526,
+      "offset": 560573029
+    },
+    "069_A4v01.flac": {
+      "member": "48khz24bit/069_A4v01.flac",
+      "compressed": 1811238,
+      "size": 1819127,
+      "compression": 8,
+      "crc32": 4170132158,
+      "offset": 561976878
+    },
+    "069_A4v03.flac": {
+      "member": "48khz24bit/069_A4v03.flac",
+      "compressed": 1601464,
+      "size": 1609409,
+      "compression": 8,
+      "crc32": 1113844446,
+      "offset": 565491154
+    },
+    "069_A4v05.flac": {
+      "member": "48khz24bit/069_A4v05.flac",
+      "compressed": 1568584,
+      "size": 1576557,
+      "compression": 8,
+      "crc32": 316005086,
+      "offset": 568727378
+    },
+    "069_A4v07.flac": {
+      "member": "48khz24bit/069_A4v07.flac",
+      "compressed": 1525074,
+      "size": 1533110,
+      "compression": 8,
+      "crc32": 3807441626,
+      "offset": 571854673
+    },
+    "069_A4v09.flac": {
+      "member": "48khz24bit/069_A4v09.flac",
+      "compressed": 1520857,
+      "size": 1528825,
+      "compression": 8,
+      "crc32": 1454687086,
+      "offset": 574882122
+    },
+    "069_A4v11.flac": {
+      "member": "48khz24bit/069_A4v11.flac",
+      "compressed": 1505930,
+      "size": 1514008,
+      "compression": 8,
+      "crc32": 3557162595,
+      "offset": 577934257
+    },
+    "069_A4v13.flac": {
+      "member": "48khz24bit/069_A4v13.flac",
+      "compressed": 1480302,
+      "size": 1488398,
+      "compression": 8,
+      "crc32": 4278496150,
+      "offset": 580918482
+    },
+    "069_A4v16.flac": {
+      "member": "48khz24bit/069_A4v16.flac",
+      "compressed": 1489202,
+      "size": 1497470,
+      "compression": 8,
+      "crc32": 250143743,
+      "offset": 585278053
+    },
+    "072_C5v01.flac": {
+      "member": "48khz24bit/072_C5v01.flac",
+      "compressed": 860175,
+      "size": 872101,
+      "compression": 8,
+      "crc32": 1960297145,
+      "offset": 586767338
+    },
+    "072_C5v03.flac": {
+      "member": "48khz24bit/072_C5v03.flac",
+      "compressed": 1515830,
+      "size": 1523930,
+      "compression": 8,
+      "crc32": 2440041966,
+      "offset": 588485188
+    },
+    "072_C5v05.flac": {
+      "member": "48khz24bit/072_C5v05.flac",
+      "compressed": 1640940,
+      "size": 1649033,
+      "compression": 8,
+      "crc32": 766350406,
+      "offset": 591568141
+    },
+    "072_C5v07.flac": {
+      "member": "48khz24bit/072_C5v07.flac",
+      "compressed": 1683534,
+      "size": 1691628,
+      "compression": 8,
+      "crc32": 443563497,
+      "offset": 594870112
+    },
+    "072_C5v09.flac": {
+      "member": "48khz24bit/072_C5v09.flac",
+      "compressed": 1672589,
+      "size": 1680638,
+      "compression": 8,
+      "crc32": 926924279,
+      "offset": 598235830
+    },
+    "072_C5v11.flac": {
+      "member": "48khz24bit/072_C5v11.flac",
+      "compressed": 1631603,
+      "size": 1639661,
+      "compression": 8,
+      "crc32": 1331735867,
+      "offset": 601543680
+    },
+    "072_C5v13.flac": {
+      "member": "48khz24bit/072_C5v13.flac",
+      "compressed": 1505121,
+      "size": 1513336,
+      "compression": 8,
+      "crc32": 2354975696,
+      "offset": 604785196
+    },
+    "072_C5v16.flac": {
+      "member": "48khz24bit/072_C5v16.flac",
+      "compressed": 1495346,
+      "size": 1503818,
+      "compression": 8,
+      "crc32": 3745072990,
+      "offset": 609386938
+    },
+    "075_Ds5v01.flac": {
+      "member": "48khz24bit/075_D#5v01.flac",
+      "compressed": 701234,
+      "size": 717098,
+      "compression": 8,
+      "crc32": 4054664038,
+      "offset": 610882367
+    },
+    "075_Ds5v03.flac": {
+      "member": "48khz24bit/075_D#5v03.flac",
+      "compressed": 1308909,
+      "size": 1317013,
+      "compression": 8,
+      "crc32": 790240225,
+      "offset": 612370622
+    },
+    "075_Ds5v05.flac": {
+      "member": "48khz24bit/075_D#5v05.flac",
+      "compressed": 1349000,
+      "size": 1357061,
+      "compression": 8,
+      "crc32": 277508774,
+      "offset": 615050074
+    },
+    "075_Ds5v07.flac": {
+      "member": "48khz24bit/075_D#5v07.flac",
+      "compressed": 1366217,
+      "size": 1374180,
+      "compression": 8,
+      "crc32": 1874617591,
+      "offset": 617733002
+    },
+    "075_Ds5v09.flac": {
+      "member": "48khz24bit/075_D#5v09.flac",
+      "compressed": 1339167,
+      "size": 1347254,
+      "compression": 8,
+      "crc32": 3570854477,
+      "offset": 620478124
+    },
+    "075_Ds5v11.flac": {
+      "member": "48khz24bit/075_D#5v11.flac",
+      "compressed": 1363866,
+      "size": 1371959,
+      "compression": 8,
+      "crc32": 1785135404,
+      "offset": 623180687
+    },
+    "075_Ds5v13.flac": {
+      "member": "48khz24bit/075_D#5v13.flac",
+      "compressed": 1294015,
+      "size": 1302343,
+      "compression": 8,
+      "crc32": 3161581726,
+      "offset": 625825508
+    },
+    "075_Ds5v16.flac": {
+      "member": "48khz24bit/075_D#5v16.flac",
+      "compressed": 1265443,
+      "size": 1273697,
+      "compression": 8,
+      "crc32": 678072097,
+      "offset": 629595999
+    },
+    "078_Fs5v01.flac": {
+      "member": "48khz24bit/078_F#5v01.flac",
+      "compressed": 1471170,
+      "size": 1479148,
+      "compression": 8,
+      "crc32": 2651469983,
+      "offset": 630861526
+    },
+    "078_Fs5v03.flac": {
+      "member": "48khz24bit/078_F#5v03.flac",
+      "compressed": 1342934,
+      "size": 1350913,
+      "compression": 8,
+      "crc32": 4001918155,
+      "offset": 633732194
+    },
+    "078_Fs5v05.flac": {
+      "member": "48khz24bit/078_F#5v05.flac",
+      "compressed": 1362588,
+      "size": 1370697,
+      "compression": 8,
+      "crc32": 3149104010,
+      "offset": 636429658
+    },
+    "078_Fs5v07.flac": {
+      "member": "48khz24bit/078_F#5v07.flac",
+      "compressed": 1284240,
+      "size": 1292254,
+      "compression": 8,
+      "crc32": 707621491,
+      "offset": 639146735
+    },
+    "078_Fs5v09.flac": {
+      "member": "48khz24bit/078_F#5v09.flac",
+      "compressed": 1219130,
+      "size": 1227256,
+      "compression": 8,
+      "crc32": 72032171,
+      "offset": 641715508
+    },
+    "078_Fs5v11.flac": {
+      "member": "48khz24bit/078_F#5v11.flac",
+      "compressed": 1176447,
+      "size": 1184667,
+      "compression": 8,
+      "crc32": 1006380343,
+      "offset": 644146600
+    },
+    "078_Fs5v13.flac": {
+      "member": "48khz24bit/078_F#5v13.flac",
+      "compressed": 1182848,
+      "size": 1191206,
+      "compression": 8,
+      "crc32": 2242811471,
+      "offset": 646452275
+    },
+    "078_Fs5v16.flac": {
+      "member": "48khz24bit/078_F#5v16.flac",
+      "compressed": 1102769,
+      "size": 1111420,
+      "compression": 8,
+      "crc32": 2826134614,
+      "offset": 649789361
+    },
+    "081_A5v01.flac": {
+      "member": "48khz24bit/081_A5v01.flac",
+      "compressed": 936830,
+      "size": 944877,
+      "compression": 8,
+      "crc32": 2282972922,
+      "offset": 650892214
+    },
+    "081_A5v03.flac": {
+      "member": "48khz24bit/081_A5v03.flac",
+      "compressed": 853128,
+      "size": 861104,
+      "compression": 8,
+      "crc32": 4273955945,
+      "offset": 652728481
+    },
+    "081_A5v05.flac": {
+      "member": "48khz24bit/081_A5v05.flac",
+      "compressed": 1173426,
+      "size": 1181353,
+      "compression": 8,
+      "crc32": 3740811003,
+      "offset": 654631287
+    },
+    "081_A5v07.flac": {
+      "member": "48khz24bit/081_A5v07.flac",
+      "compressed": 1166873,
+      "size": 1174864,
+      "compression": 8,
+      "crc32": 3299989344,
+      "offset": 656907502
+    },
+    "081_A5v09.flac": {
+      "member": "48khz24bit/081_A5v09.flac",
+      "compressed": 1140343,
+      "size": 1148382,
+      "compression": 8,
+      "crc32": 3495513517,
+      "offset": 659226031
+    },
+    "081_A5v11.flac": {
+      "member": "48khz24bit/081_A5v11.flac",
+      "compressed": 1021904,
+      "size": 1029980,
+      "compression": 8,
+      "crc32": 703784841,
+      "offset": 661402001
+    },
+    "081_A5v13.flac": {
+      "member": "48khz24bit/081_A5v13.flac",
+      "compressed": 1002653,
+      "size": 1010807,
+      "compression": 8,
+      "crc32": 4140508175,
+      "offset": 663465806
+    },
+    "081_A5v16.flac": {
+      "member": "48khz24bit/081_A5v16.flac",
+      "compressed": 992072,
+      "size": 1000277,
+      "compression": 8,
+      "crc32": 897593271,
+      "offset": 666491052
+    },
+    "084_C6v01.flac": {
+      "member": "48khz24bit/084_C6v01.flac",
+      "compressed": 815030,
+      "size": 823013,
+      "compression": 8,
+      "crc32": 2534825483,
+      "offset": 667483207
+    },
+    "084_C6v03.flac": {
+      "member": "48khz24bit/084_C6v03.flac",
+      "compressed": 727509,
+      "size": 735503,
+      "compression": 8,
+      "crc32": 3779652105,
+      "offset": 668760804
+    },
+    "084_C6v05.flac": {
+      "member": "48khz24bit/084_C6v05.flac",
+      "compressed": 868608,
+      "size": 876615,
+      "compression": 8,
+      "crc32": 2581186478,
+      "offset": 670289429
+    },
+    "084_C6v07.flac": {
+      "member": "48khz24bit/084_C6v07.flac",
+      "compressed": 839491,
+      "size": 847520,
+      "compression": 8,
+      "crc32": 875758191,
+      "offset": 672026811
+    },
+    "084_C6v09.flac": {
+      "member": "48khz24bit/084_C6v09.flac",
+      "compressed": 711480,
+      "size": 719519,
+      "compression": 8,
+      "crc32": 1490689077,
+      "offset": 673721977
+    },
+    "084_C6v11.flac": {
+      "member": "48khz24bit/084_C6v11.flac",
+      "compressed": 779304,
+      "size": 787376,
+      "compression": 8,
+      "crc32": 1558952866,
+      "offset": 675188581
+    },
+    "084_C6v13.flac": {
+      "member": "48khz24bit/084_C6v13.flac",
+      "compressed": 737070,
+      "size": 745119,
+      "compression": 8,
+      "crc32": 4075232725,
+      "offset": 676720655
+    },
+    "084_C6v16.flac": {
+      "member": "48khz24bit/084_C6v16.flac",
+      "compressed": 781275,
+      "size": 789301,
+      "compression": 8,
+      "crc32": 199802871,
+      "offset": 678983881
+    },
+    "087_Ds6v01.flac": {
+      "member": "48khz24bit/087_D#6v01.flac",
+      "compressed": 989209,
+      "size": 997193,
+      "compression": 8,
+      "crc32": 686495891,
+      "offset": 679765239
+    },
+    "087_Ds6v03.flac": {
+      "member": "48khz24bit/087_D#6v03.flac",
+      "compressed": 892227,
+      "size": 900241,
+      "compression": 8,
+      "crc32": 3264429473,
+      "offset": 681616750
+    },
+    "087_Ds6v05.flac": {
+      "member": "48khz24bit/087_D#6v05.flac",
+      "compressed": 856107,
+      "size": 864147,
+      "compression": 8,
+      "crc32": 3450864518,
+      "offset": 683362675
+    },
+    "087_Ds6v07.flac": {
+      "member": "48khz24bit/087_D#6v07.flac",
+      "compressed": 812913,
+      "size": 820950,
+      "compression": 8,
+      "crc32": 3933754158,
+      "offset": 685022656
+    },
+    "087_Ds6v09.flac": {
+      "member": "48khz24bit/087_D#6v09.flac",
+      "compressed": 790690,
+      "size": 798751,
+      "compression": 8,
+      "crc32": 3746897192,
+      "offset": 686640142
+    },
+    "087_Ds6v11.flac": {
+      "member": "48khz24bit/087_D#6v11.flac",
+      "compressed": 804096,
+      "size": 812133,
+      "compression": 8,
+      "crc32": 1701103206,
+      "offset": 688217386
+    },
+    "087_Ds6v13.flac": {
+      "member": "48khz24bit/087_D#6v13.flac",
+      "compressed": 768187,
+      "size": 776268,
+      "compression": 8,
+      "crc32": 946446171,
+      "offset": 689809432
+    },
+    "087_Ds6v16.flac": {
+      "member": "48khz24bit/087_D#6v16.flac",
+      "compressed": 695451,
+      "size": 703521,
+      "compression": 8,
+      "crc32": 407349320,
+      "offset": 692043100
+    },
+    "090_Fs6v01.flac": {
+      "member": "48khz24bit/090_F#6v01.flac",
+      "compressed": 634343,
+      "size": 642413,
+      "compression": 8,
+      "crc32": 764037293,
+      "offset": 692738635
+    },
+    "090_Fs6v03.flac": {
+      "member": "48khz24bit/090_F#6v03.flac",
+      "compressed": 725827,
+      "size": 733881,
+      "compression": 8,
+      "crc32": 2065922928,
+      "offset": 693963352
+    },
+    "090_Fs6v05.flac": {
+      "member": "48khz24bit/090_F#6v05.flac",
+      "compressed": 709042,
+      "size": 717076,
+      "compression": 8,
+      "crc32": 797006217,
+      "offset": 695408812
+    },
+    "090_Fs6v07.flac": {
+      "member": "48khz24bit/090_F#6v07.flac",
+      "compressed": 752429,
+      "size": 760481,
+      "compression": 8,
+      "crc32": 1147915227,
+      "offset": 696866186
+    },
+    "090_Fs6v09.flac": {
+      "member": "48khz24bit/090_F#6v09.flac",
+      "compressed": 694822,
+      "size": 702866,
+      "compression": 8,
+      "crc32": 508750869,
+      "offset": 698324405
+    },
+    "090_Fs6v11.flac": {
+      "member": "48khz24bit/090_F#6v11.flac",
+      "compressed": 686035,
+      "size": 694091,
+      "compression": 8,
+      "crc32": 3375176524,
+      "offset": 699738253
+    },
+    "090_Fs6v13.flac": {
+      "member": "48khz24bit/090_F#6v13.flac",
+      "compressed": 635382,
+      "size": 643441,
+      "compression": 8,
+      "crc32": 96948761,
+      "offset": 701113307
+    },
+    "090_Fs6v16.flac": {
+      "member": "48khz24bit/090_F#6v16.flac",
+      "compressed": 623267,
+      "size": 631330,
+      "compression": 8,
+      "crc32": 1779326584,
+      "offset": 703035590
+    },
+    "093_A6v01.flac": {
+      "member": "48khz24bit/093_A6v01.flac",
+      "compressed": 739194,
+      "size": 747239,
+      "compression": 8,
+      "crc32": 3246759969,
+      "offset": 703658941
+    },
+    "093_A6v03.flac": {
+      "member": "48khz24bit/093_A6v03.flac",
+      "compressed": 727614,
+      "size": 735667,
+      "compression": 8,
+      "crc32": 1379788639,
+      "offset": 705151866
+    },
+    "093_A6v05.flac": {
+      "member": "48khz24bit/093_A6v05.flac",
+      "compressed": 800835,
+      "size": 808868,
+      "compression": 8,
+      "crc32": 2225104889,
+      "offset": 706649702
+    },
+    "093_A6v07.flac": {
+      "member": "48khz24bit/093_A6v07.flac",
+      "compressed": 784468,
+      "size": 792507,
+      "compression": 8,
+      "crc32": 1532523900,
+      "offset": 708234987
+    },
+    "093_A6v09.flac": {
+      "member": "48khz24bit/093_A6v09.flac",
+      "compressed": 743432,
+      "size": 751494,
+      "compression": 8,
+      "crc32": 2178271379,
+      "offset": 709793689
+    },
+    "093_A6v11.flac": {
+      "member": "48khz24bit/093_A6v11.flac",
+      "compressed": 695507,
+      "size": 703547,
+      "compression": 8,
+      "crc32": 2971221621,
+      "offset": 711271524
+    },
+    "093_A6v13.flac": {
+      "member": "48khz24bit/093_A6v13.flac",
+      "compressed": 663045,
+      "size": 671148,
+      "compression": 8,
+      "crc32": 4174135330,
+      "offset": 712659378
+    },
+    "093_A6v16.flac": {
+      "member": "48khz24bit/093_A6v16.flac",
+      "compressed": 638895,
+      "size": 647086,
+      "compression": 8,
+      "crc32": 4039638900,
+      "offset": 714642261
+    },
+    "096_C7v01.flac": {
+      "member": "48khz24bit/096_C7v01.flac",
+      "compressed": 576383,
+      "size": 584450,
+      "compression": 8,
+      "crc32": 3608265095,
+      "offset": 715281239
+    },
+    "096_C7v03.flac": {
+      "member": "48khz24bit/096_C7v03.flac",
+      "compressed": 584868,
+      "size": 592921,
+      "compression": 8,
+      "crc32": 4206940177,
+      "offset": 716430332
+    },
+    "096_C7v05.flac": {
+      "member": "48khz24bit/096_C7v05.flac",
+      "compressed": 523249,
+      "size": 531355,
+      "compression": 8,
+      "crc32": 2732570172,
+      "offset": 717533503
+    },
+    "096_C7v07.flac": {
+      "member": "48khz24bit/096_C7v07.flac",
+      "compressed": 519986,
+      "size": 528064,
+      "compression": 8,
+      "crc32": 990321075,
+      "offset": 718562310
+    },
+    "096_C7v09.flac": {
+      "member": "48khz24bit/096_C7v09.flac",
+      "compressed": 466983,
+      "size": 475071,
+      "compression": 8,
+      "crc32": 2568970053,
+      "offset": 719551030
+    },
+    "096_C7v11.flac": {
+      "member": "48khz24bit/096_C7v11.flac",
+      "compressed": 471835,
+      "size": 479929,
+      "compression": 8,
+      "crc32": 3775558276,
+      "offset": 720521851
+    },
+    "096_C7v13.flac": {
+      "member": "48khz24bit/096_C7v13.flac",
+      "compressed": 461118,
+      "size": 469187,
+      "compression": 8,
+      "crc32": 1258579300,
+      "offset": 721472569
+    },
+    "096_C7v16.flac": {
+      "member": "48khz24bit/096_C7v16.flac",
+      "compressed": 416437,
+      "size": 424636,
+      "compression": 8,
+      "crc32": 2252469731,
+      "offset": 722752627
+    },
+    "099_Ds7v01.flac": {
+      "member": "48khz24bit/099_D#7v01.flac",
+      "compressed": 751869,
+      "size": 759935,
+      "compression": 8,
+      "crc32": 311052542,
+      "offset": 723169147
+    },
+    "099_Ds7v03.flac": {
+      "member": "48khz24bit/099_D#7v03.flac",
+      "compressed": 664445,
+      "size": 672478,
+      "compression": 8,
+      "crc32": 3779293441,
+      "offset": 724599931
+    },
+    "099_Ds7v05.flac": {
+      "member": "48khz24bit/099_D#7v05.flac",
+      "compressed": 604935,
+      "size": 613049,
+      "compression": 8,
+      "crc32": 6069261,
+      "offset": 725887108
+    },
+    "099_Ds7v07.flac": {
+      "member": "48khz24bit/099_D#7v07.flac",
+      "compressed": 562583,
+      "size": 570677,
+      "compression": 8,
+      "crc32": 4250290741,
+      "offset": 727066858
+    },
+    "099_Ds7v09.flac": {
+      "member": "48khz24bit/099_D#7v09.flac",
+      "compressed": 530201,
+      "size": 538266,
+      "compression": 8,
+      "crc32": 2653172330,
+      "offset": 728180314
+    },
+    "099_Ds7v11.flac": {
+      "member": "48khz24bit/099_D#7v11.flac",
+      "compressed": 537158,
+      "size": 545218,
+      "compression": 8,
+      "crc32": 4201309935,
+      "offset": 729228852
+    },
+    "099_Ds7v13.flac": {
+      "member": "48khz24bit/099_D#7v13.flac",
+      "compressed": 471303,
+      "size": 479458,
+      "compression": 8,
+      "crc32": 387840929,
+      "offset": 730278355
+    },
+    "099_Ds7v16.flac": {
+      "member": "48khz24bit/099_D#7v16.flac",
+      "compressed": 460151,
+      "size": 468422,
+      "compression": 8,
+      "crc32": 2470913073,
+      "offset": 731687866
+    },
+    "102_Fs7v01.flac": {
+      "member": "48khz24bit/102_F#7v01.flac",
+      "compressed": 333661,
+      "size": 341962,
+      "compression": 8,
+      "crc32": 1517195549,
+      "offset": 732148101
+    },
+    "102_Fs7v03.flac": {
+      "member": "48khz24bit/102_F#7v03.flac",
+      "compressed": 624199,
+      "size": 632271,
+      "compression": 8,
+      "crc32": 747965552,
+      "offset": 733126235
+    },
+    "102_Fs7v05.flac": {
+      "member": "48khz24bit/102_F#7v05.flac",
+      "compressed": 596250,
+      "size": 604332,
+      "compression": 8,
+      "crc32": 2450480395,
+      "offset": 734385816
+    },
+    "102_Fs7v07.flac": {
+      "member": "48khz24bit/102_F#7v07.flac",
+      "compressed": 575662,
+      "size": 583729,
+      "compression": 8,
+      "crc32": 3455325139,
+      "offset": 735562589
+    },
+    "102_Fs7v09.flac": {
+      "member": "48khz24bit/102_F#7v09.flac",
+      "compressed": 537887,
+      "size": 545962,
+      "compression": 8,
+      "crc32": 3619020063,
+      "offset": 736737025
+    },
+    "102_Fs7v11.flac": {
+      "member": "48khz24bit/102_F#7v11.flac",
+      "compressed": 568148,
+      "size": 576202,
+      "compression": 8,
+      "crc32": 527844281,
+      "offset": 737835580
+    },
+    "102_Fs7v13.flac": {
+      "member": "48khz24bit/102_F#7v13.flac",
+      "compressed": 513948,
+      "size": 522010,
+      "compression": 8,
+      "crc32": 82227402,
+      "offset": 738944879
+    },
+    "102_Fs7v16.flac": {
+      "member": "48khz24bit/102_F#7v16.flac",
+      "compressed": 446851,
+      "size": 454917,
+      "compression": 8,
+      "crc32": 2511215938,
+      "offset": 740467745
+    },
+    "105_A7v01.flac": {
+      "member": "48khz24bit/105_A7v01.flac",
+      "compressed": 487647,
+      "size": 495736,
+      "compression": 8,
+      "crc32": 2480926856,
+      "offset": 740914680
+    },
+    "105_A7v03.flac": {
+      "member": "48khz24bit/105_A7v03.flac",
+      "compressed": 479252,
+      "size": 487328,
+      "compression": 8,
+      "crc32": 601864279,
+      "offset": 741918797
+    },
+    "105_A7v05.flac": {
+      "member": "48khz24bit/105_A7v05.flac",
+      "compressed": 455188,
+      "size": 463262,
+      "compression": 8,
+      "crc32": 1704963958,
+      "offset": 742877467
+    },
+    "105_A7v07.flac": {
+      "member": "48khz24bit/105_A7v07.flac",
+      "compressed": 416068,
+      "size": 424150,
+      "compression": 8,
+      "crc32": 1301295312,
+      "offset": 743776041
+    },
+    "105_A7v09.flac": {
+      "member": "48khz24bit/105_A7v09.flac",
+      "compressed": 399120,
+      "size": 407197,
+      "compression": 8,
+      "crc32": 502096782,
+      "offset": 744645637
+    },
+    "105_A7v11.flac": {
+      "member": "48khz24bit/105_A7v11.flac",
+      "compressed": 395066,
+      "size": 403145,
+      "compression": 8,
+      "crc32": 2531404188,
+      "offset": 745455906
+    },
+    "105_A7v13.flac": {
+      "member": "48khz24bit/105_A7v13.flac",
+      "compressed": 366685,
+      "size": 374790,
+      "compression": 8,
+      "crc32": 1705693008,
+      "offset": 746231984
+    },
+    "105_A7v16.flac": {
+      "member": "48khz24bit/105_A7v16.flac",
+      "compressed": 316513,
+      "size": 324706,
+      "compression": 8,
+      "crc32": 730337849,
+      "offset": 747262969
+    },
+    "108_C8v01.flac": {
+      "member": "48khz24bit/108_C8v01.flac",
+      "compressed": 413396,
+      "size": 421471,
+      "compression": 8,
+      "crc32": 1863873978,
+      "offset": 747579565
+    },
+    "108_C8v03.flac": {
+      "member": "48khz24bit/108_C8v03.flac",
+      "compressed": 347580,
+      "size": 355680,
+      "compression": 8,
+      "crc32": 189750108,
+      "offset": 748406474
+    },
+    "108_C8v05.flac": {
+      "member": "48khz24bit/108_C8v05.flac",
+      "compressed": 329867,
+      "size": 337954,
+      "compression": 8,
+      "crc32": 1099005997,
+      "offset": 749093953
+    },
+    "108_C8v07.flac": {
+      "member": "48khz24bit/108_C8v07.flac",
+      "compressed": 407791,
+      "size": 415871,
+      "compression": 8,
+      "crc32": 4201146405,
+      "offset": 749849715
+    },
+    "108_C8v09.flac": {
+      "member": "48khz24bit/108_C8v09.flac",
+      "compressed": 424169,
+      "size": 432268,
+      "compression": 8,
+      "crc32": 3133236482,
+      "offset": 750693387
+    },
+    "108_C8v11.flac": {
+      "member": "48khz24bit/108_C8v11.flac",
+      "compressed": 408354,
+      "size": 416429,
+      "compression": 8,
+      "crc32": 428268433,
+      "offset": 751518130
+    },
+    "108_C8v13.flac": {
+      "member": "48khz24bit/108_C8v13.flac",
+      "compressed": 394404,
+      "size": 402479,
+      "compression": 8,
+      "crc32": 1805550937,
+      "offset": 752298463
+    },
+    "108_C8v16.flac": {
+      "member": "48khz24bit/108_C8v16.flac",
+      "compressed": 327596,
+      "size": 335776,
+      "compression": 8,
+      "crc32": 4136879920,
+      "offset": 753448630
+    }
+  }
+}

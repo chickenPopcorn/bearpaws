@@ -1,5 +1,7 @@
 import type { Note } from "./song";
 export type Mode = "listen" | "wait" | "rhythm";
+// Keep inclusive timing windows stable after converting song time to wall time.
+const TIMING_EPSILON = 1e-6;
 export interface Group {
   start: number;
   notes: Note[];
@@ -212,7 +214,11 @@ export class Practice {
     if (mode === "listen") return;
     if (mode === "wait") {
       const gate = this.gate;
-      if (!gate || Math.abs(position - gate.start) > 0.002) return;
+      if (
+        !gate ||
+        Math.abs(position - gate.start) / speed > tolerance + TIMING_EPSILON
+      )
+        return;
       const expected = gate.notes.filter((n) => n.pitch === pitch);
       if (!expected.length) {
         this.recordFeedback({ kind: "wrong", pitch, at: position });
@@ -239,7 +245,7 @@ export class Practice {
       (a, b) => Math.abs(a.start - position) - Math.abs(b.start - position),
     )[0];
     const offset = nearest ? (position - nearest.start) / speed : Infinity;
-    if (nearest && Math.abs(offset) <= tolerance) {
+    if (nearest && Math.abs(offset) <= tolerance + TIMING_EPSILON) {
       for (const n of candidates.filter(
         (n) => Math.abs(n.start - nearest.start) < 0.001,
       )) {
@@ -272,7 +278,7 @@ export class Practice {
     for (const n of this.notes)
       if (
         n.start >= this.from - 0.001 &&
-        n.start < position - tolerance * speed &&
+        n.start < position - (tolerance + TIMING_EPSILON) * speed &&
         !this.hit.has(n.id) &&
         !this.missed.has(n.id)
       ) {

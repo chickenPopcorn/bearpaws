@@ -1,3 +1,24 @@
+@font-face {
+  font-family: "Libre Baskerville";
+  src: url("/fonts/libre-baskerville.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Bravura";
+  src: url("/fonts/bravura.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: "Cinzel Decorative";
+  src: url("/fonts/cinzel-decorative.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
 :root {
   font-family:
     Inter,
@@ -15,6 +36,7 @@
   --muted: #767183;
   --line: #e2deec;
   --soft: #eee7fc;
+  --score-font: "Libre Baskerville", "Baskerville", Georgia, serif;
 }
 * {
   box-sizing: border-box;
@@ -235,17 +257,31 @@ main {
   margin-bottom: 7px;
 }
 h1 {
-  font-weight: 550;
-  font-size: 28px;
-  letter-spacing: -1px;
+  font-family: var(--score-font);
+  font-weight: 400;
+  font-size: clamp(30px, 3vw, 36px);
+  letter-spacing: -0.025em;
   line-height: 1.2;
   margin: 0 0 8px;
   overflow-wrap: anywhere;
+}
+.song-title-initial {
+  display: inline-block;
+  font-family: "Cinzel Decorative", Georgia, serif;
+  font-size: 1.85em;
+  font-weight: 400;
+  line-height: 0.85;
+  letter-spacing: -0.08em;
+  margin-right: 0.02em;
+  color: var(--accent);
 }
 .song-head p {
   margin: 0;
   font-size: 12px;
   color: var(--muted);
+}
+.song-head > div {
+  min-width: 0;
 }
 .chip {
   font-size: 10px;
@@ -257,12 +293,45 @@ h1 {
   white-space: nowrap;
   margin-top: 9px;
 }
-.options {
+.practice-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  margin-bottom: 16px;
+  gap: 12px 24px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.toolbar-preferences {
+  display: contents;
+}
+.practice-toolbar .tabs button {
+  padding: 7px 9px;
+  font-size: 11px;
+}
+.practice-toolbar .hands button {
+  padding: 7px 8px;
+  font-size: 10px;
+}
+.practice-toolbar .speed {
+  margin-left: auto;
+  gap: 6px;
+}
+.practice-toolbar .speed input {
+  width: 80px;
+}
+.fullscreen-song-title {
+  margin-right: auto;
+  font-family: var(--score-font);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.piano-notice {
+  margin-bottom: 10px;
+  color: #7354cf;
+  font-size: 12px;
 }
 .tabs {
   display: flex;
@@ -286,14 +355,24 @@ h1 {
 }
 .hands {
   display: flex;
-  gap: 5px;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
 }
 .hands button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
   font-size: 11px;
   padding: 7px 10px;
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.hands button[aria-pressed="true"] {
+  background: var(--soft);
 }
 .hands button[aria-pressed="false"] {
   opacity: 0.5;
@@ -319,7 +398,126 @@ h1 {
 .work-main {
   min-width: 0;
 }
+.sheet-timeline {
+  --sheet-paper: #f0f0f2;
+  font-family: var(--score-font);
+  flex: 0 0 auto;
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 1px solid #dcd8e8;
+  border-radius: 11px;
+  background: var(--sheet-paper);
+}
+.sheet-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 12px 0;
+  font-size: 10px;
+  color: #797183;
+}
+.sheet-timeline-header strong {
+  color: #443b52;
+  font-family: var(--score-font);
+  font-size: 12px;
+  font-weight: 400;
+}
+.sheet-timeline-svg {
+  display: block;
+  width: 100%;
+  height: 210px;
+}
+.sheet-timeline-svg.is-seekable {
+  cursor: pointer;
+}
+.sheet-timeline-svg.is-seeking {
+  cursor: grabbing;
+}
+.sheet-timeline-svg:focus-visible {
+  outline: 2px solid #9475d3;
+  outline-offset: -3px;
+  border-radius: 5px;
+}
+.sheet-staff-line {
+  stroke: #b9b3c0;
+  stroke-width: 0.8;
+}
+.sheet-bar-line {
+  stroke: #aaa1b5;
+  stroke-width: 1;
+}
+.sheet-clef,
+.sheet-time-signature,
+.sheet-rest {
+  fill: #51465f;
+}
+.sheet-clef,
+.sheet-time-signature,
+.sheet-accidental {
+  font-family: "Bravura";
+  font-weight: 400;
+  stroke: none;
+}
+.sheet-note-right {
+  color: #7a5ec5;
+}
+.sheet-note-left {
+  color: #328b7e;
+}
+.sheet-note {
+  fill: currentColor;
+  stroke: currentColor;
+}
+.sheet-note-label,
+.sheet-label {
+  fill: #62576e;
+  stroke: none;
+  font-family: var(--score-font);
+}
+.sheet-note-label {
+  font-size: 11px;
+}
+.sheet-bar-number {
+  fill: #82778d;
+  font-family: var(--score-font);
+  font-size: 11px;
+  font-weight: 700;
+}
+.sheet-bar-number.is-current {
+  fill: #7354cf;
+}
+.sheet-beat-number {
+  fill: #a399ae;
+  font-family: var(--score-font);
+  font-size: 9px;
+}
+.sheet-note-halo {
+  fill: currentColor;
+  opacity: 0.14;
+  stroke: none;
+}
+.sheet-density-note {
+  display: block;
+  padding: 0 12px 6px;
+  color: #82778d;
+  font-size: 10px;
+}
+.sheet-beat-tick {
+  stroke: #eeebf2;
+  stroke-width: 1;
+}
+.sheet-playhead {
+  stroke: #7354cf;
+  stroke-width: 2;
+}
+.sheet-playhead-tip {
+  fill: #7354cf;
+  stroke: none;
+}
 .roll {
+  font-family: var(--score-font);
   border: 1px solid #dcd8e8;
   border-radius: 11px;
   overflow: hidden;
@@ -329,28 +527,40 @@ h1 {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 9px;
-  letter-spacing: 0.4px;
+  font-size: 10px;
+  letter-spacing: 0.1px;
   padding: 9px 11px;
   color: #888194;
   border-bottom: 1px solid var(--line);
 }
 .piano {
+  font-family: var(--score-font);
   width: 100%;
   height: 410px;
   display: block;
   touch-action: none;
 }
-.transport {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 18px;
-}
 .transport-buttons {
   display: flex;
-  gap: 7px;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.transport-buttons button {
+  border: 0;
+  border-radius: 7px;
+}
+.transport-buttons .square {
+  width: 32px;
+  height: 32px;
+}
+.transport-buttons .play {
+  min-width: 88px;
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 11px;
 }
 .square {
   font-size: 20px;
@@ -396,27 +606,6 @@ h1 {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.seek {
-  width: 100%;
-  height: 5px;
-  display: block;
-  margin: 20px 0 10px;
-  cursor: pointer;
-}
-.status {
-  font-size: 12px;
-  color: #6e627e;
-  min-height: 40px;
-  padding-top: 9px;
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-.status > span {
-  font-size: 18px;
-  line-height: 1.1;
-  color: var(--accent);
-}
 .coach {
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -454,6 +643,187 @@ h1 {
 .chord .held {
   background: var(--accent);
   color: #fff;
+}
+.chord .finger-note {
+  min-width: 58px;
+  text-align: center;
+}
+.chord .finger-note small {
+  display: block;
+  font-size: 9px;
+  line-height: 1.5;
+}
+.chord .finger-note strong {
+  display: block;
+  font-size: 15px;
+}
+.chord .finger-note.left {
+  background: #def1ec;
+  color: #287b6e;
+}
+.chord .finger-note.held {
+  background: var(--accent);
+  color: #fff;
+}
+.finger-guide {
+  font-family: var(--score-font);
+  display: grid;
+  grid-template-columns: 1.15fr 1.4fr 1.4fr;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #f8f6fa;
+  font-size: 12px;
+}
+.finger-guide-title-button {
+  color: #443b52;
+  font-size: 16px;
+  font-weight: 400;
+  font-family: inherit;
+  text-align: left;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+}
+.finger-guide-title-button:hover {
+  color: var(--accent);
+  background: transparent;
+}
+.finger-guide p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.finger-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 9px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.finger-legend b {
+  color: var(--accent);
+}
+.hand-position {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--hand-line);
+  border-radius: 12px;
+  background: var(--hand-wash);
+}
+.hand-position > div {
+  min-width: 0;
+}
+.hand-position strong {
+  font-size: 14px;
+  font-weight: 400;
+}
+.hand-position svg {
+  width: 100px;
+  height: 137px;
+  flex-shrink: 0;
+}
+.bear-paw-outline {
+  fill: var(--paw-fur);
+  stroke: currentColor;
+  stroke-opacity: 0.65;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.bear-paw-pad {
+  fill: currentColor;
+  fill-opacity: 0.2;
+  stroke: currentColor;
+  stroke-opacity: 0.2;
+  stroke-width: 1.2;
+}
+.bear-paw-claw {
+  fill: #fcfbfe;
+  stroke: currentColor;
+  stroke-opacity: 0.4;
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+.bear-paw-fur {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-opacity: 0.25;
+}
+.bear-paw-number {
+  fill: currentColor;
+}
+.bear-paw-face {
+  fill: currentColor;
+}
+.bear-paw-face ellipse {
+  fill: var(--paw-fur);
+}
+.bear-paw-smile {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+.hand-position .bear-paw {
+  overflow: visible;
+}
+.bear-paw-wave {
+  transform-box: view-box;
+  transform-origin: 50% 86%;
+  animation: bear-wave 10s ease-in-out infinite both;
+}
+.bear-paw-digit {
+  animation: bear-pad-wiggle 10s ease-in-out infinite both;
+}
+@keyframes bear-wave {
+  0%,
+  44%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  10% {
+    transform: translateY(-4px) rotate(-8deg);
+  }
+  22% {
+    transform: translateY(-4px) rotate(8deg);
+  }
+  34% {
+    transform: translateY(-2px) rotate(-5deg);
+  }
+}
+@keyframes bear-pad-wiggle {
+  0%,
+  12%,
+  32%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  22% {
+    transform: translateY(-3px) scale(1.035, 0.98);
+  }
+}
+.hand-position.left {
+  --paw-fur: #dfefe9;
+  --hand-wash: #edf7f3;
+  --hand-line: #c8ddd5;
+  color: #328f80;
+}
+.hand-position.right {
+  --paw-fur: #eae2f7;
+  --hand-wash: #f3edf9;
+  --hand-line: #dbcfec;
+  color: var(--accent);
+}
+.hand-position.inactive {
+  opacity: 0.5;
 }
 .coach button {
   margin-top: 12px;
@@ -701,6 +1071,13 @@ footer {
   }
 }
 @media (max-width: 1200px) {
+  .finger-guide {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 20px;
+  }
+  .finger-guide-title {
+    grid-column: 1 / -1;
+  }
   .app {
     margin: 12px;
   }
@@ -781,6 +1158,9 @@ footer {
   }
 }
 @media (max-width: 700px) {
+  .finger-guide {
+    grid-template-columns: 1fr;
+  }
   .app {
     margin: 0;
     border-radius: 0;
@@ -843,9 +1223,6 @@ footer {
   .piano {
     height: 370px;
   }
-  .options {
-    gap: 8px;
-  }
   .tabs button {
     font-size: 11px;
     padding: 7px 9px;
@@ -893,5 +1270,81 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   button {
     transition: none;
+  }
+  .bear-paw-wave,
+  .bear-paw-digit {
+    animation: none;
+  }
+}
+
+.roll-caption {
+  align-items: center;
+}
+.roll-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.fullscreen-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: #66537f;
+}
+.fullscreen-toggle > span {
+  font-size: 16px;
+  line-height: 1;
+}
+.work-main.piano-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: clamp(10px, 2vw, 24px);
+  overflow: hidden;
+  background: #f6f5f9;
+  font-family: var(--score-font);
+}
+.piano-expanded::backdrop {
+  background: #f6f5f9;
+}
+.piano-expanded .roll {
+  flex: 1;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+.piano-expanded .sheet-timeline-svg {
+  height: clamp(140px, 21vh, 210px);
+}
+.piano-expanded .roll-caption {
+  flex: 0 0 auto;
+}
+.piano-expanded .piano {
+  flex: 1;
+  min-height: 0;
+  height: 0;
+}
+@media (max-width: 700px), (max-height: 600px) {
+  .practice-toolbar {
+    gap: 7px 12px;
+    margin-bottom: 8px;
+  }
+  .fullscreen-song-title {
+    font-size: 21px;
+  }
+  .piano-expanded .roll {
+    min-height: 130px;
+  }
+  .piano-expanded .roll-actions > span {
+    display: none;
   }
 }
