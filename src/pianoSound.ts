@@ -77,6 +77,7 @@ export function createRoomImpulse(context: BaseAudioContext): AudioBuffer {
 }
 
 const SMOOTH_SECONDS = 0.04;
+const PROFILE_FADE_SECONDS = 0.08;
 const NATURAL_COMPRESSOR = {
   threshold: -14,
   knee: 18,
@@ -120,6 +121,7 @@ export function createPianoSoundBus(
     const wet = remember(context.createGain());
     const safety = remember(context.createDynamicsCompressor());
     const master = remember(context.createGain());
+    const original = remember(context.createGain());
     const impulse = createRoomImpulse(context);
     const makeConvolver = () => {
       const node = context.createConvolver();
@@ -138,12 +140,20 @@ export function createPianoSoundBus(
     compressor.connect(convolver);
     wet.connect(safety);
     safety.connect(master).connect(context.destination);
+    // Web Audio compressors add 6ms of lookahead even at a 1:1 ratio. Original
+    // keeps the previous single-compressor delay; only Natural adds the second.
+    compressor.connect(original).connect(context.destination);
+    safety.threshold.value = -3;
+    safety.knee.value = 0;
+    safety.ratio.value = 20;
+    safety.attack.value = 0.001;
+    safety.release.value = 0.08;
 
     const update = (settings: PianoSoundSettings, immediate: boolean) => {
       const sound = normalizePianoSound(settings);
       const natural = sound.profile === "natural";
       const target = natural ? NATURAL_COMPRESSOR : ORIGINAL_COMPRESSOR;
-      const set = (param: AudioParam, value: number) => {
+      const set = (param: AudioParam, value: number, fade = false) => {
         if (immediate) {
           param.value = value;
           return;
@@ -154,20 +164,18 @@ export function createPianoSoundBus(
           param.cancelScheduledValues(now);
           param.setValueAtTime(param.value, now);
         }
-        param.setTargetAtTime(value, now, SMOOTH_SECONDS);
+        if (fade)
+          param.linearRampToValueAtTime(value, now + PROFILE_FADE_SECONDS);
+        else param.setTargetAtTime(value, now, SMOOTH_SECONDS);
       };
       for (const key of Object.keys(target) as (keyof typeof target)[])
         set(compressor[key], target[key]);
       set(dry.gain, 1);
       set(wet.gain, natural ? sound.ambience * 0.7 : 0);
-      // Peak protection follows the wet/dry sum, where overlapping room tails
-      // could otherwise exceed the headroom of gentler compression.
-      set(safety.threshold, natural ? -3 : 0);
-      set(safety.knee, 0);
-      set(safety.ratio, natural ? 20 : 1);
-      set(safety.attack, 0.001);
-      set(safety.release, 0.08);
-      set(master.gain, natural ? 0.92 : 1);
+      // Natural keeps post-mix peak protection. Finite crossfades reach exact
+      // zero so Original has no residual sound from the delayed safety path.
+      set(master.gain, natural ? 0.92 : 0, true);
+      set(original.gain, natural ? 0 : 1, true);
     };
     update(initial, true);
     return {

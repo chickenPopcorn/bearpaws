@@ -65,16 +65,20 @@ it("updates the room amount without switching the sound profile", async () => {
   });
   expect(onChange).toHaveBeenLastCalledWith("natural", 0.47);
 });
-it("does not let Escape inside sound options exit the piano fullscreen", async () => {
+it("leaves Escape available to the native popover and fullscreen handler", async () => {
   await render();
   const outside = vi.fn();
   document.addEventListener("keydown", outside);
   try {
     const input = container.querySelector("input")!;
-    input.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-    );
-    expect(outside).not.toHaveBeenCalled();
+    const event = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(event);
+    expect(outside).toHaveBeenCalledOnce();
+    expect(event.defaultPrevented).toBe(false);
   } finally {
     document.removeEventListener("keydown", outside);
   }

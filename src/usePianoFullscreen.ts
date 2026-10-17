@@ -76,6 +76,9 @@ export function usePianoFullscreen(onEnter: () => void) {
     element.querySelector<HTMLButtonElement>(".fullscreen-toggle")?.focus();
     const keyboard = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // Native popovers get the first Escape even when Tab moved focus to
+        // another control. Let the browser dismiss its topmost open popover.
+        if (element.querySelector("[popover]:popover-open")) return;
         event.preventDefault();
         void leave();
       } else if (event.key === "Tab") {

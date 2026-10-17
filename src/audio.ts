@@ -264,7 +264,7 @@ export class ReferenceAudio {
       }),
     );
   }
-  stop(releasePrepared = true) {
+  stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) this.playbackFiles.clear();
     for (const v of this.voices) {
       try {
@@ -276,7 +276,7 @@ export class ReferenceAudio {
     this.voices.clear();
     this.scheduled.clear();
     try {
-      this.output?.reset();
+      if (resetRoom) this.output?.reset();
     } catch {
       this.output?.dispose();
       this.output = null;
@@ -355,7 +355,9 @@ export class ReferenceAudio {
   schedule(notes: Note[], transport: Transport, enabled: boolean) {
     if (!enabled || !transport.playing || !this.context) return;
     if (this.cycle !== transport.cycle) {
-      this.stop(false);
+      // A loop changes scheduled notes but its room tail should keep ringing.
+      // Explicit pause, seek and song changes reset the room through stop().
+      this.stop(false, false);
       this.cycle = transport.cycle;
     }
     const now = this.now(),

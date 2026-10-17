@@ -413,7 +413,8 @@ export class Studio {
         this.settings.mode === "wait" ? this.practice.gate?.start : undefined,
       );
       if (cycle !== this.transport.cycle) {
-        this.audio.stop(false);
+        // Replace note scheduling without rebuilding the room on each pass.
+        this.audio.stop(false, false);
         this.scoringEpoch =
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();

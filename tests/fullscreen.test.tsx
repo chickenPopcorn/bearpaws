@@ -127,6 +127,51 @@ describe("piano fullscreen", () => {
     expect(document.activeElement).toBe(button("#launcher"));
   });
 
+  it.each(["#first", "#resume"])(
+    "dismisses an open sound popover before fullscreen when focus moved to %s",
+    async (focusedControl) => {
+      const { stage } = await mount();
+      await click("#launcher");
+      const panel = document.createElement("div");
+      panel.setAttribute("popover", "auto");
+      stage.append(panel);
+      let popoverOpen = true;
+      // Happy DOM does not implement the native popover open state. Expose the
+      // browser's selector result while exercising the real keyboard handler.
+      const querySelector = stage.querySelector.bind(stage);
+      vi.spyOn(stage, "querySelector").mockImplementation(((
+        selector: string,
+      ) =>
+        selector === "[popover]:popover-open"
+          ? popoverOpen
+            ? panel
+            : null
+          : querySelector(selector)) as typeof stage.querySelector);
+      button(focusedControl).focus();
+      const dismiss = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () => button(focusedControl).dispatchEvent(dismiss));
+      expect(dismiss.defaultPrevented).toBe(false);
+      expect(expanded()).toBe("true");
+      expect(exit).not.toHaveBeenCalled();
+
+      // The unprevented native action dismisses the popover. A second Escape
+      // should now reach fullscreen's own exit behavior.
+      popoverOpen = false;
+      const leave = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () => button(focusedControl).dispatchEvent(leave));
+      expect(leave.defaultPrevented).toBe(true);
+      expect(expanded()).toBe("false");
+    },
+  );
+
   it("starts practice again in fullscreen without another native request or losing return focus", async () => {
     const { stage, request, onEnter } = await mount();
     request.mockImplementation(async () => {

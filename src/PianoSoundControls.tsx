@@ -12,17 +12,10 @@ export function PianoSoundControls({
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
   const profileSelect = useRef<HTMLSelectElement>(null);
   const [position, setPosition] = useState({ top: 16, left: 16 });
   return (
-    <div
-      className="piano-sound"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && panel.current?.matches(":popover-open"))
-          event.stopPropagation();
-      }}
-    >
+    <div className="piano-sound">
       <button
         ref={trigger}
         popoverTarget={id}
@@ -43,7 +36,6 @@ export function PianoSoundControls({
         Piano sound
       </button>
       <div
-        ref={panel}
         id={id}
         popover="auto"
         className="piano-sound-panel"
@@ -52,10 +44,6 @@ export function PianoSoundControls({
         aria-label="Piano sound options"
         onToggle={(event) => {
           if (event.newState === "open") profileSelect.current?.focus();
-        }}
-        onKeyDown={(event) => {
-          // Let the browser close the popover without exiting piano fullscreen.
-          if (event.key === "Escape") event.stopPropagation();
         }}
       >
         <label htmlFor={`${id}-profile`}>Sound</label>

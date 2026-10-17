@@ -1166,7 +1166,9 @@ describe("practice studio integration", () => {
     expect(studio.transport.loop).toEqual([0, fixture.duration]);
     studio.mode("listen");
     await studio.play();
+    vi.mocked(studio.audio.stop).mockClear();
     advance(studio, fixture.duration + 0.25);
+    expect(studio.audio.stop).toHaveBeenCalledExactlyOnceWith(false, false);
     expect(studio.transport.playing).toBe(true);
     expect(studio.position).toBeCloseTo(0.25);
   });
