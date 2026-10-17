@@ -16,6 +16,7 @@ export interface Progress {
   attempts: number;
   updated: string;
   assignments: Record<number, string>;
+  loopEnabled: boolean;
   loop: [number, number] | null;
 }
 export const defaults: Settings = {
@@ -79,6 +80,7 @@ export function progress(id: string, duration: number): Progress {
     updated: typeof p.updated === "string" ? p.updated : "",
     assignments:
       p.assignments && typeof p.assignments === "object" ? p.assignments : {},
+    loopEnabled: typeof p.loopEnabled === "boolean" ? p.loopEnabled : true,
     loop:
       Array.isArray(loop) &&
       loop.length === 2 &&

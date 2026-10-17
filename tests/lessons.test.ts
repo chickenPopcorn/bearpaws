@@ -1,14 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { builtInSongs, isBuiltInSong } from "../src/lessons";
+import { starterPieces } from "../src/starterPieces";
+import { popsPieces } from "../src/popsPieces";
+import { collectionForSong } from "../src/collections";
 import { tempoConverter } from "../src/song";
 
 describe("bundled beginner music", () => {
-  it("keeps only Ode to Joy and Dancing Raindrops and recognizes their exact IDs", () => {
+  it("keeps the original lessons and adds recognizable beginner arrangements", () => {
     const songs = builtInSongs();
-    expect(songs.map((song) => [song.id, song.title])).toEqual([
+    expect(songs.slice(0, 2).map((song) => [song.id, song.title])).toEqual([
       ["cadence-ode-to-joy-v1", "Ode to Joy"],
       ["cadence-dancing-raindrops-v1", "Dancing Raindrops"],
     ]);
+    expect(songs).toHaveLength(15);
+    expect(new Set(songs.map((song) => song.id)).size).toBe(songs.length);
+    for (const title of [
+      "Hot Cross Buns",
+      "Mary Had a Little Lamb",
+      "Twinkle, Twinkle, Little Star",
+      "London Bridge",
+      "好一朵茉莉花 · chorus",
+    ])
+      expect(songs.some((song) => song.title === title)).toBe(true);
     for (const song of songs) {
       expect(isBuiltInSong(song.id)).toBe(true);
       expect(isBuiltInSong(`${song.id}-imported`)).toBe(false);
@@ -23,7 +36,7 @@ describe("bundled beginner music", () => {
       expect(isBuiltInSong(removedId)).toBe(false);
   });
 
-  it("returns independent notes, track assignments and lesson metadata for both songs", () => {
+  it("returns independent notes, track assignments and lesson metadata for every song", () => {
     const original = builtInSongs();
     const songs = builtInSongs();
     for (const song of songs) {
@@ -47,7 +60,7 @@ describe("bundled beginner music", () => {
     expect(song.lesson!.description.length).toBeGreaterThan(0);
   });
 
-  it("keeps both hands in their stated five-finger positions", () => {
+  it("keeps five-finger lessons in their stated positions and provides valid fingering for every note", () => {
     const right = new Map([
       [60, 1],
       [62, 2],
@@ -63,17 +76,65 @@ describe("bundled beginner music", () => {
       [55, 1],
     ]);
     for (const song of builtInSongs()) {
-      expect(song.lesson!.handPositions.right).toContain("C4 (1) to G4 (5)");
       expect(song.lesson!.handPositions.left).toContain("C3 (5) to G3 (1)");
+      expect(song.lesson!.handPositions.right.length).toBeGreaterThan(10);
+      const fixedC =
+        song.lesson!.handPositions.right === "C position · C4 (1) to G4 (5)";
       for (const note of song.notes) {
         const hand = song.tracks.find((track) => track.id === note.track)!.hand;
         expect(hand).toBe(note.track === 0 ? "left" : "right");
         expect(note.fingerHand).toBe(hand);
+        expect([1, 2, 3, 4, 5]).toContain(note.finger);
         const fingers = hand === "right" ? right : left;
-        expect(fingers.has(note.pitch)).toBe(true);
-        expect(note.finger).toBe(fingers.get(note.pitch));
+        if (hand === "left" || fixedC) {
+          expect(fingers.has(note.pitch)).toBe(true);
+          expect(note.finger).toBe(fingers.get(note.pitch));
+        }
       }
     }
+  });
+
+  it("fills each arranged bar and states hand changes for melodies beyond C position", () => {
+    for (const piece of [...starterPieces, ...popsPieces]) {
+      expect(piece.bass).toHaveLength(piece.melody.length);
+      expect(piece.melody.length).toBeGreaterThanOrEqual(4);
+      for (const bar of piece.melody)
+        expect(bar.reduce((beats, step) => beats + step[1], 0)).toBeCloseTo(
+          piece.beatsPerBar,
+        );
+      const extended = piece.melody.some((bar) =>
+        bar.some(
+          ([pitch]) => pitch !== null && ![60, 62, 64, 65, 67].includes(pitch),
+        ),
+      );
+      if (extended) expect(piece.rightPosition).toBeTruthy();
+    }
+  });
+
+  it("adds the eight-bar Jasmine Flower chorus to Mama Bear’s Pops", () => {
+    const songs = builtInSongs();
+    const jasmine = songs.find(
+      (song) => song.id === "bearpaws-jasmine-flower-v1",
+    )!;
+    expect(collectionForSong(jasmine.id).id).toBe("pops");
+    expect(
+      songs
+        .filter((song) => collectionForSong(song.id).id === "classes")
+        .map((song) => song.title),
+    ).toEqual(["Dancing Raindrops"]);
+    expect(
+      songs.filter((song) => collectionForSong(song.id).id === "songs"),
+    ).toHaveLength(13);
+    expect(jasmine.notes.filter((note) => note.track === 0)).toHaveLength(8);
+    const melody = jasmine.notes.filter((note) => note.track === 1);
+    expect(melody).toHaveLength(40);
+    expect(melody.slice(0, 7).map((note) => note.pitch)).toEqual([
+      64, 64, 67, 69, 72, 72, 69,
+    ]);
+    expect(melody.slice(-4).map((note) => note.pitch)).toEqual([
+      60, 60, 62, 60,
+    ]);
+    expect(jasmine.lesson!.description).toContain("chorus");
   });
 
   it("schedules valid, nonoverlapping notes on the stated tempo and counts every track", () => {

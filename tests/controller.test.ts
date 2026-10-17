@@ -74,6 +74,7 @@ vi.mock("../src/storage", () => ({
       updated: "",
       assignments: {},
       loop: null,
+      loopEnabled: true,
       ...((env.values.get(`progress:${id}`) as object) ?? {}),
     }),
   library: vi.fn(async () => env.songs),
@@ -351,6 +352,7 @@ describe("practice studio integration", () => {
     "lets the final piano release finish naturally at %sx speed, while explicit pause still stops it",
     async (speed) => {
       const studio = create(song([[60, 3.5]]));
+      studio.loop(false);
       studio.mode("listen");
       studio.speed(speed);
       await studio.play();
@@ -374,6 +376,7 @@ describe("practice studio integration", () => {
         ]),
       );
       studio.mode("listen");
+      if (change === "inactive bounds") studio.loop(false);
       if (change === "loop wrap") {
         studio.bounds(0, 2);
         studio.loop(true);
@@ -405,7 +408,7 @@ describe("practice studio integration", () => {
       );
       studio.mode("listen");
       studio.bounds(0, 1.5);
-      if (change !== "enable") studio.loop(true);
+      if (change === "enable") studio.loop(false);
       await studio.play();
       advance(studio, 0.25);
       vi.mocked(studio.audio.prepare).mockClear();
@@ -1048,6 +1051,36 @@ describe("practice studio integration", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(studio.audio.tone).not.toHaveBeenCalled();
+  });
+
+  it("loops the whole song by default and keeps playing after the ending", async () => {
+    const fixture = song([[60, 0.5]]);
+    const studio = create(fixture);
+    expect(studio.loopEnabled).toBe(true);
+    expect(studio.transport.loop).toEqual([0, fixture.duration]);
+    studio.mode("listen");
+    await studio.play();
+    advance(studio, fixture.duration + 0.25);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(0.25);
+  });
+
+  it("restores an explicit loop-off preference without losing its custom bounds", () => {
+    const fixture = song([[60, 1]]);
+    const studio = create(fixture);
+    studio.bounds(0.5, 2.5);
+    studio.loop(false);
+    studio.seek(3);
+    studio.save();
+    const restored = new Studio();
+    active.push(restored);
+    restored.load(fixture);
+    expect(restored.loopEnabled).toBe(false);
+    expect(restored.transport.loop).toBeNull();
+    expect(restored.position).toBe(3);
+    expect([restored.loopStart, restored.loopEnd]).toEqual([0.5, 2.5]);
+    restored.loop(true);
+    expect(restored.transport.loop).toEqual([0.5, 2.5]);
   });
 
   it("persists position, speed, hand assignments, loop and feedback settings per song", () => {

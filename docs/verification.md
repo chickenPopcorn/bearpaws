@@ -1,11 +1,11 @@
 # Verification record
 
-Updated October 16, 2026 for the sampled-piano and practice-studio changes.
+Updated October 17, 2026 for the BearPaws library and practice controls.
 
 ## Automated checks
 
-- `npm test`: 343 tests across 20 suites passed.
-- `python3 -m unittest discover -s tests -p 'test_*.py'`: 4 offline importer tests passed.
+- `npm test`: 415 tests across 23 suites passed.
+- `python3 -m unittest discover -s tests -p 'test_*.py'`: 6 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
 - `npm audit --audit-level=moderate`: no known vulnerabilities reported after updating the test runner.
@@ -23,6 +23,12 @@ seeking geometry and label bounds; hand-guide preferences; fullscreen fallback,
 Escape, focus restoration, tab trapping and audio-before-fullscreen ordering.
 Imported 3/4, 6/8 and changing meters are verified through parsing, score layout,
 displayed signatures, keyboard seeking and the waterfall beat grid.
+The library checks cover collection search and selection, native keyboard
+activation, score-slider shortcuts, loop preference persistence, all 15 MIDI
+exports and catalog entries, and exact ZIP contents with CRC verification.
+ZIP bytes remain identical when source timestamps, permissions or file creation
+order change, and search casing remains consistent across browser locales.
+Exported pieces use a full-bar count-in to retain musical bar alignment.
 
 The sample bank contains 240 lossless FLACs, about 358 MiB compressed. Checks
 verify all hashes against the recorded source metadata. Runtime loading remains
@@ -31,7 +37,14 @@ to open the page. The CI artifact includes the complete bank.
 
 ## Local browser checks
 
-Desktop Chrome at `http://127.0.0.1:5173/` was used to check:
+The latest production build was checked in the in-app browser at
+`http://127.0.0.1:4187/nested/piano/`: the logo and MIDI downloads resolve below
+the deployment path; accent-insensitive search finds Frère Jacques; Enter
+activates library controls; score arrows seek without changing songs; and the
+fullscreen controls remain visible. HTTP checks returned 200 for the logo,
+individual MIDI files and ZIP.
+
+Earlier desktop Chrome checks at `http://127.0.0.1:5173/` covered:
 
 - Automatic connection to `USB func for MIDI MIDI IN 1` after refresh, without
   clicking Connect piano again.

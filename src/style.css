@@ -112,22 +112,10 @@ select {
   text-decoration: none;
 }
 .brand-mark {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 27px;
-}
-.brand-mark i {
-  width: 5px;
-  background: var(--accent);
-  border-radius: 3px;
-  height: 15px;
-}
-.brand-mark i:nth-child(2) {
-  height: 26px;
-}
-.brand-mark i:nth-child(3) {
-  height: 20px;
+  display: block;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
 }
 .eyebrow {
   color: var(--muted);
@@ -194,6 +182,84 @@ select {
   margin: 0 9px 8px;
   display: flex;
   justify-content: space-between;
+}
+.library-search {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfaff;
+  color: inherit;
+  font-size: 12px;
+}
+.library-songs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: min(40vh, 440px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d1e8 transparent;
+}
+.library-section {
+  min-width: 0;
+  padding-top: 6px;
+}
+.library-section + .library-section {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+.library-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 3px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.library-section-toggle svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.library-section-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.library-section-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.library-section .import {
+  width: 100%;
+  margin-top: 4px;
+}
+.library-empty {
+  margin: 4px 0;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.library-download {
+  display: block;
+  color: var(--accent);
+  padding: 6px 10px;
+  font-size: 11px;
+  text-underline-offset: 3px;
 }
 .song {
   border: none;
@@ -293,6 +359,18 @@ h1 {
   white-space: nowrap;
   margin-top: 9px;
 }
+.song-tools {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+.song-midi-download {
+  color: var(--accent);
+  font-size: 11px;
+  text-underline-offset: 3px;
+}
 .practice-toolbar {
   display: flex;
   align-items: center;
@@ -320,13 +398,44 @@ h1 {
   width: 80px;
 }
 .fullscreen-song-title {
-  margin-right: auto;
+  display: block;
   font-family: var(--score-font);
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 400;
   letter-spacing: -0.025em;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-top: 4px;
+}
+.fullscreen-song-heading {
+  flex: 1 1 320px;
+  min-width: 150px;
+}
+.fullscreen-collection {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.song-navigation {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+.song-navigation button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  font-size: 11px;
+}
+.song-navigation button:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 .piano-notice {
   margin-bottom: 10px;
@@ -1200,7 +1309,27 @@ footer {
     align-items: center;
     gap: 6px;
   }
-  .nav-label,
+  .library-search,
+  .library-section,
+  .nav-label {
+    flex-basis: 100%;
+  }
+  .nav-label {
+    display: flex;
+    margin: 0 2px 6px;
+  }
+  .library-section-toggle {
+    font-size: 13px;
+  }
+  .library-songs {
+    flex-basis: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    max-height: 120px;
+  }
+  .library-songs .song {
+    flex: 0 0 155px;
+  }
   .privacy,
   .side-footer {
     display: none;
@@ -1316,6 +1445,24 @@ footer {
 .piano-expanded::backdrop {
   background: #f6f5f9;
 }
+.piano-expanded .practice-toolbar {
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  margin: -4px -4px 8px;
+  padding: 4px;
+}
+.piano-expanded .practice-toolbar .tabs,
+.piano-expanded .practice-toolbar .hands,
+.piano-expanded .transport-buttons,
+.piano-expanded .practice-toolbar .speed,
+.piano-expanded .practice-toolbar .time {
+  flex-shrink: 0;
+}
+.piano-expanded .practice-toolbar .speed {
+  margin-left: 0;
+}
 .piano-expanded .roll {
   flex: 1;
   min-height: 160px;
@@ -1334,6 +1481,10 @@ footer {
   height: 0;
 }
 @media (max-width: 700px), (max-height: 600px) {
+  .song-navigation button {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
   .practice-toolbar {
     gap: 7px 12px;
     margin-bottom: 8px;

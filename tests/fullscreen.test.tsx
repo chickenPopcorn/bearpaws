@@ -16,6 +16,9 @@ function Harness({ onEnter }: { onEnter(): void }) {
       </aside>
       <div id="stage" ref={screen.stage} data-expanded={screen.expanded}>
         <button id="first">First control</button>
+        <button id="resume" onClick={() => void screen.enter()}>
+          Resume practice
+        </button>
         <button
           className="fullscreen-toggle"
           onClick={() => void screen.toggle()}
@@ -121,6 +124,28 @@ describe("piano fullscreen", () => {
     });
     expect(expanded()).toBe("false");
     expect(onEnter).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(button("#launcher"));
+  });
+
+  it("starts practice again in fullscreen without another native request or losing return focus", async () => {
+    const { stage, request, onEnter } = await mount();
+    request.mockImplementation(async () => {
+      nativeElement = stage;
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    button("#launcher").focus();
+    await click("#launcher");
+    button("#resume").focus();
+    await click("#resume");
+
+    expect(onEnter).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledOnce();
+    expect(exit).not.toHaveBeenCalled();
+    expect(expanded()).toBe("true");
+    expect(nativeElement).toBe(stage);
+
+    await click(".fullscreen-toggle");
+    expect(expanded()).toBe("false");
     expect(document.activeElement).toBe(button("#launcher"));
   });
 
