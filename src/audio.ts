@@ -16,21 +16,32 @@ import {
 export const MAX_REFERENCE_VOICES = 64;
 export const MAX_PIANO_CACHE_BYTES = 512 * 1024 * 1024;
 type PianoNote = Pick<Note, "pitch" | "velocity">;
+const MEMORY_MESSAGE =
+  "This passage needs too many piano samples. Try one hand or a shorter loop.";
+/** The recordings that play these notes. */
+const sampleFiles = (notes: readonly PianoNote[]) =>
+  new Set(
+    notes.flatMap((note) => {
+      const region = selectPianoRegion(note.pitch, note.velocity);
+      return region ? [region.file] : [];
+    }),
+  );
 interface SampleRequest {
   promise: Promise<AudioBuffer>;
   controller: AbortController;
   decoding: boolean;
+}
+interface Voice {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  file: string;
 }
 class PianoMemoryError extends Error {}
 /** Audio and MIDI timestamps share performance.timeOrigin. Frames never advance time. */
 export class ReferenceAudio {
   context: AudioContext | null = null;
   samples = new Map<string, AudioBuffer>();
-  voices = new Set<{
-    source: AudioBufferSourceNode;
-    gain: GainNode;
-    file: string;
-  }>();
+  voices = new Set<Voice>();
   private output: PianoSoundBus | null = null;
   private sound: PianoSoundSettings = { ...DEFAULT_PIANO_SOUND };
   private pending = new Map<string, SampleRequest>();
@@ -40,8 +51,10 @@ export class ReferenceAudio {
   private preparationGeneration = 0;
   private playbackBlocked = false;
   private playbackFiles = new Set<string>();
+  /** Whether the room has received sound since it was last rebuilt. */
+  private roomUsed = false;
   scheduled = new Set<string>();
-  cycle = -1;
+  private cycle = -1;
   error = "";
   get loading() {
     return this.preparations > 0;
@@ -61,6 +74,7 @@ export class ReferenceAudio {
       await this.context.resume();
       if (!this.output) {
         this.output = createPianoSoundBus(this.context, this.sound);
+        this.roomUsed = false;
       }
       this.playbackBlocked = false;
     } catch (error) {
@@ -80,26 +94,29 @@ export class ReferenceAudio {
           4
       : 32 * 1024 * 1024;
   }
+  /** Recordings that are sounding, scheduled, or being prepared. */
+  private inUse() {
+    return new Set([
+      ...this.playbackFiles,
+      ...this.pins.keys(),
+      ...[...this.voices].map((voice) => voice.file),
+    ]);
+  }
   private makeRoom(bytes: number) {
     let used =
       [...this.samples.values()].reduce(
         (sum, buffer) => sum + this.bufferBytes(buffer),
         0,
       ) + [...this.reserved.values()].reduce((sum, value) => sum + value, 0);
-    const active = new Set([
-      ...this.playbackFiles,
-      ...[...this.voices].map((voice) => voice.file),
-    ]);
+    const inUse = this.inUse();
     for (const [file, buffer] of this.samples) {
       if (used + bytes <= MAX_PIANO_CACHE_BYTES) break;
-      if (this.pins.has(file) || active.has(file)) continue;
+      if (inUse.has(file)) continue;
       this.samples.delete(file);
       used -= this.bufferBytes(buffer);
     }
     if (used + bytes > MAX_PIANO_CACHE_BYTES)
-      throw new PianoMemoryError(
-        "This passage needs too many piano samples. Try one hand or a shorter loop.",
-      );
+      throw new PianoMemoryError(MEMORY_MESSAGE);
   }
   private loadSample(
     file: string,
@@ -114,14 +131,15 @@ export class ReferenceAudio {
     }
     const pending = this.pending.get(file);
     if (pending) return pending.promise;
-    const size = this.estimateBytes(file, context);
-    this.makeRoom(size);
-    this.reserved.set(file, size);
     const controller = new AbortController();
     const signal = AbortSignal.any([
       controller.signal,
       AbortSignal.timeout(30000),
     ]);
+    // Reserve last: nothing above may throw and leave the memory reserved.
+    const size = this.estimateBytes(file, context);
+    this.makeRoom(size);
+    this.reserved.set(file, size);
     let request!: SampleRequest;
     const promise = (async () => {
       const response = await fetch(
@@ -150,12 +168,9 @@ export class ReferenceAudio {
     return promise;
   }
   private cancelUnusedLoads() {
-    const active = new Set([
-      ...this.playbackFiles,
-      ...[...this.voices].map((voice) => voice.file),
-    ]);
+    const inUse = this.inUse();
     for (const [file, request] of this.pending) {
-      if (this.pins.has(file) || active.has(file)) continue;
+      if (inUse.has(file)) continue;
       request.controller.abort();
       // A decoder cannot be cancelled. Retain its reservation until it settles;
       // the next scope waits for that memory instead of exceeding the cap.
@@ -169,14 +184,7 @@ export class ReferenceAudio {
     signal?.throwIfAborted();
     const context = this.context;
     if (!context) throw new Error("Enable piano audio first.");
-    const files = [
-      ...new Set(
-        notes.flatMap((note) => {
-          const region = selectPianoRegion(note.pitch, note.velocity);
-          return region ? [region.file] : [];
-        }),
-      ),
-    ];
+    const files = [...sampleFiles(notes)];
     this.preparations++;
     const generation = ++this.preparationGeneration;
     this.error = "";
@@ -215,22 +223,15 @@ export class ReferenceAudio {
       }
       // Refuse an oversized passage before starting its downloads. Other cached
       // pieces can be evicted, but not a piece that is still loading or playing.
-      const needed = new Set([
-        ...this.playbackFiles,
-        ...this.pins.keys(),
-        ...[...this.voices].map((voice) => voice.file),
-      ]);
       let required = 0;
-      for (const file of needed) {
+      for (const file of this.inUse()) {
         const buffer = this.samples.get(file);
         required += buffer
           ? this.bufferBytes(buffer)
           : this.estimateBytes(file, context);
       }
       if (required > MAX_PIANO_CACHE_BYTES)
-        throw new PianoMemoryError(
-          "This passage needs too many piano samples. Try one hand or a shorter loop.",
-        );
+        throw new PianoMemoryError(MEMORY_MESSAGE);
       let next = 0;
       const failures: unknown[] = [];
       const loading = Promise.all(
@@ -262,26 +263,29 @@ export class ReferenceAudio {
     }
   }
   setPlaybackNotes(notes: readonly PianoNote[]) {
-    this.playbackFiles = new Set(
-      notes.flatMap((note) => {
-        const region = selectPianoRegion(note.pitch, note.velocity);
-        return region ? [region.file] : [];
-      }),
-    );
+    this.playbackFiles = sampleFiles(notes);
+  }
+  private disconnect(voice: Voice) {
+    this.voices.delete(voice);
+    voice.source.disconnect();
+    voice.gain.disconnect();
   }
   stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) this.playbackFiles.clear();
-    for (const v of this.voices) {
+    for (const voice of this.voices) {
       try {
-        v.source.stop();
+        voice.source.stop();
       } catch {}
-      v.source.disconnect();
-      v.gain.disconnect();
+      this.disconnect(voice);
     }
-    this.voices.clear();
     this.scheduled.clear();
+    // Rebuilding the room flushes its tail. Skip it when there is no tail,
+    // such as while dragging the playhead with nothing playing.
     try {
-      if (resetRoom) this.output?.reset();
+      if (resetRoom && this.roomUsed) {
+        this.output?.reset();
+        this.roomUsed = false;
+      }
     } catch {
       this.output?.dispose();
       this.output = null;
@@ -328,13 +332,10 @@ export class ReferenceAudio {
       if (region.releaseSeconds < 100)
         gain.gain.setTargetAtTime(0, releaseAt, releaseTime);
       source.connect(gain).connect(this.output?.input ?? context.destination);
+      this.roomUsed = true;
       const voice = { source, gain, file: region.file };
       this.voices.add(voice);
-      source.onended = () => {
-        this.voices.delete(voice);
-        voice.source.disconnect();
-        voice.gain.disconnect();
-      };
+      source.onended = () => this.disconnect(voice);
       source.start(when, region.offset);
       // Seven time constants leaves less than 0.1% gain before cleanup.
       const sampleEnd = when + (buffer.duration - region.offset) / rate;
