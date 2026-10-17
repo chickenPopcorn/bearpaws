@@ -22,6 +22,13 @@ const node = () => ({
   connect: vi.fn((destination: unknown) => destination),
   disconnect: vi.fn(),
 });
+/** Send one cached note through the room. */
+function playTone(audio: ReferenceAudio) {
+  const region = selectPianoRegion(60, 0.8)!;
+  audio.samples.set(region.file, { duration: 20 } as AudioBuffer);
+  audio.tone(60, 0.8, 10, 2);
+  expect(audio.voices.size).toBeGreaterThan(0);
+}
 function contextFixture(sampleRate = 48000) {
   const context = {
     state: "running",
@@ -245,13 +252,28 @@ describe("shared reference sound bus", () => {
     audio.context = audioContext;
     await audio.unlock();
     const first = context.createConvolver.mock.results[0].value;
+    playTone(audio);
     audio.stop();
     const next = context.createConvolver.mock.results[1].value;
     expect(first.disconnect).toHaveBeenCalledOnce();
     expect(next.buffer).toBe(first.buffer);
     expect(context.createBuffer).toHaveBeenCalledOnce();
     expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(2);
-    expect(context.createGain).toHaveBeenCalledTimes(3);
+    // The three bus gains, plus the one note's own gain.
+    expect(context.createGain).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps the room while nothing has played since it was last flushed", async () => {
+    const { context, audioContext } = contextFixture();
+    const audio = new ReferenceAudio();
+    audio.context = audioContext;
+    await audio.unlock();
+    for (let seek = 0; seek < 5; seek++) audio.stop();
+    expect(context.createConvolver).toHaveBeenCalledOnce();
+    playTone(audio);
+    audio.stop();
+    audio.stop();
+    expect(context.createConvolver).toHaveBeenCalledTimes(2);
   });
 
   it("contains a room-reset allocation failure and rebuilds on explicit retry", async () => {
@@ -263,6 +285,7 @@ describe("shared reference sound bus", () => {
     context.createConvolver.mockImplementationOnce(() => {
       throw new Error("quota");
     });
+    playTone(audio);
     expect(() => audio.stop()).not.toThrow();
     expect(first.disconnect).toHaveBeenCalled();
     expect(audio.error).toContain("could not reset");
