@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildScore,
   createBeatClock,
+  createMeterMap,
   isNotePlayed,
   pitchPosition,
   rhythmForBeats,
@@ -67,6 +68,111 @@ describe("sheet timeline beat clock", () => {
     }
     expect(clock.at(1.25)).toBeCloseTo(1.5);
     expect(clock.at(1.625)).toBeCloseTo(2.5);
+  });
+});
+
+describe("meter-aware score geometry", () => {
+  const changing = () =>
+    createMeterMap({
+      ppq: 480,
+      timeSignatures: [
+        { tick: 0, numerator: 4, denominator: 4 },
+        { tick: 8 * 480, numerator: 3, denominator: 4 },
+        { tick: 14 * 480, numerator: 6, denominator: 8 },
+      ],
+    });
+
+  it("round-trips score positions and seeking across meter changes", () => {
+    const meter = changing();
+    for (const beat of [0, 1.25, 7.99, 8, 9.5, 13.99, 14, 16.5, 17, 1000]) {
+      expect(meter.beatAt(meter.coordinate(beat))).toBeCloseTo(beat, 8);
+      const viewport = scoreViewport(beat, 1000, meter);
+      const x =
+        88 +
+        24 +
+        (meter.coordinate(beat) - viewport.first) * viewport.measureWidth -
+        viewport.offset;
+      expect(
+        scoreBeatAtX(
+          x,
+          viewport.first,
+          viewport.last,
+          viewport.measureWidth,
+          meter,
+          88,
+          viewport.offset,
+        ),
+      ).toBeCloseTo(beat, 8);
+    }
+    // Moving one bar keeps the same relative place across 4/4 -> 3/4.
+    expect(meter.beatAt(meter.coordinate(6) + 1)).toBe(9.5);
+  });
+
+  it("ends a partial bar exactly at a signature change", () => {
+    const meter = createMeterMap({
+      ppq: 480,
+      timeSignatures: [{ tick: 1200, numerator: 3, denominator: 4 }],
+    });
+    expect(meter.measureAt(0)).toMatchObject({
+      start: 0,
+      end: 2.5,
+      length: 2.5,
+    });
+    expect(meter.at(2.5)).toMatchObject({ measure: 1, offset: 0, length: 3 });
+    expect(meter.coordinate(1.25)).toBe(0.5);
+    expect(meter.beatAt(1.5)).toBe(4);
+  });
+
+  it("retains count-in navigation and legacy lesson metadata", () => {
+    const meter = createMeterMap({ ppq: 480, beatsPerBar: 3, leadInBeats: 1 });
+    expect(meter.measureAt(0)).toMatchObject({
+      numerator: 3,
+      denominator: 4,
+      length: 3,
+    });
+    expect(meter.beatAt(meter.coordinate(-1) + 1)).toBe(2);
+    expect(meter.beatAt(meter.coordinate(0.5) - 1)).toBe(-2.5);
+  });
+
+  it("ignores malformed persisted metadata and repeated signatures", () => {
+    const meter = createMeterMap({
+      ppq: 480,
+      beatsPerBar: Infinity,
+      timeSignatures: [
+        { tick: 0, numerator: 6, denominator: 8 },
+        { tick: 1, numerator: 0, denominator: 4 },
+        { tick: 2, numerator: 3, denominator: 0 },
+        { tick: NaN, numerator: 3, denominator: 4 },
+        { tick: 100, numerator: 6, denominator: 8 },
+        { tick: 200, numerator: 3, denominator: 7 },
+      ],
+    });
+    expect(meter.at(3)).toMatchObject({
+      measure: 1,
+      numerator: 6,
+      denominator: 8,
+      start: 3,
+    });
+    expect(meter.beatAt(100_000_000)).toBe(300_000_000);
+  });
+
+  it("keeps a huge sparse score bounded while locating a late meter change", () => {
+    const piece = song(
+      [note("first", 0, 0.5), note("late", 5_000_000, 5_000_000.25)],
+      5_000_001,
+    );
+    piece.timeSignatures = [
+      { tick: 0, numerator: 3, denominator: 4 },
+      { tick: 9_999_999 * 480, numerator: 6, denominator: 8 },
+    ];
+    const score = buildScore(piece);
+    expect(score.measures.size).toBe(2);
+    expect(score.measures.get(3_333_333)?.[0]).toMatchObject({
+      note: { id: "late" },
+      offset: 1,
+    });
+    const viewport = scoreViewport(10_000_000, score.measureCount, score.meter);
+    expect(viewport.last - viewport.first).toBeLessThanOrEqual(4);
   });
 });
 

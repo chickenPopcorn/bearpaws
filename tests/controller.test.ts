@@ -24,7 +24,7 @@ vi.mock("../src/audio", () => ({
       this.origin ??= env.now;
       if (env.unlockWait) await env.unlockWait;
     });
-    prepare = vi.fn(async () => {
+    prepare = vi.fn(async (_notes?: unknown, _signal?: AbortSignal) => {
       if (env.prepareWait) await env.prepareWait;
     });
     setPlaybackNotes = vi.fn();
@@ -231,6 +231,9 @@ describe("practice studio integration", () => {
       else if (change === "mode") studio.mode("rhythm");
       else if (change === "seek") studio.seek(2);
       else studio.pause();
+      expect(vi.mocked(studio.audio.prepare).mock.calls[0][1]?.aborted).toBe(
+        true,
+      );
       finish();
       await starting;
       expect(studio.transport.playing).toBe(false);
@@ -252,6 +255,58 @@ describe("practice studio integration", () => {
     );
     finish();
     await vi.waitFor(() => expect(studio.audio.tone).toHaveBeenCalledOnce());
+  });
+
+  it.each(["listen", "rhythm"] as const)(
+    "handles a bound MIDI source reset while %s samples are preparing",
+    async (mode) => {
+      const studio = create(song([[60, 1]]));
+      studio.mode(mode);
+      let finish!: () => void;
+      env.prepareWait = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const starting = studio.play();
+      await vi.waitFor(() =>
+        expect(studio.audio.prepare).toHaveBeenCalledOnce(),
+      );
+      const signal = vi.mocked(studio.audio.prepare).mock.calls[0][1]!;
+      studio.input.message(new Uint8Array([0x90, 60, 100]));
+      env.resets.at(-1)!();
+      expect(studio.input.down.size).toBe(0);
+      expect(signal.aborted).toBe(mode === "rhythm");
+      if (mode === "rhythm")
+        expect(studio.notice).toMatch(/Piano connection changed.*Press Play/);
+      finish();
+      await starting;
+      expect(studio.transport.playing).toBe(mode === "listen");
+      expect(studio.progress.attempts).toBe(mode === "listen" ? 1 : 0);
+    },
+  );
+
+  it("keeps concurrent playback, preview, and virtual-key preparations until the session changes", async () => {
+    const studio = create(song([[60, 1]]));
+    studio.mode("listen");
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const starting = studio.play();
+    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
+    const preview = studio.preview();
+    studio.virtual(63, true);
+    await vi.waitFor(() =>
+      expect(studio.audio.prepare).toHaveBeenCalledTimes(3),
+    );
+    const signals = vi
+      .mocked(studio.audio.prepare)
+      .mock.calls.map((call) => call[1]!);
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
+    studio.pause();
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    finish();
+    await Promise.all([starting, preview]);
+    expect(studio.transport.playing).toBe(false);
   });
 
   it.each(["seek", "disconnect"] as const)(
@@ -369,7 +424,10 @@ describe("practice studio integration", () => {
         expect(studio.audio.prepare).toHaveBeenCalledOnce(),
       );
       const prepared = change === "enable" ? [studio.notes[0]] : studio.notes;
-      expect(studio.audio.prepare).toHaveBeenCalledWith(prepared);
+      expect(studio.audio.prepare).toHaveBeenCalledWith(
+        prepared,
+        expect.any(AbortSignal),
+      );
       advance(studio, 1);
       expect(studio.position).toBeCloseTo(position);
       expect(studio.audio.setPlaybackNotes).not.toHaveBeenCalled();
@@ -471,7 +529,10 @@ describe("practice studio integration", () => {
     studio.loop(true);
     expect(studio.scoringNotes).toEqual([studio.notes[1]]);
     await studio.play();
-    expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(studio.notes);
+    expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
+      studio.notes,
+      expect.any(AbortSignal),
+    );
     expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith(studio.notes);
     expect(studio.position).toBe(1);
   });
@@ -510,9 +571,10 @@ describe("practice studio integration", () => {
     await studio.play();
     expect(studio.audio.prepare).not.toHaveBeenCalled();
     await studio.preview();
-    expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith([
-      studio.notes[0],
-    ]);
+    expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
+      [studio.notes[0]],
+      expect.any(AbortSignal),
+    );
   });
 
   it("prepares reference samples before resuming an active quiet Rhythm session", async () => {
@@ -535,6 +597,7 @@ describe("practice studio integration", () => {
     await vi.waitFor(() =>
       expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
         studio.notes,
+        expect.any(AbortSignal),
       ),
     );
     advance(studio, 1);

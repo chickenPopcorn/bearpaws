@@ -9,6 +9,11 @@ import {
 export const MAX_REFERENCE_VOICES = 64;
 export const MAX_PIANO_CACHE_BYTES = 512 * 1024 * 1024;
 type PianoNote = Pick<Note, "pitch" | "velocity">;
+interface SampleRequest {
+  promise: Promise<AudioBuffer>;
+  controller: AbortController;
+  decoding: boolean;
+}
 class PianoMemoryError extends Error {}
 /** Audio and MIDI timestamps share performance.timeOrigin. Frames never advance time. */
 export class ReferenceAudio {
@@ -20,7 +25,7 @@ export class ReferenceAudio {
     file: string;
   }>();
   private output: DynamicsCompressorNode | null = null;
-  private pending = new Map<string, Promise<AudioBuffer>>();
+  private pending = new Map<string, SampleRequest>();
   private reserved = new Map<string, number>();
   private pins = new Map<string, number>();
   private preparations = 0;
@@ -98,33 +103,60 @@ export class ReferenceAudio {
     const cached = this.samples.get(file);
     if (cached) return Promise.resolve(cached);
     const pending = this.pending.get(file);
-    if (pending) return pending;
+    if (pending) return pending.promise;
     const size = this.estimateBytes(file, context);
     this.makeRoom(size);
     this.reserved.set(file, size);
-    const request = (async () => {
+    const controller = new AbortController();
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(30000),
+    ]);
+    let request!: SampleRequest;
+    const promise = (async () => {
       const response = await fetch(
         `${import.meta.env.BASE_URL}audio/accurate-salamander/${file}`,
-        {
-          signal: AbortSignal.timeout(30000),
-        },
+        { signal },
       );
+      signal.throwIfAborted();
       if (!response.ok) throw new Error(`Piano sample: ${response.status}`);
-      const buffer = await context.decodeAudioData(
-        await response.arrayBuffer(),
-      );
+      const bytes = await response.arrayBuffer();
+      signal.throwIfAborted();
+      request.decoding = true;
+      const buffer = await context.decodeAudioData(bytes);
+      signal.throwIfAborted();
       this.reserved.delete(file);
       this.makeRoom(this.bufferBytes(buffer));
       this.samples.set(file, buffer);
       return buffer;
     })().finally(() => {
-      this.pending.delete(file);
-      this.reserved.delete(file);
+      if (this.pending.get(file) === request) {
+        this.pending.delete(file);
+        this.reserved.delete(file);
+      }
     });
+    request = { promise, controller, decoding: false };
     this.pending.set(file, request);
-    return request;
+    return promise;
   }
-  async prepare(notes: readonly PianoNote[]) {
+  private cancelUnusedLoads() {
+    const active = new Set([
+      ...this.playbackFiles,
+      ...[...this.voices].map((voice) => voice.file),
+    ]);
+    for (const [file, request] of this.pending) {
+      if (this.pins.has(file) || active.has(file)) continue;
+      request.controller.abort();
+      // A decoder cannot be cancelled. Retain its reservation until it settles;
+      // the next scope waits for that memory instead of exceeding the cap.
+      if (!request.decoding) {
+        this.pending.delete(file);
+        this.reserved.delete(file);
+      }
+    }
+  }
+  async prepare(notes: readonly PianoNote[], signal?: AbortSignal) {
+    signal?.throwIfAborted();
     const context = this.context;
     if (!context) throw new Error("Enable piano audio first.");
     const files = [
@@ -140,7 +172,37 @@ export class ReferenceAudio {
     this.error = "";
     for (const file of files)
       this.pins.set(file, (this.pins.get(file) ?? 0) + 1);
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      for (const file of files) {
+        const count = this.pins.get(file)! - 1;
+        if (count) this.pins.set(file, count);
+        else this.pins.delete(file);
+      }
+      this.cancelUnusedLoads();
+    };
+    let abort!: () => void;
+    const cancelled = signal
+      ? new Promise<never>((_, reject) => {
+          abort = () => {
+            release();
+            reject(signal.reason);
+          };
+          signal.addEventListener("abort", abort, { once: true });
+        })
+      : undefined;
     try {
+      const abandonedDecodes = [...this.pending.values()].filter(
+        (request) => request.decoding && request.controller.signal.aborted,
+      );
+      if (abandonedDecodes.length) {
+        const settled = Promise.all(
+          abandonedDecodes.map((request) => request.promise.catch(() => {})),
+        );
+        await (cancelled ? Promise.race([settled, cancelled]) : settled);
+      }
       // Refuse an oversized passage before starting its downloads. Other cached
       // pieces can be evicted, but not a piece that is still loading or playing.
       const needed = new Set([
@@ -161,9 +223,9 @@ export class ReferenceAudio {
         );
       let next = 0;
       const failures: unknown[] = [];
-      await Promise.all(
+      const loading = Promise.all(
         Array.from({ length: Math.min(4, files.length) }, async () => {
-          while (next < files.length) {
+          while (!signal?.aborted && next < files.length) {
             const file = files[next++];
             try {
               await this.loadSample(file, context);
@@ -173,10 +235,11 @@ export class ReferenceAudio {
           }
         }),
       );
+      await (cancelled ? Promise.race([loading, cancelled]) : loading);
       if (failures.length) throw failures[0];
       if (generation === this.preparationGeneration) this.error = "";
     } catch (error) {
-      if (generation === this.preparationGeneration)
+      if (!signal?.aborted && generation === this.preparationGeneration)
         this.error =
           error instanceof PianoMemoryError
             ? error.message
@@ -184,11 +247,8 @@ export class ReferenceAudio {
       throw error;
     } finally {
       this.preparations--;
-      for (const file of files) {
-        const count = this.pins.get(file)! - 1;
-        if (count) this.pins.set(file, count);
-        else this.pins.delete(file);
-      }
+      if (signal) signal.removeEventListener("abort", abort);
+      release();
     }
   }
   setPlaybackNotes(notes: readonly PianoNote[]) {

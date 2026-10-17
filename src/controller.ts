@@ -18,6 +18,7 @@ export class Studio {
   savedSelection = this.settings.selected;
   private playGeneration = 0;
   private playbackPending = false;
+  private audioPreparations = new Set<AbortController>();
   private virtualRequests = new Map<number, number>();
   private nextVirtualRequest = 0;
   private lifecycleGeneration = 0;
@@ -59,12 +60,13 @@ export class Studio {
     return new MidiConnection({
       onMessage: (data, time) => this.receive(data, time),
       onReset: () => {
-        this.cancelPlaybackPreparation();
         this.input.clear();
-        if (this.settings.mode !== "listen" && this.transport.playing) {
-          this.pause();
-          this.notice =
-            "Piano connection changed. Press Play when you are ready.";
+        if (this.settings.mode !== "listen") {
+          if (this.transport.playing || this.playbackPending) {
+            this.pause();
+            this.notice =
+              "Piano connection changed. Press Play when you are ready.";
+          } else this.cancelPlaybackPreparation();
         }
         this.emit();
       },
@@ -93,6 +95,8 @@ export class Studio {
   private cancelPlaybackPreparation() {
     this.playGeneration++;
     this.playbackPending = false;
+    for (const preparation of this.audioPreparations) preparation.abort();
+    this.audioPreparations.clear();
   }
   get notes() {
     return this.selectedNotes;
@@ -303,16 +307,20 @@ export class Studio {
   ) {
     await this.audio.unlock();
     if (generation !== this.playGeneration || !notes.length) return;
-    const preparation = this.audio.prepare(notes);
+    const controller = new AbortController();
+    this.audioPreparations.add(controller);
+    const preparation = this.audio.prepare(notes, controller.signal);
     this.emit();
     try {
       await preparation;
     } finally {
+      this.audioPreparations.delete(controller);
       this.emit();
     }
   }
   async play() {
-    const generation = ++this.playGeneration;
+    this.cancelPlaybackPreparation();
+    const generation = this.playGeneration;
     this.playbackPending = true;
     if (!this.notes.length) {
       this.playbackPending = false;

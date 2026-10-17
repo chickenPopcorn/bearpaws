@@ -75,6 +75,23 @@ function renderedNotes(markup: string) {
 }
 
 describe("sheet timeline SVG progress", () => {
+  it("shows imported 6/8 as six eighth-note beats, including after a meter change", () => {
+    const piece = song([note("first", 60, 0), note("later", 62, 4)]);
+    piece.timeSignatures = [
+      { tick: 0, numerator: 3, denominator: 4 },
+      { tick: 6 * 480, numerator: 6, denominator: 8 },
+    ];
+    const markup = render(piece, { position: 3.25 });
+    expect(markup).toContain("Bar 3 of 3 · Beat 2");
+    const signature = markup.match(
+      /<g class="sheet-time-signature"[^>]*>(.*?)<\/g>/,
+    )![1];
+    expect(signature).toContain(String.fromCodePoint(0xe086));
+    expect(signature).toContain(String.fromCodePoint(0xe088));
+    expect(signature).not.toContain(String.fromCodePoint(0xe084));
+    expect([...markup.matchAll(/class="sheet-beat-number"/g)]).toHaveLength(12);
+  });
+
   it("exposes the interactive score as a focusable slider with the current time", () => {
     const onSeek = vi.fn();
     const markup = render(song([note("middle-c")]), { position: 1.25, onSeek });

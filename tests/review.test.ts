@@ -319,6 +319,35 @@ describe("review regressions", () => {
     );
   });
 
+  it("draws six eighth-note pulses per 6/8 bar in the waterfall", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const piece = {
+      ...song([]),
+      timeSignatures: [{ tick: 0, numerator: 6, denominator: 8 }],
+    };
+    const { canvas, context } = drawingCanvas();
+    draw(
+      canvas,
+      piece,
+      piece.notes,
+      0,
+      new MidiState(),
+      new Practice([]),
+      false,
+      false,
+      false,
+    );
+    expect(context.fillText).toHaveBeenCalledWith(
+      "beat 7",
+      7,
+      strikeLine - 1.5 * pixelsPerSecond - 5,
+    );
+    expect(context.lineTo).toHaveBeenCalledWith(
+      880,
+      strikeLine - 0.25 * pixelsPerSecond,
+    );
+  });
+
   it("shows suggested fingers on notes and keys without note names, and hides them after hand reassignment", () => {
     vi.stubGlobal("window", { devicePixelRatio: 1 });
     const n: Note = {

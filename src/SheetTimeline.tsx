@@ -247,6 +247,7 @@ export function SheetTimeline({
       song.tempos,
       song.ppq,
       song.beatsPerBar,
+      song.timeSignatures,
       song.leadInBeats,
     ],
   );
@@ -257,11 +258,9 @@ export function SheetTimeline({
   const beat = score.clock.at(position) - score.leadInBeats;
   const currentMeasure = Math.max(
     0,
-    Math.min(
-      score.measureCount - 1,
-      Math.floor(Math.max(0, beat) / score.beatsPerBar),
-    ),
+    Math.min(score.measureCount - 1, score.meter.at(beat).measure),
   );
+  const currentBar = score.meter.measureAt(currentMeasure);
   // Track assignment can change in place, so use its small signature as a cache key.
   const handSignature = song.tracks
     .map((track) => `${track.id}:${track.hand}`)
@@ -284,7 +283,7 @@ export function SheetTimeline({
   const following = scoreViewport(
     beat,
     score.measureCount,
-    score.beatsPerBar,
+    score.meter,
     Math.max(1, Math.min(6, Math.floor(size.width / 280))),
     // Match the real SVG aspect ratio so the score fills its width without
     // stretching the notes or leaving empty margins beside the staffs.
@@ -298,13 +297,14 @@ export function SheetTimeline({
     prefix +
     (measure - window.first) * measureWidth +
     24 +
-    (offset / score.beatsPerBar) * measureWidth;
+    (offset / score.meter.measureAt(measure).length) * measureWidth;
   const layout = useMemo(() => {
     const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
     const drawn: DrawNote[] = [];
     const rests: { x: number; y: number; beats: number; key: string }[] = [];
     let condensed = false;
     for (let measure = window.first; measure < window.last; measure++) {
+      const barLength = score.meter.measureAt(measure).length;
       const bar = (score.measures.get(measure) || []).filter((item) => {
         const hand = hands.get(item.note.track);
         return hand === "left" || hand === "right";
@@ -379,7 +379,7 @@ export function SheetTimeline({
             .filter((item) => hands.get(item.note.track) === hand)
             .map((item) => [
               item.offset,
-              Math.min(score.beatsPerBar, item.offset + item.duration),
+              Math.min(barLength, item.offset + item.duration),
             ])
             .sort((a, b) => a[0] - b[0]);
           const gaps: [number, number][] = [];
@@ -388,12 +388,11 @@ export function SheetTimeline({
             if (interval[0] > end + 0.01) gaps.push([end, interval[0] - end]);
             end = Math.max(end, interval[1]);
           }
-          if (end < score.beatsPerBar - 0.01)
-            gaps.push([end, score.beatsPerBar - end]);
+          if (end < barLength - 0.01) gaps.push([end, barLength - end]);
           for (const [start, beats] of gaps) {
             rests.push({
               x:
-                beats === score.beatsPerBar
+                beats === barLength
                   ? prefix + (measure - window.first + 0.5) * measureWidth
                   : noteX(measure, start),
               y: hand === "right" ? 84 : 192,
@@ -418,12 +417,12 @@ export function SheetTimeline({
     song.lesson,
   ]);
 
-  const beatInMeasure = Math.max(0, beat - currentMeasure * score.beatsPerBar);
+  const beatInMeasure = Math.max(0, beat - currentBar.start);
   const marker = Math.max(
     prefix,
     Math.min(
       viewWidth - 15,
-      noteX(currentMeasure, Math.min(score.beatsPerBar, beatInMeasure)) -
+      noteX(currentMeasure, Math.min(currentBar.length, beatInMeasure)) -
         viewport.offset,
     ),
   );
@@ -463,7 +462,7 @@ export function SheetTimeline({
         ? 0
         : scoreTimeAtX(
             local.x,
-            { ...axis, beatsPerBar: score.beatsPerBar },
+            { ...axis, beatsPerBar: score.meter },
             score.clock,
             score.leadInBeats,
             song.duration,
@@ -511,14 +510,19 @@ export function SheetTimeline({
   };
   const seekKeyboard = (event: KeyboardEvent<SVGSVGElement>) => {
     if (!onSeek) return;
-    const step = event.shiftKey ? score.beatsPerBar : 1;
     let time: number;
     if (event.key === "Home") time = 0;
     else if (event.key === "End") time = song.duration;
     else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
-      time = score.clock.time(score.clock.at(position) + step);
+      const next = event.shiftKey
+        ? score.meter.beatAt(score.meter.coordinate(beat) + 1)
+        : beat + currentBar.beatUnit;
+      time = score.clock.time(next + score.leadInBeats);
     } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
-      time = score.clock.time(score.clock.at(position) - step);
+      const previous = event.shiftKey
+        ? score.meter.beatAt(score.meter.coordinate(beat) - 1)
+        : beat - currentBar.beatUnit;
+      time = score.clock.time(previous + score.leadInBeats);
     } else return;
     event.preventDefault();
     event.stopPropagation();
@@ -531,7 +535,7 @@ export function SheetTimeline({
         <span className="sheet-timeline-progress">
           {countIn
             ? "Count in"
-            : `Bar ${currentMeasure + 1} of ${score.measureCount} · Beat ${Math.min(score.beatsPerBar, Math.floor(beatInMeasure) + 1)}`}
+            : `Bar ${currentMeasure + 1} of ${score.measureCount} · Beat ${Math.min(currentBar.numerator, Math.floor(beatInMeasure / currentBar.beatUnit) + 1)}`}
         </span>
         <span className="sheet-timeline-legend">
           {onSeek && "Click or drag to seek · "}Played notes fade to 50%
@@ -589,20 +593,24 @@ export function SheetTimeline({
         </text>
         <g className="sheet-time-signature" textAnchor="middle" fontSize={40}>
           <text x={74} y={74}>
-            {String(score.beatsPerBar).replace(/\d/g, (digit) =>
+            {String(currentBar.numerator).replace(/\d/g, (digit) =>
               String.fromCodePoint(0xe080 + Number(digit)),
             )}
           </text>
           <text x={74} y={94}>
-            {"\uE084"}
+            {String(currentBar.denominator).replace(/\d/g, (digit) =>
+              String.fromCodePoint(0xe080 + Number(digit)),
+            )}
           </text>
           <text x={74} y={182}>
-            {String(score.beatsPerBar).replace(/\d/g, (digit) =>
+            {String(currentBar.numerator).replace(/\d/g, (digit) =>
               String.fromCodePoint(0xe080 + Number(digit)),
             )}
           </text>
           <text x={74} y={202}>
-            {"\uE084"}
+            {String(currentBar.denominator).replace(/\d/g, (digit) =>
+              String.fromCodePoint(0xe080 + Number(digit)),
+            )}
           </text>
         </g>
         <g clipPath={`url(#${clipId})`}>
@@ -612,6 +620,7 @@ export function SheetTimeline({
           >
             {bars.map((measure) => {
               const left = prefix + (measure - window.first) * measureWidth;
+              const bar = score.meter.measureAt(measure);
               return (
                 <g key={measure}>
                   <text
@@ -629,19 +638,24 @@ export function SheetTimeline({
                     y2={212}
                   />
                   {Array.from(
-                    { length: Math.min(16, Math.ceil(score.beatsPerBar)) },
+                    {
+                      length: Math.min(
+                        16,
+                        Math.ceil(bar.length / bar.beatUnit),
+                      ),
+                    },
                     (_, b) => (
                       <g key={b}>
                         <line
                           className="sheet-beat-tick"
-                          x1={noteX(measure, b)}
-                          x2={noteX(measure, b)}
+                          x1={noteX(measure, b * bar.beatUnit)}
+                          x2={noteX(measure, b * bar.beatUnit)}
                           y1={43}
                           y2={48}
                         />
                         <text
                           className="sheet-beat-number"
-                          x={noteX(measure, b)}
+                          x={noteX(measure, b * bar.beatUnit)}
                           y={17}
                           textAnchor="middle"
                         >

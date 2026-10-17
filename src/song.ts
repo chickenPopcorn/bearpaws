@@ -26,6 +26,11 @@ export interface Tempo {
   tick: number;
   microseconds: number;
 }
+export interface TimeSignature {
+  tick: number;
+  numerator: number;
+  denominator: number;
+}
 export interface Song {
   id: string;
   title: string;
@@ -34,6 +39,8 @@ export interface Song {
   duration: number;
   tempos: Tempo[];
   ppq: number;
+  timeSignatures?: TimeSignature[];
+  /** Legacy lesson bar length, in quarter-note beats. */
   beatsPerBar?: number;
   leadInBeats?: number;
   warnings: string[];
@@ -97,13 +104,22 @@ function preflightTrack(
       runningStatus = status;
     } else {
       // SMF SysEx and meta messages have explicit variable-length payloads.
-      if (status === 0xff) byte();
-      else {
+      const metaType = status === 0xff ? byte() : undefined;
+      if (status !== 0xff) {
         if (status !== 0xf0 && status !== 0xf7) throw malformed();
         runningStatus = 0;
       }
       const length = variable();
       if (length > end - cursor) throw malformed();
+      // midi-file uses a bit shift for the denominator: reject exponents that
+      // would wrap there, and bound the smallest supported written note unit.
+      if (
+        metaType === 0x58 &&
+        ((length !== 2 && length !== 4) ||
+          !bytes[cursor] ||
+          bytes[cursor + 1] > 10)
+      )
+        throw new Error("This MIDI file has an unsupported time signature.");
       cursor += length;
       continue;
     }
@@ -196,6 +212,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
       "SMPTE time division is not supported. Export with ticks per beat.",
     );
   const tempos: Tempo[] = [];
+  const timeSignatures: TimeSignature[] = [];
   const warnings: string[] = [];
   const events = midi.tracks.map((track) => {
     let tick = 0;
@@ -219,6 +236,12 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
         if (e.microsecondsPerBeat <= 0) throw new Error("Invalid MIDI tempo.");
         tempos.push({ tick, microseconds: e.microsecondsPerBeat });
       }
+      if (e.type === "timeSignature")
+        timeSignatures.push({
+          tick,
+          numerator: e.numerator,
+          denominator: e.denominator,
+        });
       return { e, tick };
     });
   });
@@ -341,6 +364,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     duration: Math.max(...notes.map((n) => n.soundEnd)) + 0.5,
     tempos,
     ppq,
+    timeSignatures: timeSignatures.sort((a, b) => a.tick - b.tick),
     warnings: [...new Set(warnings)],
   };
 }

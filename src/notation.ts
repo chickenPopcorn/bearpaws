@@ -90,9 +90,137 @@ export interface ScoreNote {
   rhythm: Rhythm;
 }
 
+interface MeterSegment {
+  beat: number;
+  measure: number;
+  numerator: number;
+  denominator: number;
+  beatsPerBar: number;
+  beatUnit: number;
+  writtenBeat: number;
+}
+
+/** Sparse bar geometry: even an hours-long MIDI only stores meter changes. */
+export function createMeterMap(
+  song: Pick<Song, "ppq" | "timeSignatures" | "beatsPerBar" | "leadInBeats">,
+) {
+  const leadIn = Number.isFinite(song.leadInBeats)
+    ? Math.max(0, song.leadInBeats || 0)
+    : 0;
+  const fallback =
+    Number.isFinite(song.beatsPerBar) && song.beatsPerBar! > 0
+      ? song.beatsPerBar!
+      : 4;
+  const ppq = Number.isFinite(song.ppq) && song.ppq > 0 ? song.ppq : 480;
+  const segments: MeterSegment[] = [
+    {
+      beat: 0,
+      measure: 0,
+      numerator: fallback,
+      denominator: 4,
+      beatsPerBar: fallback,
+      beatUnit: 1,
+      writtenBeat: 0,
+    },
+  ];
+  const signatures = (song.timeSignatures || [])
+    .filter(
+      ({ numerator, denominator, tick }) =>
+        Number.isInteger(numerator) &&
+        numerator >= 1 &&
+        numerator <= 255 &&
+        Number.isInteger(denominator) &&
+        denominator >= 1 &&
+        denominator <= 1024 &&
+        (denominator & (denominator - 1)) === 0 &&
+        Number.isFinite(tick) &&
+        tick >= 0 &&
+        tick <= 2 ** 40,
+    )
+    .sort((a, b) => a.tick - b.tick);
+  // Later events at the same tick win, like the tempo map.
+  const changes = signatures.filter(
+    (entry, index) => signatures[index + 1]?.tick !== entry.tick,
+  );
+  for (const change of changes) {
+    const { numerator, denominator } = change;
+    const beat = Math.max(0, change.tick / ppq - leadIn);
+    const previous = segments[segments.length - 1];
+    if (
+      previous.numerator === numerator &&
+      previous.denominator === denominator
+    )
+      continue;
+    const segment = {
+      beat,
+      // A change inside a bar ends that partial bar at the change itself.
+      measure:
+        previous.measure +
+        Math.ceil((beat - previous.beat) / previous.beatsPerBar - 1e-9),
+      numerator,
+      denominator,
+      beatsPerBar: (numerator * 4) / denominator,
+      beatUnit: 4 / denominator,
+      writtenBeat:
+        previous.writtenBeat + (beat - previous.beat) / previous.beatUnit,
+    };
+    if (beat === previous.beat) segments[segments.length - 1] = segment;
+    else segments.push(segment);
+  }
+  const find = (value: number, key: "beat" | "measure") => {
+    let low = 0,
+      high = segments.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (segments[middle][key] <= value) low = middle + 1;
+      else high = middle;
+    }
+    return Math.max(0, low - 1);
+  };
+  const measureAt = (index: number) => {
+    const measure = Math.max(0, Math.floor(index));
+    const segmentIndex = find(measure, "measure");
+    const segment = segments[segmentIndex];
+    const start =
+      segment.beat + (measure - segment.measure) * segment.beatsPerBar;
+    const end = Math.min(
+      start + segment.beatsPerBar,
+      segments[segmentIndex + 1]?.beat ?? Infinity,
+    );
+    return { ...segment, measure, start, end, length: end - start };
+  };
+  const at = (rawBeat: number) => {
+    const beat = Math.max(0, rawBeat);
+    const segment = segments[find(beat, "beat")];
+    const index =
+      segment.measure +
+      Math.floor((beat - segment.beat) / segment.beatsPerBar + 1e-10);
+    const bar = measureAt(index);
+    return { ...bar, offset: beat - bar.start };
+  };
+  const coordinate = (beat: number) => {
+    if (beat < 0) return beat / measureAt(0).length;
+    const bar = at(beat);
+    return bar.measure + bar.offset / bar.length;
+  };
+  const beatAt = (coordinate: number) => {
+    if (coordinate < 0) return coordinate * measureAt(0).length;
+    const bar = measureAt(coordinate);
+    return bar.start + (Math.max(0, coordinate) - bar.measure) * bar.length;
+  };
+  return { at, measureAt, coordinate, beatAt };
+}
+
+type MeterAxis = number | ReturnType<typeof createMeterMap>;
+const measureCoordinate = (beat: number, meter: MeterAxis) =>
+  typeof meter === "number" ? beat / meter : meter.coordinate(beat);
+const beatAtCoordinate = (measure: number, meter: MeterAxis) =>
+  typeof meter === "number" ? measure * meter : meter.beatAt(measure);
+
 export function buildScore(song: Song) {
   const clock = createBeatClock(song.ppq, song.tempos);
-  const beatsPerBar = Math.max(1, song.beatsPerBar || 4);
+  const meter = createMeterMap(song);
+  const beatsPerBar = meter.measureAt(0).beatsPerBar;
   const leadInBeats = Math.max(0, song.leadInBeats || 0);
   const measures = new Map<number, ScoreNote[]>();
   let lastBeat = 0;
@@ -101,7 +229,8 @@ export function buildScore(song: Song) {
     const rawBeat = Math.max(0, clock.at(note.start) - leadInBeats);
     const nearest = Math.round(rawBeat * 64) / 64;
     const beat = Math.abs(rawBeat - nearest) < 0.0001 ? nearest : rawBeat;
-    const measure = Math.floor(beat / beatsPerBar);
+    const bar = meter.at(beat);
+    const measure = bar.measure;
     const performed = Math.max(
       0.0625,
       clock.at(note.end) - clock.at(note.start),
@@ -112,22 +241,26 @@ export function buildScore(song: Song) {
       note,
       beat,
       measure,
-      offset: beat - measure * beatsPerBar,
+      offset: beat - bar.start,
       duration,
       rhythm,
     };
-    const bar = measures.get(measure) || [];
-    bar.push(item);
-    measures.set(measure, bar);
+    const measureNotes = measures.get(measure) || [];
+    measureNotes.push(item);
+    measures.set(measure, measureNotes);
     lastBeat = Math.max(lastBeat, beat + duration);
   }
   for (const notes of measures.values())
     notes.sort((a, b) => a.beat - b.beat || a.note.pitch - b.note.pitch);
   return {
     clock,
+    meter,
     beatsPerBar,
     leadInBeats,
-    measureCount: Math.max(1, Math.ceil((lastBeat - 0.0001) / beatsPerBar)),
+    measureCount: Math.max(
+      1,
+      meter.at(Math.max(0, lastBeat - 0.0001)).measure + 1,
+    ),
     measures,
   };
 }
@@ -144,7 +277,7 @@ export function scoreWindow(measure: number, total: number, count = 3) {
 export function scoreViewport(
   beat: number,
   total: number,
-  beatsPerBar: number,
+  beatsPerBar: MeterAxis,
   count = 3,
   width = 960,
 ) {
@@ -160,7 +293,9 @@ export function scoreViewport(
     0,
     Math.min(
       (measures - size) * measureWidth,
-      (Math.max(0, beat) / beatsPerBar) * measureWidth + 24 - available * 0.34,
+      measureCoordinate(Math.max(0, beat), beatsPerBar) * measureWidth +
+        24 -
+        available * 0.34,
     ),
   );
   const first = Math.min(measures - size, Math.floor(camera / measureWidth));
@@ -179,18 +314,18 @@ export function scoreBeatAtX(
   firstMeasure: number,
   lastMeasure: number,
   measureWidth: number,
-  beatsPerBar: number,
+  beatsPerBar: MeterAxis,
   prefix = 88,
   offset = 0,
 ) {
   const last = Math.max(firstMeasure + 1, lastMeasure);
   const width = Math.max(36, measureWidth);
-  return Math.max(
-    firstMeasure * beatsPerBar,
-    Math.min(
-      last * beatsPerBar,
-      (firstMeasure + (x + offset - prefix - 24) / width) * beatsPerBar,
+  return beatAtCoordinate(
+    Math.max(
+      firstMeasure,
+      Math.min(last, firstMeasure + (x + offset - prefix - 24) / width),
     ),
+    beatsPerBar,
   );
 }
 
@@ -200,7 +335,7 @@ export function scoreTimeAtX(
     first: number;
     last: number;
     measureWidth: number;
-    beatsPerBar: number;
+    beatsPerBar: MeterAxis;
     offset?: number;
   },
   clock: ReturnType<typeof createBeatClock>,

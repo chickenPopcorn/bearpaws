@@ -326,6 +326,195 @@ describe("piano sample loading", () => {
     expect(context.createBufferSource).toHaveBeenCalledOnce();
   });
 
+  it.each(["download", "decode"] as const)(
+    "releases a cancelled scope during %s so a disjoint near-limit scope can load",
+    async (phase) => {
+      const { audio, context } = fixture(false);
+      const bytes = 300 * 1024 * 1024;
+      const oldFile = fileFor(60),
+        nextFile = fileFor(63);
+      instrumentMetadata.files = Object.fromEntries(
+        [oldFile, nextFile].map((file) => [
+          file,
+          { duration: bytes / (sampleRate * 8), channels: 2 },
+        ]),
+      );
+      let finishDownload!: (value: ReturnType<typeof response>) => void;
+      const oldDownload = new Promise<ReturnType<typeof response>>(
+        (resolve) => {
+          finishDownload = resolve;
+        },
+      );
+      let finishDecode!: (value: AudioBuffer) => void;
+      const oldDecode = new Promise<AudioBuffer>((resolve) => {
+        finishDecode = resolve;
+      });
+      const fetcher = vi.fn(async (url: string) =>
+        phase === "download" && url.endsWith(oldFile)
+          ? oldDownload
+          : response(),
+      );
+      vi.stubGlobal("fetch", fetcher);
+      context.decodeAudioData.mockImplementation(async () =>
+        sizedBuffer(bytes),
+      );
+      if (phase === "decode")
+        context.decodeAudioData.mockImplementationOnce(() => oldDecode);
+      await audio.unlock();
+      const controller = new AbortController();
+      const old = audio.prepare([sound(60)], controller.signal);
+      const cancelled = expect(old).rejects.toMatchObject({
+        name: "AbortError",
+      });
+      if (phase === "decode")
+        await vi.waitFor(() =>
+          expect(context.decodeAudioData).toHaveBeenCalledOnce(),
+        );
+      controller.abort();
+      await cancelled;
+      expect(audio.loading).toBe(false);
+      const next = audio.prepare([sound(63)]);
+      if (phase === "decode") {
+        // The in-flight decoder retains its 300 MiB reservation. A second
+        // 300 MiB scope waits instead of overcommitting or being rejected.
+        expect(fetcher).toHaveBeenCalledOnce();
+        expect(audio.loading).toBe(true);
+        finishDecode(sizedBuffer(bytes));
+      }
+      await next;
+      audio.setPlaybackNotes([sound(63)]);
+      expect(audio.samples.has(nextFile)).toBe(true);
+      expect(audio.error).toBe("");
+      finishDownload(response());
+      finishDecode(sizedBuffer(bytes));
+      await vi.waitFor(() => expect(audio.samples.size).toBe(1));
+      // Let the abandoned worker finish; it must not publish the stale decode.
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(audio.samples.has(oldFile)).toBe(false);
+      expect(cachedBytes(audio)).toBe(bytes);
+      expect(cachedBytes(audio)).toBeLessThanOrEqual(MAX_PIANO_CACHE_BYTES);
+    },
+  );
+
+  it("keeps a shared load and active sound when only one preparation is cancelled", async () => {
+    const { audio, context } = fixture(false);
+    const activeFile = fileFor(66),
+      sharedFile = fileFor(60);
+    const bytes = 300 * 1024 * 1024;
+    audio.samples.set(activeFile, sizedBuffer(100 * 1024 * 1024));
+    instrumentMetadata.files = {
+      [sharedFile]: { duration: bytes / (sampleRate * 8), channels: 2 },
+    };
+    let finish!: (value: ReturnType<typeof response>) => void;
+    const download = new Promise<ReturnType<typeof response>>((resolve) => {
+      finish = resolve;
+    });
+    let requestSignal!: AbortSignal;
+    const fetcher = vi.fn((_url: string, options: RequestInit) => {
+      requestSignal = options.signal as AbortSignal;
+      return download;
+    });
+    vi.stubGlobal("fetch", fetcher);
+    context.decodeAudioData.mockResolvedValue(sizedBuffer(bytes));
+    await audio.unlock();
+    audio.setPlaybackNotes([sound(66)]);
+    audio.tone(66, 0.8, 0, 1);
+    const controller = new AbortController();
+    const first = audio.prepare([sound(60)], controller.signal);
+    const cancelled = expect(first).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    const shared = audio.prepare([sound(60)]);
+    controller.abort();
+    await cancelled;
+    expect(requestSignal.aborted).toBe(false);
+    expect(audio.loading).toBe(true);
+    finish(response());
+    await shared;
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(audio.samples.has(sharedFile)).toBe(true);
+    expect(audio.samples.has(activeFile)).toBe(true);
+    expect(audio.voices.size).toBe(1);
+    expect(audio.loading).toBe(false);
+  });
+
+  it.each(["download", "decode"] as const)(
+    "retries the same file after a cancelled %s without stale cleanup removing its replacement",
+    async (phase) => {
+      const { audio, context } = fixture(false);
+      const file = fileFor(60),
+        bytes = 300 * 1024 * 1024;
+      instrumentMetadata.files = {
+        [file]: { duration: bytes / (sampleRate * 8), channels: 2 },
+      };
+      let finishOldDownload!: (value: ReturnType<typeof response>) => void;
+      const oldDownload = new Promise<ReturnType<typeof response>>(
+        (resolve) => {
+          finishOldDownload = resolve;
+        },
+      );
+      let finishNewDownload!: (value: ReturnType<typeof response>) => void;
+      const newDownload = new Promise<ReturnType<typeof response>>(
+        (resolve) => {
+          finishNewDownload = resolve;
+        },
+      );
+      let finishOldDecode!: (value: AudioBuffer) => void;
+      const oldDecode = new Promise<AudioBuffer>((resolve) => {
+        finishOldDecode = resolve;
+      });
+      const fetcher = vi
+        .fn()
+        .mockImplementationOnce(() =>
+          phase === "download" ? oldDownload : response(),
+        )
+        .mockImplementation(() => newDownload);
+      vi.stubGlobal("fetch", fetcher);
+      context.decodeAudioData.mockResolvedValue(sizedBuffer(bytes));
+      if (phase === "decode")
+        context.decodeAudioData.mockImplementationOnce(() => oldDecode);
+      await audio.unlock();
+      const controller = new AbortController();
+      const first = audio.prepare([sound(60)], controller.signal);
+      const cancellation = expect(first).rejects.toMatchObject({
+        name: "AbortError",
+      });
+      if (phase === "decode")
+        await vi.waitFor(() =>
+          expect(context.decodeAudioData).toHaveBeenCalledOnce(),
+        );
+      // Observe the abandoned worker through its cleanup, after public prepare
+      // has already rejected on cancellation, to exercise the identity guard.
+      const oldWorker = (
+        Reflect.get(audio, "pending") as Map<
+          string,
+          { promise: Promise<AudioBuffer> }
+        >
+      )
+        .get(file)!
+        .promise.catch(() => {});
+      controller.abort();
+      await cancellation;
+      const replacement = audio.prepare([sound(60)]);
+      if (phase === "decode") expect(fetcher).toHaveBeenCalledOnce();
+      else expect(fetcher).toHaveBeenCalledTimes(2);
+      finishOldDownload(response());
+      finishOldDecode(sizedBuffer(bytes));
+      await oldWorker;
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+      const shared = audio.prepare([sound(60)]);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      finishNewDownload(response());
+      await Promise.all([replacement, shared]);
+      expect(audio.samples.size).toBe(1);
+      expect(audio.samples.has(file)).toBe(true);
+      expect(cachedBytes(audio)).toBe(bytes);
+      expect(audio.error).toBe("");
+      expect(audio.loading).toBe(false);
+    },
+  );
+
   it.each(["download", "decode"])(
     "retains successful recordings and retries only the failed %s",
     async (failure) => {

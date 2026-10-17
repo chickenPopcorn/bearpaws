@@ -1,16 +1,14 @@
-import {
-  tempoConverter,
-  noteName,
-  suggestedFinger,
-  type Note,
-  type Song,
-} from "./song";
+import { noteName, suggestedFinger, type Note, type Song } from "./song";
 import type { Group, MidiState, Practice } from "./engine";
+import { createBeatClock, createMeterMap } from "./notation";
 const scoreFont = '"Libre Baskerville", Baskerville, Georgia, serif';
 const ranges = new WeakMap<Song, [number, number]>();
 const beatTimelines = new WeakMap<
   Song,
-  { converter: ReturnType<typeof tempoConverter>; tickLimit: number }
+  {
+    clock: ReturnType<typeof createBeatClock>;
+    meter: ReturnType<typeof createMeterMap>;
+  }
 >();
 const waitGroups = new WeakMap<
   Group,
@@ -184,33 +182,29 @@ export function draw(
   // Beat grid follows the actual tempo map, including changes.
   let timeline = beatTimelines.get(song);
   if (!timeline) {
-    const tempos = song.tempos;
-    let minimumTempo = 500000;
-    for (const tempo of tempos)
-      minimumTempo = Math.min(minimumTempo, tempo.microseconds);
     timeline = {
-      converter: tempoConverter(song.ppq, tempos),
-      tickLimit: Math.ceil((song.duration * song.ppq * 1e6) / minimumTempo),
+      clock: createBeatClock(song.ppq, song.tempos),
+      meter: createMeterMap(song),
     };
     beatTimelines.set(song, timeline);
   }
-  const { converter, tickLimit } = timeline;
-  // A bounded binary search locates the visible beat even in a long imported song.
-  let low = 0,
-    high = tickLimit;
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    if (converter(mid) < position) low = mid + 1;
-    else high = mid;
-  }
-  let beat = Math.floor(low / song.ppq);
-  for (let i = 0; i < 128; i++, beat++) {
-    const t = converter(beat * song.ppq);
+  const { clock, meter } = timeline;
+  const leadIn = song.leadInBeats ?? 0;
+  const currentBeat = clock.at(position) - leadIn;
+  const initialBar = meter.at(currentBeat);
+  let beat =
+    currentBeat < 0
+      ? Math.floor(currentBeat)
+      : initialBar.start +
+        Math.floor(initialBar.offset / initialBar.beatUnit) *
+          initialBar.beatUnit;
+  // Keep the work bounded even at extreme tempos or small written note units.
+  for (let i = 0; i < 128; i++) {
+    const t = clock.time(beat + leadIn);
     if (t > position + 5) break;
     const y = fall - (t - position) * px;
-    const musicalBeat = beat - (song.leadInBeats ?? 0);
-    const barStart =
-      musicalBeat >= 0 && musicalBeat % (song.beatsPerBar ?? 4) === 0;
+    const bar = meter.at(beat);
+    const barStart = beat >= 0 && Math.abs(beat - bar.start) < 1e-9;
     c.strokeStyle = barStart ? "#d5d1e3" : "#e3e0ed";
     c.beginPath();
     c.moveTo(0, y);
@@ -220,8 +214,12 @@ export function draw(
       c.fillStyle = "#777287";
       c.font = `10px ${scoreFont}`;
       c.textAlign = "left";
-      c.fillText("beat " + String(musicalBeat + 1), 7, y - 5);
+      const writtenBeat =
+        bar.writtenBeat + (bar.start - bar.beat) / bar.beatUnit;
+      c.fillText("beat " + String(writtenBeat + 1), 7, y - 5);
     }
+    beat =
+      beat < 0 ? Math.min(0, beat + 1) : Math.min(bar.end, beat + bar.beatUnit);
   }
   const group = waiting ? practice.gate : undefined;
   let expected = group ? waitGroups.get(group) : undefined;
