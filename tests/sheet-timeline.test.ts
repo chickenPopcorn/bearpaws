@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { SheetTimeline } from "../src/SheetTimeline";
+import { builtInSongs } from "../src/lessons";
 import type { Mode } from "../src/engine";
 import type { Note, Song } from "../src/song";
 
@@ -72,6 +73,21 @@ function renderedNotes(markup: string) {
     notes.set(group[1], attributes);
   }
   return notes;
+}
+
+function noteLayout(markup: string, id: string) {
+  const group = markup.match(
+    new RegExp(`<g\\b[^>]*data-note-id="${id}"[^>]*>([\\s\\S]*?)</g>`),
+  )![1];
+  const head = group.match(/<ellipse\b[^>]*\bry="4\.4"[^>]*>/)![0];
+  const label = group.match(
+    /<text\b[^>]*class="sheet-note-label"[^>]*y="([^"]+)"[^>]*>([^<]+)<\/text>/,
+  )!;
+  return {
+    headY: Number(head.match(/\bcy="([^"]+)"/)![1]),
+    labelY: Number(label[1]),
+    label: label[2],
+  };
 }
 
 describe("sheet timeline SVG progress", () => {
@@ -260,6 +276,61 @@ describe("sheet timeline SVG progress", () => {
     expect(f.stem).toBe(g.stem);
   });
 
+  it("puts Dancing Raindrops' G3 label above E3 without changing their notes or fingers", () => {
+    const piece = builtInSongs().find(
+      (candidate) => candidate.id === "cadence-dancing-raindrops-v1",
+    )!;
+    const e = piece.notes.find(
+      (candidate) =>
+        candidate.track === 0 &&
+        candidate.pitch === 52 &&
+        piece.notes.some(
+          (other) =>
+            other.track === 0 &&
+            other.pitch === 55 &&
+            other.start === candidate.start,
+        ),
+    )!;
+    const g = piece.notes.find(
+      (candidate) =>
+        candidate.track === 0 &&
+        candidate.pitch === 55 &&
+        candidate.start === e.start,
+    )!;
+    const markup = render(piece);
+    const lower = noteLayout(markup, e.id);
+    const upper = noteLayout(markup, g.id);
+    expect(lower.headY).toBeGreaterThan(upper.headY);
+    expect(lower.labelY).toBeGreaterThan(upper.labelY);
+    expect(lower.label).toBe("E3 · 3");
+    expect(upper.label).toBe("G3 · 1");
+  });
+
+  it.each([
+    { track: 0, pitches: [60] },
+    { track: 0, pitches: [60, 64] },
+    { track: 0, pitches: [60, 64, 67] },
+    { track: 1, pitches: [48] },
+    { track: 1, pitches: [48, 52] },
+    { track: 1, pitches: [48, 52, 55] },
+  ])(
+    "matches chord label order to staff pitch for $pitches on track $track",
+    ({ track, pitches }) => {
+      const notes = pitches.map((pitch) =>
+        note(`pitch-${pitch}`, pitch, 0.5, track),
+      );
+      const markup = render(song(notes));
+      const layout = notes.map((item) => noteLayout(markup, item.id));
+      for (let i = 1; i < layout.length; i++) {
+        expect(layout[i].headY).toBeLessThan(layout[i - 1].headY);
+        expect(layout[i].labelY).toBeLessThan(layout[i - 1].labelY);
+      }
+      expect(Math.min(...layout.map((item) => item.labelY))).toBe(
+        track === 0 ? 134 : 242,
+      );
+    },
+  );
+
   it("keeps a 50,000-note dense import to at most 240 rendered note groups", () => {
     const notes = Array.from({ length: 50_000 }, (_, index) =>
       note(`dense-${index}`, 60 + (index % 12), (index % 8) * 2),
@@ -290,6 +361,20 @@ describe("sheet timeline SVG progress", () => {
       "G4, finger 3",
       "C5, finger 5",
     ]);
+  });
+
+  it("keeps dense chord labels capped at the highest three notes", () => {
+    const markup = render(
+      song(
+        [48, 52, 55, 60].map((pitch) => note(`pitch-${pitch}`, pitch, 0.5, 1)),
+      ),
+    );
+    const labels = [
+      ...markup.matchAll(
+        /<text\b[^>]*class="sheet-note-label"[^>]*y="([^"]+)"[^>]*>([^<]+)<\/text>/g,
+      ),
+    ].sort((a, b) => Number(a[1]) - Number(b[1]));
+    expect(labels.map((label) => label[2])).toEqual(["C4", "G3", "E3"]);
   });
 
   it("leaves room below all three left-hand chord labels, including descenders", () => {

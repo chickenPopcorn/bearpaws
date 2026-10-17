@@ -2,8 +2,7 @@ name: Codex review gate
 
 on:
   pull_request_target:
-    branches: [main]
-    types: [opened, reopened, synchronize, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review, edited]
   issue_comment:
     types: [created, edited, deleted]
   workflow_dispatch:
@@ -21,10 +20,17 @@ permissions:
 
 jobs:
   publish-gate:
+    # Codex task completion comes from its summary, independently of GitHub's
+    # review decision. These trusted events also retain write access for forks.
     if: >-
-      github.event_name != 'issue_comment' ||
+      (github.event_name != 'issue_comment' &&
+       (github.event_name != 'pull_request_target' ||
+        github.event.action != 'edited' || github.event.changes.base)) ||
       (github.event.issue.pull_request &&
-       github.event.comment.user.id == 199175422)
+       (github.event.comment.user.id == 199175422 ||
+        ((contains(github.event.comment.body, '@codex') ||
+          contains(github.event.changes.body.from, '@codex')) &&
+         contains(fromJSON('["OWNER", "COLLABORATOR", "MEMBER"]'), github.event.comment.author_association))))
     concurrency:
       group: codex-review-gate-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_request_number }}
       cancel-in-progress: true
