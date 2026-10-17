@@ -116,40 +116,42 @@ const db = () =>
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
-export async function library(): Promise<Song[]> {
-  const store = await db();
-  return new Promise((resolve, reject) => {
-    const tx = store.transaction("songs");
-    const request = tx.objectStore("songs").getAll();
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-    tx.oncomplete = () => store.close();
+/**
+ * Settle on the transaction, not the request: a commit can still fail after a
+ * successful request (for example, a full disk), and only fires `abort`.
+ */
+async function transact<T>(
+  mode: IDBTransactionMode,
+  run: (songs: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  const database = await db();
+  return new Promise<T>((resolve, reject) => {
+    try {
+      const tx = database.transaction("songs", mode);
+      const request = run(tx.objectStore("songs"));
+      tx.oncomplete = () => {
+        database.close();
+        resolve(request.result);
+      };
+      // Request errors bubble to the transaction and then abort it.
+      tx.onabort = () => {
+        database.close();
+        reject(
+          tx.error ?? new DOMException("Transaction aborted", "AbortError"),
+        );
+      };
+    } catch (error) {
+      database.close();
+      reject(error);
+    }
   });
+}
+export function library(): Promise<Song[]> {
+  return transact("readonly", (songs) => songs.getAll());
 }
 export async function saveSong(song: Song) {
-  const store = await db();
-  return new Promise<void>((resolve, reject) => {
-    const tx = store.transaction("songs", "readwrite");
-    tx.objectStore("songs").put(song);
-    tx.oncomplete = () => {
-      store.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      store.close();
-      reject(tx.error);
-    };
-  });
+  await transact("readwrite", (songs) => songs.put(song));
 }
 export async function deleteSong(id: string) {
-  const store = await db();
-  return new Promise<void>((resolve, reject) => {
-    const tx = store.transaction("songs", "readwrite");
-    tx.objectStore("songs").delete(id);
-    tx.oncomplete = () => {
-      store.close();
-      resolve();
-    };
-    tx.onerror = () => reject(tx.error);
-  });
+  await transact("readwrite", (songs) => songs.delete(id));
 }
