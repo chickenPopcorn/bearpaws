@@ -867,7 +867,9 @@ function App() {
           <footer>
             Practice stays on this browser.{" "}
             <span>USB MIDI · Desktop Chrome / Edge · HTTPS required</span>
-            {" · "}
+            <span className="footer-separator" aria-hidden="true">
+              ·
+            </span>
             <a
               href={`${import.meta.env.BASE_URL}audio/accurate-salamander/CREDITS.md`}
             >
