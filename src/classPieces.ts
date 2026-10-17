@@ -313,7 +313,12 @@ const blackbird: readonly ClassBar[] = [
   { left: [[C4, 4]] },
 ];
 
-/** Book order, after the existing Dancing Raindrops lesson. */
+/**
+ * Book order: Music for Little Mozarts, Recital Book 3. The photos cut off the
+ * page numbers of the first five story pieces; facing pages and the story keep
+ * them in this order. Mozart Mouse's Special Music is page 21, and the
+ * Challenge Repertoire follows on odd pages 23 to 31.
+ */
 export const classPieces: readonly ClassPiece[] = [
   {
     id: "pawpal-five-oclock-v1",
@@ -964,6 +969,17 @@ export const classPieces: readonly ClassPiece[] = [
       ...blackbird.slice(2),
     ],
   },
+];
+
+/**
+ * George Bear’s Classes in display order: the single source for the built-in
+ * song order and the collection. Dancing Raindrops (built in lessons.ts) stays
+ * first because it is not from Recital Book 3; the book pieces follow in
+ * book order.
+ */
+export const georgeClassesOrder: readonly string[] = [
+  "cadence-dancing-raindrops-v1",
+  ...classPieces.map((piece) => piece.id),
 ];
 
 /** Build a two-hand lesson with the printed rhythm, rests, dynamics and fingers. */

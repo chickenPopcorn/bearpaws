@@ -2,7 +2,7 @@ import { tempoConverter, type Finger, type Note, type Song } from "./song";
 import { starterPieces, type StarterPiece } from "./starterPieces";
 import { popsPieces } from "./popsPieces";
 import { midiPieces, midiSongs } from "./midiPieces";
-import { classPieces, classSong } from "./classPieces";
+import { classPieces, classSong, georgeClassesOrder } from "./classPieces";
 
 const rightFingers: Record<number, Finger> = {
   60: 1,
@@ -20,8 +20,7 @@ const leftFingers: Record<number, Finger> = {
 };
 const builtInIds = new Set([
   "cadence-ode-to-joy-v1",
-  "cadence-dancing-raindrops-v1",
-  ...classPieces.map((piece) => piece.id),
+  ...georgeClassesOrder,
   ...starterPieces.map((piece) => piece.id),
   ...popsPieces.map((piece) => piece.id),
   ...midiPieces.map((piece) => piece.id),
@@ -231,12 +230,16 @@ function dancingRaindrops(): Song {
   };
 }
 
+function classLesson(id: string): Song {
+  if (id === "cadence-dancing-raindrops-v1") return dancingRaindrops();
+  return classSong(classPieces.find((piece) => piece.id === id)!);
+}
+
 /** Fresh objects keep track assignments and library edits local to each caller. */
 export function builtInSongs(): Song[] {
   return [
     makeLesson(odeToJoy),
-    dancingRaindrops(),
-    ...classPieces.map(classSong),
+    ...georgeClassesOrder.map(classLesson),
     ...starterPieces.map(makeLesson),
     ...popsPieces.map(makeLesson),
     ...midiSongs(),

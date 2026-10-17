@@ -1,6 +1,6 @@
 import { popsPieces } from "./popsPieces";
 import { midiPieces } from "./midiPieces";
-import { classPieces } from "./classPieces";
+import { georgeClassesOrder } from "./classPieces";
 import type { Song } from "./song";
 
 export const collections = [
@@ -9,10 +9,7 @@ export const collections = [
   { id: "pops", title: "Mama Bear’s Pops" },
 ] as const;
 export type CollectionId = (typeof collections)[number]["id"];
-const classIds = new Set([
-  "cadence-dancing-raindrops-v1",
-  ...classPieces.map((piece) => piece.id),
-]);
+const classIds = new Set(georgeClassesOrder);
 const popsIds = new Set(
   [...popsPieces, ...midiPieces].map((piece) => piece.id),
 );

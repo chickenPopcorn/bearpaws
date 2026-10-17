@@ -3,8 +3,12 @@ import { readFileSync } from "node:fs";
 import { builtInSongs, isBuiltInSong } from "../src/lessons";
 import { starterPieces } from "../src/starterPieces";
 import { popsPieces } from "../src/popsPieces";
-import { classPieces, classPositions } from "../src/classPieces";
-import { collectionForSong } from "../src/collections";
+import {
+  classPieces,
+  classPositions,
+  georgeClassesOrder,
+} from "../src/classPieces";
+import { collectionForSong, songsInCollection } from "../src/collections";
 import { parseSong, tempoConverter, type Song } from "../src/song";
 import { buildScore, scoreTimeAtX, scoreViewport } from "../src/notation";
 
@@ -463,6 +467,35 @@ describe("George Bear’s Classes book pieces", () => {
     builtInSongs().filter(
       (song) => collectionForSong(song.id).id === "classes",
     );
+
+  it("lists the pieces in Recital Book 3 order, after Dancing Raindrops", () => {
+    // Pages 21–31 are printed in the photos; the five story pieces before
+    // page 21 follow their facing pages and the story.
+    const bookOrder = [
+      "pawpal-five-oclock-v1",
+      "pawpal-tell-us-please-v1",
+      "pawpal-sleep-tight-mozart-mouse-v1",
+      "pawpal-something-for-you-v1",
+      "pawpal-bridal-chorus-v1",
+      "pawpal-mozart-mouses-special-music-v1", // page 21
+      "pawpal-camptown-races-v1", // page 23
+      "pawpal-hush-little-baby-v1", // page 25
+      "pawpal-wheels-on-the-bus-v1", // page 27
+      "pawpal-old-macdonald-v1", // page 29
+      "pawpal-aura-lee-v1", // page 31
+    ];
+    expect(georgeClassesOrder).toEqual([
+      "cadence-dancing-raindrops-v1",
+      ...bookOrder,
+    ]);
+    const songs = builtInSongs();
+    expect(songs.map((song) => song.id).slice(1, 13)).toEqual(
+      georgeClassesOrder,
+    );
+    expect(songsInCollection(songs, "classes").map((song) => song.id)).toEqual(
+      georgeClassesOrder,
+    );
+  });
 
   it("registers each piece once, with full bars and its printed hand position", () => {
     expect(new Set(classPieces.map((piece) => piece.id)).size).toBe(11);
