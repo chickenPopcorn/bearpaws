@@ -3,6 +3,7 @@ import {
   deleteSong,
   library,
   progress,
+  removeProgress,
   saveSong,
   settings,
   write,
@@ -14,6 +15,7 @@ beforeEach(() => {
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => values.get(k) ?? null,
     setItem: (k: string, v: string) => values.set(k, v),
+    removeItem: (k: string) => values.delete(k),
   });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -47,6 +49,13 @@ it("persists actual settings and song progress under independent browser keys", 
     loop: [1, 4],
   });
   expect(progress("other", 5).position).toBe(0);
+});
+it("removes one song's progress under the same key it was saved with", () => {
+  write("progress:gone", { position: 3 });
+  write("progress:kept", { position: 2 });
+  removeProgress("gone");
+  expect(progress("gone", 5).position).toBe(0);
+  expect(progress("kept", 5).position).toBe(2);
 });
 it("recovers corrupt or invalid storage shapes without crashing", () => {
   values.set("cadence:settings", "{bad");
