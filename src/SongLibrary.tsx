@@ -51,7 +51,7 @@ export const SongLibrary = memo(function SongLibrary({
   return (
     <>
       <div className="nav-label">
-        My library <span>{songs.length}</span>
+        Library <span>{songs.length}</span>
       </div>
       <input
         type="search"

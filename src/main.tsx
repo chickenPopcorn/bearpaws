@@ -10,13 +10,7 @@ import { createRoot } from "react-dom/client";
 import { Studio } from "./controller";
 import { draw, pianoKeyAt } from "./render";
 import { watchCanvasRedraws } from "./canvasRedraw";
-import {
-  noteName,
-  suggestedFinger,
-  fingerNames,
-  type Hand,
-  type Song,
-} from "./song";
+import { noteName, type Hand, type Song } from "./song";
 import type { Feedback, Mode } from "./engine";
 import { FingerGuide } from "./FingerGuide";
 import { SongLibrary } from "./SongLibrary";
@@ -397,13 +391,7 @@ function App() {
   });
   const s = studio.settings,
     p = studio.practice,
-    playing = studio.transport.playing,
-    gate = p.gate,
-    waiting =
-      s.mode === "wait" &&
-      playing &&
-      !!gate &&
-      Math.abs(gate.start - studio.position) < 0.002;
+    playing = studio.transport.playing;
   const connected = studio.midi.status === "connected";
   const collection = collectionForSong(studio.song.id);
   const collectionSongs = songsInCollection(studio.songs, collection.id);
@@ -635,7 +623,7 @@ function App() {
             </p>
           )}
           <FingerGuide song={studio.song} left={s.left} right={s.right} />
-          <div className={`workspace ${s.mode === "wait" ? "guided" : ""}`}>
+          <div className="workspace">
             <div
               id="piano-stage"
               ref={fullscreen.stage}
@@ -802,71 +790,6 @@ function App() {
                 <Piano />
               </div>
             </div>
-            {s.mode === "wait" && (
-              <aside className="coach">
-                <div className="kicker">Let’s play together</div>
-                <h2>
-                  {waiting ? "Take your time." : "Find your first notes."}
-                </h2>
-                <p>
-                  {studio.song.lesson
-                    ? "Play the highlighted keys with the suggested fingers."
-                    : "Play the highlighted keys."}{" "}
-                  Release repeated notes before playing them again.
-                </p>
-                <div className="chord">
-                  {[
-                    ...new Map(
-                      (gate?.notes || []).map((n) => [
-                        `${n.track}:${n.pitch}`,
-                        n,
-                      ]),
-                    ).values(),
-                  ].map((note) => {
-                    const hand =
-                      studio.song.tracks.find((t) => t.id === note.track)
-                        ?.hand ?? "off";
-                    const finger = suggestedFinger(note, hand);
-                    return (
-                      <span
-                        className={`finger-note ${hand} ${studio.input.down.has(note.pitch) ? "held" : ""}`}
-                        key={`${note.track}:${note.pitch}`}
-                      >
-                        <small>{hand === "left" ? "Left" : "Right"}</small>
-                        <strong>{noteName(note.pitch)}</strong>
-                        {finger && (
-                          <small>
-                            {finger} · {fingerNames[finger]}
-                          </small>
-                        )}
-                      </span>
-                    );
-                  })}
-                </div>
-                <p className="small">
-                  {waiting
-                    ? "Hold all highlighted keys to move on."
-                    : "Next notes in your selected hands."}
-                </p>
-                <button
-                  disabled={studio.audio.loading}
-                  onClick={() => void studio.preview()}
-                >
-                  Hear next notes
-                </button>
-                <div className="coach-steps">
-                  <div>
-                    <b>1</b> Find the notes
-                  </div>
-                  <div>
-                    <b>2</b> Play the changes
-                  </div>
-                  <div>
-                    <b>3</b> Try Rhythm when ready
-                  </div>
-                </div>
-              </aside>
-            )}
           </div>
           <div className="settings-row">
             <label>
