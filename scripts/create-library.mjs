@@ -147,7 +147,8 @@ try {
       "Paw Pal treats it as a general MIDI file, without the lesson metadata.\n\n" +
       "The catalog records countInBeats as the leading silent quarter-note beats.\n" +
       "Melody credits, starting positions, and per-note fingering are in catalog.json.\n" +
-      "Dancing Raindrops is the personal-practice transcription supplied by the user.\n",
+      "Dancing Raindrops and the other George Bear's Classes pieces are\n" +
+      "personal-practice transcriptions of the student parts supplied by the user.\n",
   );
   // Python's standard library packages fixed entry metadata for reproducible ZIPs.
   execFileSync("python3", ["scripts/create-library-zip.py", directory]);

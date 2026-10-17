@@ -26,7 +26,7 @@ npm run format         # Format source, tests and documentation
 
 ## Practice
 
-The library includes **15 beginner arrangements**, keeping **Ode to Joy** and
+The library includes **26 beginner arrangements**, keeping **Ode to Joy** and
 **Dancing Raindrops** and adding familiar melodies such as Mary Had a Little Lamb,
 Twinkle, Twinkle, Little Star, London Bridge, Frère Jacques, and Jingle Bells.
 Each includes suggested finger numbers on the score, falling notes, active keys
@@ -34,6 +34,10 @@ and Wait for me coach, plus starting hand positions. The simplest pieces stay
 in C position; melodies with position changes explain the moves. Short themes
 and the Jingle Bells chorus are labelled as such. New arrangements use one held
 bass note per bar; Dancing Raindrops retains its supplied chords and articulation.
+George Bear’s Classes adds eleven more personal-practice transcriptions from
+your piano book, in C and Middle C positions. They keep the student parts'
+printed rests, chords, staccato, dynamics, repeat and finger numbers, without
+lyrics or teacher duet parts.
 Mama Bear’s Pops includes **好一朵茉莉花 (Jasmine Flower)** as an eight-bar chorus
 in C major, with suggested finger numbers and a simple left-hand accompaniment.
 It also includes **安静 · 周杰伦 (Silence / An Jing)** as a complete piano MIDI
@@ -43,7 +47,7 @@ C and no added finger numbers. The source MIDI is kept in `src/assets/an-jing.mi
 and is available through the song’s individual download, outside the starter pack.
 
 Search the library by title or composer. **Download starter MIDI pack** saves the
-15 standard MIDI files as a ZIP; **Download MIDI** saves the selected arrangement.
+26 standard MIDI files as a ZIP; **Download MIDI** saves the selected arrangement.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
 with barlines. The ZIP also includes a fingering manifest with `countInBeats`.

@@ -10,4 +10,5 @@ Paw Pal treats it as a general MIDI file, without the lesson metadata.
 
 The catalog records countInBeats as the leading silent quarter-note beats.
 Melody credits, starting positions, and per-note fingering are in catalog.json.
-Dancing Raindrops is the personal-practice transcription supplied by the user.
+Dancing Raindrops and the other George Bear's Classes pieces are
+personal-practice transcriptions of the student parts supplied by the user.
