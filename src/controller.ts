@@ -28,7 +28,10 @@ export class Studio {
   private selectedNotes: Song["notes"] = [];
   scoringEpoch = 0;
   songs = builtInSongs();
-  song = this.songs[0];
+  // Loading writes the selection, so start on the saved built-in song (if
+  // any) rather than overwrite it before the library loads, or fails to.
+  song =
+    this.songs.find((song) => song.id === this.savedSelection) ?? this.songs[0];
   audio = new ReferenceAudio();
   input = new MidiState();
   transport = new Transport(this.song.duration);
@@ -148,7 +151,9 @@ export class Studio {
         ...songs.filter((song) => !isBuiltInSong(song.id)),
       ];
       const selected = this.songs.find((s) => s.id === this.savedSelection);
-      if (selected) this.load(selected);
+      // A saved built-in song is already active; reloading it would stop any
+      // practice that started before the library finished loading.
+      if (selected && selected.id !== this.song.id) this.load(selected);
       this.emit();
     } catch {
       if (generation !== this.lifecycleGeneration) return;
@@ -396,7 +401,8 @@ export class Studio {
       Math.min(this.song.duration, end),
     );
     this.syncLoop();
-    this.audio.stop(!this.transport.playing);
+    // An enabled loop restarts from its new start. A disabled one does not
+    // change playback, so sounding notes must not be stopped and re-struck.
     if (this.loopEnabled) this.seek(this.loopStart);
     this.save();
     this.emit();

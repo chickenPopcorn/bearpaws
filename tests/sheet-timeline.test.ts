@@ -343,6 +343,26 @@ describe("sheet timeline SVG progress", () => {
     expect(markup).toContain("condensed preview");
   });
 
+  it("names the finger of every chord note, including ones without a visible label", () => {
+    const fingers = [1, 2, 3, 5] as const;
+    const chord = [60, 64, 67, 72].map((pitch, index) => ({
+      ...note(`chord-${index}`, pitch),
+      finger: fingers[index],
+      fingerHand: "right" as const,
+    }));
+    const markup = render(song(chord));
+    expect(markup.match(/class="sheet-note-label"/g)).toHaveLength(3);
+    const titles = [...markup.matchAll(/<title>([^<]+)<\/title>/g)].map(
+      (match) => match[1],
+    );
+    expect(titles).toEqual([
+      "C4, finger 1",
+      "E4, finger 2",
+      "G4, finger 3",
+      "C5, finger 5",
+    ]);
+  });
+
   it("keeps dense chord labels capped at the highest three notes", () => {
     const markup = render(
       song(

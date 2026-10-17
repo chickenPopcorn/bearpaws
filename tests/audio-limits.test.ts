@@ -636,6 +636,29 @@ describe("piano sample loading", () => {
     expect(cachedBytes(audio)).toBeLessThanOrEqual(MAX_PIANO_CACHE_BYTES);
   });
 
+  it("evicts the least recently used recording, not the first loaded", async () => {
+    const { audio, context } = fixture(false);
+    const bytes = 200 * 1024 * 1024;
+    const reused = fileFor(60),
+      stale = fileFor(63),
+      requested = fileFor(66);
+    audio.samples.set(reused, sizedBuffer(bytes));
+    audio.samples.set(stale, sizedBuffer(bytes));
+    instrumentMetadata.files = {
+      [requested]: { duration: bytes / (sampleRate * 8), channels: 2 },
+    };
+    context.decodeAudioData.mockResolvedValueOnce(sizedBuffer(bytes));
+    const fetcher = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetcher);
+    await audio.unlock();
+    await audio.prepare([sound(60)]);
+    expect(fetcher).not.toHaveBeenCalled();
+    await audio.prepare([sound(66)]);
+    expect(audio.samples.has(reused)).toBe(true);
+    expect(audio.samples.has(stale)).toBe(false);
+    expect(audio.samples.has(requested)).toBe(true);
+  });
+
   it("protects future playback recordings across scheduler cycles until playback stops", async () => {
     const { audio, context, transport } = fixture(false);
     const bytes = 200 * 1024 * 1024;

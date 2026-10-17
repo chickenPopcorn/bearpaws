@@ -9,7 +9,13 @@ import {
   type PointerEvent,
 } from "react";
 import type { Mode } from "./engine";
-import { noteName, suggestedFinger, type Note, type Song } from "./song";
+import {
+  noteName,
+  suggestedFinger,
+  type Finger,
+  type Note,
+  type Song,
+} from "./song";
 import {
   buildScore,
   isNotePlayed,
@@ -48,6 +54,7 @@ interface DrawNote {
   y: number;
   up: boolean;
   accidental: string;
+  finger?: Finger;
   label: string;
   labelY: number;
 }
@@ -65,8 +72,19 @@ const NoteGlyph = memo(function NoteGlyph({
   past: boolean;
   active: boolean;
 }) {
-  const { score, hand, x, stemX, labelX, y, up, accidental, label, labelY } =
-    item;
+  const {
+    score,
+    hand,
+    x,
+    stemX,
+    labelX,
+    y,
+    up,
+    accidental,
+    finger,
+    label,
+    labelY,
+  } = item;
   const { note, rhythm } = score;
   const top = hand === "right" ? 64 : 172;
   const bottom = top + 40;
@@ -84,7 +102,7 @@ const NoteGlyph = memo(function NoteGlyph({
       data-past={past}
       data-enabled={enabled}
     >
-      <title>{`${noteName(note.pitch)}${label.includes("·") ? `, finger ${label.split("·")[1].trim()}` : ""}${played ? ", played" : past ? ", earlier in score" : ""}${!enabled ? ", hand hidden" : ""}`}</title>
+      <title>{`${noteName(note.pitch)}${finger ? `, finger ${finger}` : ""}${played ? ", played" : past ? ", earlier in score" : ""}${!enabled ? ", hand hidden" : ""}`}</title>
       {active && (
         <ellipse className="sheet-note-halo" cx={x} cy={y} rx={13} ry={10} />
       )}
@@ -366,6 +384,7 @@ export function SheetTimeline({
           y: pitch.y,
           up,
           accidental,
+          finger,
           label:
             row < 3
               ? `${noteName(item.note.pitch)}${finger ? ` · ${finger}` : ""}`
