@@ -660,6 +660,39 @@ describe("practice studio integration", () => {
     expect(deleteSong).not.toHaveBeenCalled();
   });
 
+  it("restores the full An Jing arrangement and practices each suggested hand independently", async () => {
+    const arrangement = builtInSongs().find(
+      (piece) => piece.id === "bearpaws-an-jing-v1",
+    )!;
+    env.values.set("settings", { selected: arrangement.id });
+    const studio = create();
+    await studio.init();
+
+    expect(studio.song.id).toBe(arrangement.id);
+    expect(studio.song.source).toEqual(arrangement.source);
+    expect(studio.song.lesson).toBeUndefined();
+    expect(studio.notes).toHaveLength(1369);
+    expect(studio.practice.notes).toEqual(studio.notes);
+
+    studio.hand("left");
+    expect(studio.notes).toHaveLength(761);
+    expect(studio.notes.every((note) => note.pitch >= 60)).toBe(true);
+    expect(studio.scoringNotes).toEqual(studio.notes);
+    expect(studio.practice.notes).toEqual(studio.notes);
+
+    studio.hand("left");
+    studio.hand("right");
+    expect(studio.notes).toHaveLength(608);
+    expect(studio.notes.every((note) => note.pitch < 60)).toBe(true);
+    expect(studio.scoringNotes).toEqual(studio.notes);
+    expect(studio.practice.notes).toEqual(studio.notes);
+
+    studio.hand("right");
+    expect(studio.notes).toHaveLength(1369);
+    expect(studio.practice.notes).toEqual(studio.notes);
+    expect(studio.song.source).toEqual(arrangement.source);
+  });
+
   it.each([false, true])(
     "accepts Wait input within the early tolerance even when delivered after the gate (already held: %s)",
     async (held) => {

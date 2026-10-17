@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { builtInSongs, isBuiltInSong } from "../src/lessons";
 import { starterPieces } from "../src/starterPieces";
 import { popsPieces } from "../src/popsPieces";
 import { collectionForSong } from "../src/collections";
-import { tempoConverter } from "../src/song";
+import { parseSong, tempoConverter } from "../src/song";
+import { buildScore, scoreTimeAtX, scoreViewport } from "../src/notation";
 
 describe("bundled beginner music", () => {
   it("keeps the original lessons and adds recognizable beginner arrangements", () => {
@@ -12,7 +14,8 @@ describe("bundled beginner music", () => {
       ["cadence-ode-to-joy-v1", "Ode to Joy"],
       ["cadence-dancing-raindrops-v1", "Dancing Raindrops"],
     ]);
-    expect(songs).toHaveLength(15);
+    expect(songs).toHaveLength(16);
+    expect(songs.filter((song) => song.lesson)).toHaveLength(15);
     expect(new Set(songs.map((song) => song.id)).size).toBe(songs.length);
     for (const title of [
       "Hot Cross Buns",
@@ -20,6 +23,7 @@ describe("bundled beginner music", () => {
       "Twinkle, Twinkle, Little Star",
       "London Bridge",
       "好一朵茉莉花 · chorus",
+      "安静 · 周杰伦",
     ])
       expect(songs.some((song) => song.title === title)).toBe(true);
     for (const song of songs) {
@@ -42,7 +46,8 @@ describe("bundled beginner music", () => {
     for (const song of songs) {
       song.notes[0].pitch = 0;
       song.tracks[0].hand = "off";
-      song.lesson!.handPositions.left = "changed";
+      if (song.lesson) song.lesson.handPositions.left = "changed";
+      if (song.source) song.source.description = "changed";
     }
     expect(builtInSongs()).toEqual(original);
   });
@@ -75,7 +80,7 @@ describe("bundled beginner music", () => {
       [53, 2],
       [55, 1],
     ]);
-    for (const song of builtInSongs()) {
+    for (const song of builtInSongs().filter((song) => song.lesson)) {
       expect(song.lesson!.handPositions.left).toContain("C3 (5) to G3 (1)");
       expect(song.lesson!.handPositions.right.length).toBeGreaterThan(10);
       const fixedC =
@@ -137,12 +142,116 @@ describe("bundled beginner music", () => {
     expect(jasmine.lesson!.description).toContain("chorus");
   });
 
+  it("adds the full An Jing piano MIDI to Mama Bear’s Pops without invented fingerings", () => {
+    const song = builtInSongs().find(
+      (candidate) => candidate.id === "bearpaws-an-jing-v1",
+    )!;
+    const original = parseSong(
+      new Uint8Array(readFileSync("src/assets/an-jing.mid")),
+      "source",
+      "source",
+    );
+    expect(song).toBeDefined();
+    expect(song.title).toBe("安静 · 周杰伦");
+    expect(collectionForSong(song.id).id).toBe("pops");
+    expect(song.lesson).toBeUndefined();
+    expect(song.source!.composer).toMatch(/周杰伦|Jay Chou/);
+    expect(song.source!.description.length).toBeGreaterThan(0);
+    expect(song.source!.url).toMatch(/^https:\/\//);
+    expect(song.source!.credit.length).toBeGreaterThan(0);
+    expect(song.notes).toHaveLength(1369);
+    expect(song.duration).toBeGreaterThan(330);
+    expect(song.ppq).toBe(original.ppq);
+    expect(song.tempos).toEqual(original.tempos);
+    expect(song.timeSignatures).toEqual(original.timeSignatures);
+    expect(song.duration).toBe(original.duration);
+    const performance = (notes: typeof song.notes) =>
+      notes
+        .map(({ pitch, start, end, soundEnd, velocity, channel }) => ({
+          pitch,
+          start,
+          end,
+          soundEnd,
+          velocity,
+          channel,
+        }))
+        .sort(
+          (a, b) =>
+            a.start - b.start ||
+            a.pitch - b.pitch ||
+            a.end - b.end ||
+            a.soundEnd - b.soundEnd ||
+            a.velocity - b.velocity ||
+            a.channel - b.channel,
+        );
+    expect(performance(song.notes)).toEqual(performance(original.notes));
+    expect(song.tracks.map((track) => [track.id, track.hand])).toEqual([
+      [0, "left"],
+      [1, "right"],
+    ]);
+    for (const note of song.notes) {
+      expect(note.track).toBe(note.pitch < 60 ? 0 : 1);
+      expect(note.finger).toBeUndefined();
+      expect(note.fingerHand).toBeUndefined();
+      expect(note.id.startsWith(`${song.id}-`)).toBe(true);
+    }
+    for (const track of song.tracks)
+      expect(track.count).toBe(
+        song.notes.filter((note) => note.track === track.id).length,
+      );
+  });
+
+  it("keeps the complete An Jing score seekable from its opening through its final measure", () => {
+    const song = builtInSongs().find(
+      (candidate) => candidate.id === "bearpaws-an-jing-v1",
+    )!;
+    const score = buildScore(song);
+    const scoredNotes = [...score.measures.values()].flat();
+    expect(scoredNotes).toHaveLength(1369);
+    expect(new Set(scoredNotes.map((item) => item.note.id))).toEqual(
+      new Set(song.notes.map((note) => note.id)),
+    );
+    expect(score.measureCount).toBeGreaterThan(90);
+
+    for (const position of [
+      song.notes[0].start,
+      song.notes[Math.floor(song.notes.length / 2)].start,
+      song.notes.at(-1)!.start,
+    ]) {
+      const beat = score.clock.at(position);
+      const coordinate = score.meter.coordinate(beat);
+      const measure = score.meter.at(beat);
+      expect(score.meter.beatAt(coordinate)).toBeCloseTo(beat, 8);
+      expect(score.clock.time(measure.start + measure.offset)).toBeCloseTo(
+        position,
+        8,
+      );
+
+      const viewport = scoreViewport(beat, score.measureCount, score.meter);
+      expect(viewport.last - viewport.first).toBeLessThanOrEqual(4);
+      const x =
+        88 +
+        24 +
+        (coordinate - viewport.first) * viewport.measureWidth -
+        viewport.offset;
+      expect(
+        scoreTimeAtX(
+          x,
+          { ...viewport, beatsPerBar: score.meter },
+          score.clock,
+          score.leadInBeats,
+          song.duration,
+        ),
+      ).toBeCloseTo(position, 8);
+    }
+  });
+
   it("schedules valid, nonoverlapping notes on the stated tempo and counts every track", () => {
     const songs = builtInSongs();
     expect(
       new Set(songs.flatMap((song) => song.notes.map((note) => note.id))).size,
     ).toBe(songs.reduce((sum, song) => sum + song.notes.length, 0));
-    for (const song of songs) {
+    for (const song of songs.filter((candidate) => candidate.lesson)) {
       const beat = tempoConverter(song.ppq, song.tempos)(song.ppq);
       expect(beat).toBeCloseTo(60 / song.lesson!.bpm, 9);
       expect(song.notes[0].start).toBeCloseTo(beat, 9);

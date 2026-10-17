@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SongLibrary } from "../src/SongLibrary";
 import { builtInSongs } from "../src/lessons";
+import { midiPieces } from "../src/midiPieces";
 import { popsPieces } from "../src/popsPieces";
 import type { Song } from "../src/song";
 
@@ -21,6 +22,15 @@ const songs = [
   song(popsPieces[0].id, "Jasmine Flower", "Traditional"),
   song("imported-waltz", "My Waltz"),
 ];
+const fullPiano: Song = {
+  ...song(midiPieces[0].id, "安静 · 周杰伦"),
+  source: {
+    composer: "周杰伦 · Jay Chou",
+    description: "Full piano arrangement without suggested finger numbers.",
+    url: "https://example.com/an-jing",
+    credit: "Example arranger",
+  },
+};
 
 let root: Root;
 let container: HTMLDivElement;
@@ -130,6 +140,51 @@ describe("song library", () => {
     } finally {
       localeLowerCase.mockRestore();
     }
+  });
+
+  it.each(["  JAY CHOU  ", "周杰伦", "安静"])(
+    "finds a full piano arrangement by its source composer or title: %s",
+    async (term) => {
+      await render({ songs: [...songs, fullPiano] });
+      await type(term);
+      expect(titles()).toEqual([fullPiano.title]);
+      expect(search().value).toBe(term);
+    },
+  );
+
+  it("labels source arrangements as full piano without suggesting finger numbers", async () => {
+    await render({ songs: [fullPiano], selected: fullPiano.id });
+    const button =
+      groupContent("pops").querySelector<HTMLButtonElement>(".song")!;
+    expect(button.querySelector("small")?.textContent).toBe(
+      "Full piano · No finger numbers",
+    );
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    await click(button);
+    expect(props.onSelect).toHaveBeenCalledExactlyOnceWith(fullPiano);
+  });
+
+  it("keeps a matching source-composer search when revealing the selected arrangement", async () => {
+    await render({ songs: [...songs, fullPiano] });
+    await type("JAY CHOU");
+    await click(groupToggle("pops"));
+    await render({ selected: fullPiano.id });
+    expect(groupContent("pops").hidden).toBe(false);
+    expect(search().value).toBe("JAY CHOU");
+    expect(titles()).toEqual([fullPiano.title]);
+    expect(
+      container.querySelector(".song[aria-pressed=true]")?.textContent,
+    ).toContain(fullPiano.title);
+  });
+
+  it("clears an unrelated search when revealing a selected source arrangement", async () => {
+    await render({ songs: [...songs, fullPiano] });
+    await type("waltz");
+    await click(groupToggle("pops"));
+    await render({ selected: fullPiano.id });
+    expect(groupContent("pops").hidden).toBe(false);
+    expect(search().value).toBe("");
+    expect(titles()).toContain(fullPiano.title);
   });
 
   it("hides collapsed collection contents and opens all collections when searching", async () => {

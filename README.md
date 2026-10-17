@@ -36,8 +36,13 @@ and the Jingle Bells chorus are labelled as such. New arrangements use one held
 bass note per bar; Dancing Raindrops retains its supplied chords and articulation.
 Mama Bear’s Pops includes **好一朵茉莉花 (Jasmine Flower)** as an eight-bar chorus
 in C major, with suggested finger numbers and a simple left-hand accompaniment.
+It also includes **安静 · 周杰伦 (Silence / An Jing)** as a complete piano MIDI
+from [Shaivan’s Online Sequencer upload](https://onlinesequencer.net/1677315).
+Its original notes and timing are preserved, with suggested hands split at middle
+C and no added finger numbers. The source MIDI is kept in `src/assets/an-jing.mid`
+and is available through the song’s individual download, outside the starter pack.
 
-Search the library by title or composer. **Download starter MIDI pack** saves all
+Search the library by title or composer. **Download starter MIDI pack** saves the
 15 standard MIDI files as a ZIP; **Download MIDI** saves the selected arrangement.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned

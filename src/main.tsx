@@ -374,11 +374,25 @@ function App() {
                 <SongTitle title={studio.song.title} />
               </h1>
               <p>
-                {studio.song.lesson
-                  ? `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
-                  : isBuiltInSong(studio.song.id)
-                    ? "An original beginning · Chords, changes & a simple melody"
-                    : `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`}
+                {studio.song.source ? (
+                  <>
+                    {studio.song.source.composer} ·{" "}
+                    {studio.song.source.description}{" "}
+                    <a
+                      href={studio.song.source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      MIDI by {studio.song.source.credit}
+                    </a>
+                  </>
+                ) : studio.song.lesson ? (
+                  `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
+                ) : isBuiltInSong(studio.song.id) ? (
+                  "An original beginning · Chords, changes & a simple melody"
+                ) : (
+                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`
+                )}
               </p>
             </div>
             <div className="song-tools">
@@ -573,8 +587,10 @@ function App() {
                   {waiting ? "Take your time." : "Find your first notes."}
                 </h2>
                 <p>
-                  Play the highlighted keys with the suggested fingers. Release
-                  repeated notes before playing them again.
+                  {studio.song.lesson
+                    ? "Play the highlighted keys with the suggested fingers."
+                    : "Play the highlighted keys."}{" "}
+                  Release repeated notes before playing them again.
                 </p>
                 <div className="chord">
                   {[

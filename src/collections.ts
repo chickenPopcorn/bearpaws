@@ -1,4 +1,5 @@
 import { popsPieces } from "./popsPieces";
+import { midiPieces } from "./midiPieces";
 
 export const collections = [
   { id: "classes", title: "George Bear’s Classes" },
@@ -8,6 +9,7 @@ export const collections = [
 
 export function collectionForSong(id: string) {
   if (id === "cadence-dancing-raindrops-v1") return collections[0];
-  if (popsPieces.some((piece) => piece.id === id)) return collections[2];
+  if ([...popsPieces, ...midiPieces].some((piece) => piece.id === id))
+    return collections[2];
   return collections[1];
 }

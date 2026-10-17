@@ -1,10 +1,10 @@
 # Verification record
 
-Updated October 17, 2026 for the BearPaws library and practice controls.
+Updated October 17, 2026 for the BearPaws library, practice controls, and full An Jing arrangement.
 
 ## Automated checks
 
-- `npm test`: 415 tests across 23 suites passed.
+- `npm test`: 426 tests across 24 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: 6 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
@@ -29,6 +29,12 @@ exports and catalog entries, and exact ZIP contents with CRC verification.
 ZIP bytes remain identical when source timestamps, permissions or file creation
 order change, and search casing remains consistent across browser locales.
 Exported pieces use a full-bar count-in to retain musical bar alignment.
+The full An Jing arrangement preserves all 1,369 source notes and original
+timing/velocities, with suggested hands split at middle C. Tests cover saved
+selection, separate-hand practice, all score notes, and seeking across the
+99-measure arrangement. A real export in a temporary workspace verifies the
+original MIDI download and byte-identical regeneration of the 15-song starter
+pack; full arrangements remain outside that pack.
 
 The sample bank contains 240 lossless FLACs, about 358 MiB compressed. Checks
 verify all hashes against the recorded source metadata. Runtime loading remains
@@ -38,6 +44,11 @@ to open the page. The CI artifact includes the complete bank.
 ## Local browser checks
 
 The latest production build was checked in the in-app browser at
+`http://127.0.0.1:4188/nested/piano/`: composer search finds An Jing, the source
+credit and individual download are visible, fullscreen starts practice, and
+score seeking reaches the last of 99 measures.
+
+The preceding production build was checked at
 `http://127.0.0.1:4187/nested/piano/`: the logo and MIDI downloads resolve below
 the deployment path; accent-insensitive search finds Frère Jacques; Enter
 activates library controls; score arrows seek without changing songs; and the

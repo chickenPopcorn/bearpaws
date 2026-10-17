@@ -14,9 +14,15 @@ const server = await createServer({
 });
 try {
   const { builtInSongs } = await server.ssrLoadModule("/src/lessons.ts");
-  const songs = builtInSongs();
+  const { midiPieces, midiBytes } =
+    await server.ssrLoadModule("/src/midiPieces.ts");
+  const songs = builtInSongs().filter((song) => song.lesson);
   const directory = resolve("public/midi");
   mkdirSync(directory, { recursive: true });
+  // Full arrangements retain the original MIDI bytes and are downloaded
+  // individually, outside the starter pack with its authored fingerings.
+  for (const piece of midiPieces)
+    writeFileSync(resolve(directory, `${piece.id}.mid`), midiBytes(piece));
   const manifest = [];
   for (const song of songs) {
     const bpm = song.lesson.bpm;
@@ -146,7 +152,7 @@ try {
   // Python's standard library packages fixed entry metadata for reproducible ZIPs.
   execFileSync("python3", ["scripts/create-library-zip.py", directory]);
   console.log(
-    `Exported ${songs.length} MIDI files and cadence-starter-library.zip`,
+    `Exported ${songs.length} starter MIDI files, ${midiPieces.length} full arrangements and cadence-starter-library.zip`,
   );
 } finally {
   await server.close();
