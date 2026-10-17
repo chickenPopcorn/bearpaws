@@ -4,9 +4,9 @@ import { georgeClassesOrder } from "./classPieces";
 import type { Song } from "./song";
 
 export const collections = [
-  { id: "classes", title: "George Bear’s Classes" },
-  { id: "songs", title: "Papa Bear’s Collections" },
-  { id: "pops", title: "Mama Bear’s Pops" },
+  { id: "classes", title: "George Bear’s Classes", icon: "🎒" },
+  { id: "songs", title: "Papa Bear’s Collections", icon: "🎼" },
+  { id: "pops", title: "Mama Bear’s Pops", icon: "🎤" },
 ] as const;
 export type CollectionId = (typeof collections)[number]["id"];
 const classIds = new Set(georgeClassesOrder);

@@ -51,7 +51,7 @@ export const SongLibrary = memo(function SongLibrary({
   return (
     <>
       <div className="nav-label">
-        My library <span>{songs.length}</span>
+        Library <span>{songs.length}</span>
       </div>
       <input
         type="search"
@@ -83,7 +83,10 @@ export const SongLibrary = memo(function SongLibrary({
               <svg viewBox="0 0 12 12" aria-hidden="true">
                 <path d="m4.5 2.5 3.5 3.5-3.5 3.5" />
               </svg>
-              <span>{group.title}</span>
+              <span className="library-section-icon" aria-hidden="true">
+                {group.icon}
+              </span>
+              <span className="library-section-title">{group.title}</span>
               <span className="library-section-count" aria-hidden="true">
                 {group.songs.length}
               </span>

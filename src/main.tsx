@@ -10,19 +10,14 @@ import { createRoot } from "react-dom/client";
 import { Studio } from "./controller";
 import { draw, pianoKeyAt } from "./render";
 import { watchCanvasRedraws } from "./canvasRedraw";
-import {
-  noteName,
-  suggestedFinger,
-  fingerNames,
-  type Hand,
-  type Song,
-} from "./song";
+import { noteName, type Hand, type Song } from "./song";
 import type { Feedback, Mode } from "./engine";
 import { FingerGuide } from "./FingerGuide";
 import { SongLibrary } from "./SongLibrary";
 import { PianoSoundControls } from "./PianoSoundControls";
 import { SheetTimeline } from "./SheetTimeline";
 import { LoopBoundInput } from "./LoopBoundInput";
+import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { isBuiltInSong } from "./lessons";
@@ -179,10 +174,10 @@ const PassagePanel = memo(function PassagePanel({
   loopEnd: number;
 }) {
   return (
-    <details className="panel" open>
-      <summary>
+    <section className="panel" aria-label="Tracks and passage">
+      <div className="panel-heading">
         Make it yours <span>Tracks & passage</span>
-      </summary>
+      </div>
       <div className="assignments">
         {song.tracks
           .filter((t) => t.count)
@@ -258,7 +253,7 @@ const PassagePanel = memo(function PassagePanel({
           Remove this local song
         </button>
       )}
-    </details>
+    </section>
   );
 });
 // `misses` grows in place, but always together with a new `recent` item.
@@ -388,7 +383,7 @@ const KeyboardHelp = memo(function KeyboardHelp() {
 });
 function App() {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
-  const [deviceOpen, setDeviceOpen] = useState(true),
+  const [deviceOpen, setDeviceOpen] = useState(false),
     [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const openImport = useCallback(() => file.current?.click(), []);
@@ -397,13 +392,7 @@ function App() {
   });
   const s = studio.settings,
     p = studio.practice,
-    playing = studio.transport.playing,
-    gate = p.gate,
-    waiting =
-      s.mode === "wait" &&
-      playing &&
-      !!gate &&
-      Math.abs(gate.start - studio.position) < 0.002;
+    playing = studio.transport.playing;
   const connected = studio.midi.status === "connected";
   const collection = collectionForSong(studio.song.id);
   const collectionSongs = songsInCollection(studio.songs, collection.id);
@@ -514,16 +503,26 @@ function App() {
         >
           <span className={`dot ${connected ? "connected" : ""}`} />
           {connected ? "Piano connected" : "Connect your piano"}
-          <span aria-hidden="true">⌄</span>
+          <svg
+            className="device-chevron"
+            viewBox="0 0 12 12"
+            aria-hidden="true"
+          >
+            <path d="m2.5 7.5 3.5-3.5 3.5 3.5" />
+          </svg>
         </button>
       </header>
+      {/* Connection changes are announced even while the panel is folded. */}
+      <p className="sr-only" role="status">
+        {studio.midi.message}
+      </p>
       {deviceOpen && (
         <section className="connection" aria-label="Piano connection">
           <div>
             <strong>
               {connected ? "Your piano is ready" : "Make room for music"}
             </strong>
-            <p role="status">{studio.midi.message}</p>
+            <p>{studio.midi.message}</p>
           </div>
           <div className="device-actions">
             {studio.midi.devices.length > 0 && (
@@ -629,7 +628,7 @@ function App() {
             </p>
           )}
           <FingerGuide song={studio.song} left={s.left} right={s.right} />
-          <div className={`workspace ${s.mode === "wait" ? "guided" : ""}`}>
+          <div className="workspace">
             <div
               id="piano-stage"
               ref={fullscreen.stage}
@@ -747,6 +746,16 @@ function App() {
                   {stageNotice}
                 </div>
               )}
+              {s.mode === "wait" && (
+                <p className="sr-only" aria-live="polite">
+                  {describeWaitTarget(
+                    studio.song,
+                    p.gate,
+                    studio.input.down,
+                    p.hit,
+                  )}
+                </p>
+              )}
               <SheetTimeline
                 song={studio.song}
                 position={studio.position}
@@ -796,71 +805,6 @@ function App() {
                 <Piano />
               </div>
             </div>
-            {s.mode === "wait" && (
-              <aside className="coach">
-                <div className="kicker">Let’s play together</div>
-                <h2>
-                  {waiting ? "Take your time." : "Find your first notes."}
-                </h2>
-                <p>
-                  {studio.song.lesson
-                    ? "Play the highlighted keys with the suggested fingers."
-                    : "Play the highlighted keys."}{" "}
-                  Release repeated notes before playing them again.
-                </p>
-                <div className="chord">
-                  {[
-                    ...new Map(
-                      (gate?.notes || []).map((n) => [
-                        `${n.track}:${n.pitch}`,
-                        n,
-                      ]),
-                    ).values(),
-                  ].map((note) => {
-                    const hand =
-                      studio.song.tracks.find((t) => t.id === note.track)
-                        ?.hand ?? "off";
-                    const finger = suggestedFinger(note, hand);
-                    return (
-                      <span
-                        className={`finger-note ${hand} ${studio.input.down.has(note.pitch) ? "held" : ""}`}
-                        key={`${note.track}:${note.pitch}`}
-                      >
-                        <small>{hand === "left" ? "Left" : "Right"}</small>
-                        <strong>{noteName(note.pitch)}</strong>
-                        {finger && (
-                          <small>
-                            {finger} · {fingerNames[finger]}
-                          </small>
-                        )}
-                      </span>
-                    );
-                  })}
-                </div>
-                <p className="small">
-                  {waiting
-                    ? "Hold all highlighted keys to move on."
-                    : "Next notes in your selected hands."}
-                </p>
-                <button
-                  disabled={studio.audio.loading}
-                  onClick={() => void studio.preview()}
-                >
-                  Hear next notes
-                </button>
-                <div className="coach-steps">
-                  <div>
-                    <b>1</b> Find the notes
-                  </div>
-                  <div>
-                    <b>2</b> Play the changes
-                  </div>
-                  <div>
-                    <b>3</b> Try Rhythm when ready
-                  </div>
-                </div>
-              </aside>
-            )}
           </div>
           <div className="settings-row">
             <label>
@@ -897,11 +841,6 @@ function App() {
             </span>
           </div>
           <section className="lower-grid">
-            <PassagePanel
-              song={studio.song}
-              loopStart={studio.loopStart}
-              loopEnd={studio.loopEnd}
-            />
             <PracticeReview
               recent={recent}
               misses={misses}
@@ -917,6 +856,11 @@ function App() {
               }
               attempts={studio.progress.attempts}
               best={studio.progress.best}
+            />
+            <PassagePanel
+              song={studio.song}
+              loopStart={studio.loopStart}
+              loopEnd={studio.loopEnd}
             />
           </section>
           <KeyboardHelp />

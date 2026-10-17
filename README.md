@@ -30,7 +30,7 @@ The library includes **26 beginner arrangements**, keeping **Ode to Joy** and
 **Dancing Raindrops** and adding familiar melodies such as Mary Had a Little Lamb,
 Twinkle, Twinkle, Little Star, London Bridge, Frère Jacques, and Jingle Bells.
 Each includes suggested finger numbers on the score, falling notes, active keys
-and Wait for me coach, plus starting hand positions. The simplest pieces stay
+and Wait for me practice, plus starting hand positions. The simplest pieces stay
 in C position; melodies with position changes explain the moves. Short themes
 and the Jingle Bells chorus are labelled as such. New arrangements use one held
 bass note per bar; Dancing Raindrops retains its supplied chords and articulation.
@@ -82,7 +82,7 @@ guessed finger numbers.
 4. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Import and Listen work without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
 5. Slow down (25–150%), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
-**Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. “Hear next notes” provides a reference without accepting the notes for you.
+**Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.
 
 **Rhythm** keeps moving and matches note onsets using MIDI event timestamps. Timing tolerance is configurable (±120, ±220 or ±350 ms of real time, independent of playback speed). Feedback identifies missed/wrong notes and early/late matched notes; click a missed note to loop a short passage around it. This MVP scores pitch and onset timing, not fingering or held-note duration.
 
@@ -121,7 +121,7 @@ Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, in
 - `src/controller.ts`: shared practice timeline, transport actions and local progress.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings/progress and IndexedDB song library.
-- `src/main.tsx`: Practice studio with the beginner Wait for me coach.
+- `src/main.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.
 
