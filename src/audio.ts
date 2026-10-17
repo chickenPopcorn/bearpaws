@@ -1,6 +1,13 @@
 import type { Note } from "./song";
 import type { Transport } from "./engine";
 import {
+  createPianoSoundBus,
+  DEFAULT_PIANO_SOUND,
+  normalizePianoSound,
+  type PianoSoundBus,
+  type PianoSoundSettings,
+} from "./pianoSound";
+import {
   pianoInstrument,
   pianoLevel,
   pianoPlaybackRate,
@@ -24,7 +31,8 @@ export class ReferenceAudio {
     gain: GainNode;
     file: string;
   }>();
-  private output: DynamicsCompressorNode | null = null;
+  private output: PianoSoundBus | null = null;
+  private sound: PianoSoundSettings = { ...DEFAULT_PIANO_SOUND };
   private pending = new Map<string, SampleRequest>();
   private reserved = new Map<string, number>();
   private pins = new Map<string, number>();
@@ -42,20 +50,17 @@ export class ReferenceAudio {
   eventTime(timestamp: number) {
     return this.now() + (timestamp - performance.now()) / 1000;
   }
+  setSound(settings: PianoSoundSettings) {
+    this.sound = normalizePianoSound(settings);
+    this.output?.setSound(this.sound);
+  }
   async unlock() {
     this.context ??= new AudioContext();
     this.error = "";
     try {
       await this.context.resume();
       if (!this.output) {
-        const output = this.context.createDynamicsCompressor();
-        output.threshold.value = -10;
-        output.knee.value = 12;
-        output.ratio.value = 4;
-        output.attack.value = 0.003;
-        output.release.value = 0.25;
-        output.connect(this.context.destination);
-        this.output = output;
+        this.output = createPianoSoundBus(this.context, this.sound);
       }
       this.playbackBlocked = false;
     } catch (error) {
@@ -259,7 +264,7 @@ export class ReferenceAudio {
       }),
     );
   }
-  stop(releasePrepared = true) {
+  stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) this.playbackFiles.clear();
     for (const v of this.voices) {
       try {
@@ -270,6 +275,14 @@ export class ReferenceAudio {
     }
     this.voices.clear();
     this.scheduled.clear();
+    try {
+      if (resetRoom) this.output?.reset();
+    } catch {
+      this.output?.dispose();
+      this.output = null;
+      this.playbackBlocked = true;
+      this.error = "The piano sound could not reset. Please try Play again.";
+    }
   }
   tone(pitch: number, velocity: number, when: number, duration: number) {
     const context = this.context;
@@ -309,7 +322,7 @@ export class ReferenceAudio {
       gain.gain.setValueAtTime(level, releaseAt);
       if (region.releaseSeconds < 100)
         gain.gain.setTargetAtTime(0, releaseAt, releaseTime);
-      source.connect(gain).connect(this.output ?? context.destination);
+      source.connect(gain).connect(this.output?.input ?? context.destination);
       const voice = { source, gain, file: region.file };
       this.voices.add(voice);
       source.onended = () => {
@@ -342,7 +355,9 @@ export class ReferenceAudio {
   schedule(notes: Note[], transport: Transport, enabled: boolean) {
     if (!enabled || !transport.playing || !this.context) return;
     if (this.cycle !== transport.cycle) {
-      this.stop(false);
+      // A loop changes scheduled notes but its room tail should keep ringing.
+      // Explicit pause, seek and song changes reset the room through stop().
+      this.stop(false, false);
       this.cycle = transport.cycle;
     }
     const now = this.now(),

@@ -28,6 +28,7 @@ vi.mock("../src/audio", () => ({
       if (env.prepareWait) await env.prepareWait;
     });
     setPlaybackNotes = vi.fn();
+    setSound = vi.fn();
     stop = vi.fn();
     schedule = vi.fn();
     tone = vi.fn();
@@ -58,6 +59,7 @@ vi.mock("../src/storage", () => ({
     reference: true,
     names: true,
     selected: "cadence-ode-to-joy-v1",
+    ambience: 0.22,
     ...((env.values.get("settings") as object) ?? {}),
   }),
   write: (key: string, value: unknown) => {
@@ -138,6 +140,72 @@ afterEach(() => {
 });
 
 describe("practice studio integration", () => {
+  it("restores sound preferences before audio starts and preserves them across songs", () => {
+    env.values.set("settings", { ambience: 0.43 });
+    const studio = create();
+    expect(studio.audio.setSound).toHaveBeenCalledWith({
+      ambience: 0.43,
+    });
+    studio.sound(0.31);
+    studio.load(builtInSongs()[1]);
+    expect(studio.settings).toMatchObject({
+      ambience: 0.31,
+    });
+    const restored = create();
+    expect(restored.audio.setSound).toHaveBeenCalledWith({
+      ambience: 0.31,
+    });
+  });
+
+  it("changes sound live without interrupting playback or resetting practice", async () => {
+    const studio = create(
+      song([
+        [60, 0],
+        [64, 2],
+      ]),
+    );
+    studio.mode("listen");
+    await studio.play();
+    advance(studio, 0.2);
+    const position = studio.position;
+    const epoch = studio.scoringEpoch;
+    const practice = studio.practice;
+    vi.mocked(studio.audio.stop).mockClear();
+    vi.mocked(studio.audio.prepare).mockClear();
+    studio.sound(0.6);
+    expect(studio.audio.setSound).toHaveBeenLastCalledWith({
+      ambience: 0.6,
+    });
+    expect(studio.audio.stop).not.toHaveBeenCalled();
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBe(position);
+    expect(studio.scoringEpoch).toBe(epoch);
+    expect(studio.practice).toBe(practice);
+  });
+
+  it("keeps a pending playback preparation alive when sound changes", async () => {
+    const studio = create(
+      song([
+        [60, 0],
+        [64, 2],
+      ]),
+    );
+    studio.mode("listen");
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const playing = studio.play();
+    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
+    const signal = vi.mocked(studio.audio.prepare).mock.calls[0][1]!;
+    studio.sound(0);
+    expect(signal.aborted).toBe(false);
+    finish();
+    await playing;
+    expect(studio.transport.playing).toBe(true);
+  });
+
   it("initializes once and recreates MIDI after the studio is restarted", async () => {
     const studio = create();
     const originalMidi = studio.midi;
@@ -1093,7 +1161,9 @@ describe("practice studio integration", () => {
     expect(studio.transport.loop).toEqual([0, fixture.duration]);
     studio.mode("listen");
     await studio.play();
+    vi.mocked(studio.audio.stop).mockClear();
     advance(studio, fixture.duration + 0.25);
+    expect(studio.audio.stop).toHaveBeenCalledExactlyOnceWith(false, false);
     expect(studio.transport.playing).toBe(true);
     expect(studio.position).toBeCloseTo(0.25);
   });

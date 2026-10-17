@@ -57,9 +57,11 @@ function fixture(loaded = true) {
   });
   const createGain = vi.fn(() => ({
     gain: {
+      value: 1,
       setValueAtTime: vi.fn(),
       linearRampToValueAtTime: vi.fn(),
       setTargetAtTime: vi.fn(),
+      cancelAndHoldAtTime: vi.fn(),
     },
     connect: vi.fn(function (this: unknown) {
       return this;
@@ -74,14 +76,53 @@ function fixture(loaded = true) {
     resume: vi.fn(async () => {}),
     createBufferSource,
     createGain,
+    createConvolver: vi.fn(() => ({
+      normalize: true,
+      buffer: null as AudioBuffer | null,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    })),
+    createBuffer: vi.fn((channels: number, length: number, rate: number) => {
+      const data = Array.from(
+        { length: channels },
+        () => new Float32Array(length),
+      );
+      return {
+        length,
+        sampleRate: rate,
+        numberOfChannels: channels,
+        getChannelData: (channel: number) => data[channel],
+      };
+    }),
     decodeAudioData: vi.fn(async () => buffer()),
     createDynamicsCompressor: vi.fn(() => ({
-      threshold: { value: 0 },
-      knee: { value: 0 },
-      ratio: { value: 0 },
-      attack: { value: 0 },
-      release: { value: 0 },
-      connect: vi.fn(),
+      threshold: {
+        value: 0,
+        cancelAndHoldAtTime: vi.fn(),
+        setTargetAtTime: vi.fn(),
+      },
+      knee: {
+        value: 0,
+        cancelAndHoldAtTime: vi.fn(),
+        setTargetAtTime: vi.fn(),
+      },
+      ratio: {
+        value: 0,
+        cancelAndHoldAtTime: vi.fn(),
+        setTargetAtTime: vi.fn(),
+      },
+      attack: {
+        value: 0,
+        cancelAndHoldAtTime: vi.fn(),
+        setTargetAtTime: vi.fn(),
+      },
+      release: {
+        value: 0,
+        cancelAndHoldAtTime: vi.fn(),
+        setTargetAtTime: vi.fn(),
+      },
+      connect: vi.fn((node: unknown) => node),
+      disconnect: vi.fn(),
     })),
   };
   const audio = new ReferenceAudio();
@@ -109,17 +150,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("bounded reference audio", () => {
-  it("reuses one limiter for playback and previews after repeated audio unlocks", async () => {
+  it("reuses the shared sound bus for playback and previews after repeated audio unlocks", async () => {
     const { audio, context } = fixture();
     await audio.unlock();
     await audio.unlock();
     expect(context.resume).toHaveBeenCalledTimes(2);
-    expect(context.createDynamicsCompressor).toHaveBeenCalledOnce();
+    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(2);
+    expect(context.createConvolver).toHaveBeenCalledOnce();
+    expect(context.createBuffer).toHaveBeenCalledOnce();
     const output = context.createDynamicsCompressor.mock.results[0].value;
-    expect(output.connect).toHaveBeenCalledOnce();
-    expect(output.connect).toHaveBeenCalledWith(context.destination);
+    const master = context.createGain.mock.results[2].value;
+    expect(master.connect).toHaveBeenCalledWith(context.destination);
     audio.tone(60, 0.8, 0, 1);
-    const gain = context.createGain.mock.results[0].value;
+    const gain = context.createGain.mock.results[3].value;
     expect(gain.connect).toHaveBeenCalledWith(output);
   });
 

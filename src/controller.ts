@@ -3,6 +3,7 @@ import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
 import { parseSong, type Song, type Hand } from "./song";
 import { builtInSongs, isBuiltInSong } from "./lessons";
+import { normalizePianoSound } from "./pianoSound";
 import {
   settings,
   write,
@@ -54,6 +55,9 @@ export class Studio {
   loopEnd = this.song.duration;
   timer: ReturnType<typeof setInterval> | null = null;
   constructor() {
+    this.audio.setSound({
+      ambience: this.settings.ambience,
+    });
     this.midi = this.createMidi();
     this.load(this.song);
   }
@@ -275,6 +279,13 @@ export class Studio {
     this.emit();
     if (resume) void this.play();
   }
+  sound(ambience: number) {
+    const sound = normalizePianoSound({ ambience });
+    this.settings.ambience = sound.ambience;
+    this.audio.setSound(sound);
+    this.persist();
+    this.emit();
+  }
   seek(position: number) {
     this.cancelPlaybackPreparation();
     this.audio.stop(!this.transport.playing);
@@ -400,7 +411,8 @@ export class Studio {
         this.settings.mode === "wait" ? this.practice.gate?.start : undefined,
       );
       if (cycle !== this.transport.cycle) {
-        this.audio.stop(false);
+        // Replace note scheduling without rebuilding the room on each pass.
+        this.audio.stop(false, false);
         this.scoringEpoch =
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();

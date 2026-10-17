@@ -65,6 +65,22 @@ it("migrates the removed 500ms tolerance to the widest available setting", () =>
   write("settings", { tolerance: 0.5 });
   expect(settings().tolerance).toBe(0.35);
 });
+it("preserves the room amount and discards the removed sound profile", () => {
+  expect(settings()).toMatchObject({ ambience: 0.22 });
+  write("settings", { soundProfile: "original", ambience: 0.37 });
+  expect(settings()).toMatchObject({
+    ambience: 0.37,
+  });
+  expect(settings()).not.toHaveProperty("soundProfile");
+});
+it.each([
+  [{ soundProfile: "unknown", ambience: "loud" }, { ambience: 0.22 }],
+  [{ soundProfile: "natural", ambience: -1 }, { ambience: 0 }],
+  [{ soundProfile: "original", ambience: 8 }, { ambience: 1 }],
+])("normalizes invalid sound preferences: %j", (saved, expected) => {
+  write("settings", saved);
+  expect(settings()).toMatchObject(expected);
+});
 it.each([undefined, { loop: null }, { loop: [1, 4] }])(
   "defaults new and legacy progress to looping on: %j",
   (saved) => {
