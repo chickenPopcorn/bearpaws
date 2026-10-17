@@ -95,9 +95,13 @@ function configure(
     node[key].value = settings[key];
 }
 export interface PianoSoundBus {
+  /** The dry path, behind the natural compressor. */
   input: AudioNode;
-  /** The dry path alone: sound sent here never reaches the room. */
-  dryInput: AudioNode;
+  /**
+   * The room, behind an identical compressor. Voices feed both inputs, so a
+   * voice can stop feeding the room without its dry sound changing.
+   */
+  roomInput: AudioNode;
   setSound(settings: PianoSoundSettings): void;
   reset(): void;
   dispose(): void;
@@ -124,6 +128,7 @@ export function createPianoSoundBus(
     const wet = remember(context.createGain());
     const safety = remember(context.createDynamicsCompressor());
     const master = remember(context.createGain());
+    const roomCompressor = remember(context.createDynamicsCompressor());
     const impulse = createRoomImpulse(context);
     const makeConvolver = () => {
       const node = context.createConvolver();
@@ -134,10 +139,11 @@ export function createPianoSoundBus(
     };
     convolver = makeConvolver();
     compressor.connect(dry).connect(safety);
-    compressor.connect(convolver);
+    roomCompressor.connect(convolver);
     wet.connect(safety);
     safety.connect(master).connect(context.destination);
     configure(compressor, NATURAL_COMPRESSOR);
+    configure(roomCompressor, NATURAL_COMPRESSOR);
     configure(safety, SAFETY_LIMITER);
     dry.gain.value = 1;
     master.gain.value = 0.92;
@@ -159,18 +165,18 @@ export function createPianoSoundBus(
     update(initial, true);
     return {
       input: compressor,
-      dryInput: dry,
+      roomInput: roomCompressor,
       setSound: (settings) => update(settings, false),
       reset: () => {
         // Reusing the impulse avoids regenerating it. A fresh processor flushes
         // the old room tail after a stop, seek or song change.
         if (convolver) {
-          compressor.disconnect(convolver);
+          roomCompressor.disconnect(convolver);
           convolver.disconnect();
           convolver = null;
         }
         convolver = makeConvolver();
-        compressor.connect(convolver);
+        roomCompressor.connect(convolver);
       },
       dispose,
     };

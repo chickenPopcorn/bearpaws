@@ -22,6 +22,8 @@ const LOOKAHEAD_SECONDS = 0.12;
 const FADE_SECONDS = 0.008;
 /** Six fade time constants leave less than 0.3% gain when the source stops. */
 const FADE_STOP_SECONDS = 0.05;
+/** A note at the voice cap may replace a voice once it starts within this time. */
+const DUE_SECONDS = 0.001;
 const MEMORY_MESSAGE =
   "This passage needs too many piano samples. Try one hand or a shorter loop.";
 /** The recordings that play these notes. */
@@ -41,10 +43,11 @@ interface Voice {
   source: AudioBufferSourceNode;
   gain: GainNode;
   file: string;
-  /** Context times of the attack, the scheduled stop, and the fade (if any). */
+  /** Context times of the attack and of the scheduled stop. */
   start: number;
   end: number;
-  fadeAt: number;
+  /** The room input this voice feeds, until a stop takes it out of the room. */
+  room?: AudioNode;
   /** The scheduled notes this voice plays, and the set that records them. */
   ids: readonly string[];
   pass: Set<string>;
@@ -306,7 +309,6 @@ export class ReferenceAudio {
   private fade(voice: Voice, at: number) {
     this.voices.delete(voice);
     this.fading.add(voice);
-    voice.fadeAt = at;
     // A voice that stops by itself first needs no fade.
     if (voice.end <= at) return;
     try {
@@ -321,35 +323,13 @@ export class ReferenceAudio {
       this.disconnect(voice);
     }
   }
-  /**
-   * Make room for a voice that starts at `when`: fade the oldest voice that
-   * started before it, at that attack. Fading any earlier would silence it
-   * before its replacement sounds.
-   */
-  private steal(when: number) {
+  /** Make room for a note that is due now: fade the oldest voice that started before it. */
+  private steal(now: number) {
     let oldest: Voice | undefined;
     for (const voice of this.voices)
-      if (voice.start < (oldest?.start ?? when)) oldest = voice;
-    if (oldest) this.fade(oldest, when);
+      if (voice.start < (oldest?.start ?? now)) oldest = voice;
+    if (oldest) this.fade(oldest, now);
     return oldest !== undefined;
-  }
-  /**
-   * Voices stolen for an attack that has not come yet. Each still holds its
-   * nodes until then, so they have their own cap: otherwise every attack in
-   * one lookahead window of a dense file could steal, and allocate, again.
-   */
-  private pendingSteals(now: number) {
-    let count = 0;
-    for (const voice of this.fading) if (voice.fadeAt > now) count++;
-    return count;
-  }
-  /**
-   * Voices that still play now: active ones, and ones stolen for a later
-   * attack, which sound until that attack.
-   */
-  private *playing(now: number) {
-    yield* this.voices;
-    for (const voice of this.fading) if (voice.fadeAt > now) yield voice;
   }
   /**
    * Cancel scheduled voices that have not started, so the next schedule()
@@ -358,7 +338,7 @@ export class ReferenceAudio {
    */
   reschedule() {
     const now = this.now();
-    for (const voice of [...this.playing(now)]) {
+    for (const voice of this.voices) {
       if (voice.start <= now || !voice.ids.length) continue;
       for (const id of voice.ids) voice.pass.delete(id);
       this.fade(voice, now);
@@ -367,7 +347,7 @@ export class ReferenceAudio {
   stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) this.playbackFiles.clear();
     const now = this.now();
-    for (const voice of [...this.playing(now)]) this.fade(voice, now);
+    for (const voice of this.voices) this.fade(voice, now);
     this.scheduled.clear();
     this.ahead.clear();
     this.aheadStart = Infinity;
@@ -376,11 +356,12 @@ export class ReferenceAudio {
     try {
       if (resetRoom && this.roomUsed && this.output) {
         // Fading voices would feed the fresh room and leave a new tail of the
-        // old passage. Let them finish on the dry path instead.
-        for (const voice of this.fading) {
-          voice.gain.disconnect();
-          voice.gain.connect(this.output.dryInput);
-        }
+        // old passage. They finish on the dry path, which is unchanged.
+        for (const voice of this.fading)
+          if (voice.room) {
+            voice.gain.disconnect(voice.room);
+            voice.room = undefined;
+          }
         this.output.reset();
         this.roomUsed = false;
       }
@@ -413,13 +394,18 @@ export class ReferenceAudio {
     const buffer = this.samples.get(region.file);
     if (!buffer) return true;
     // The cap includes future scheduled voices and previews: no entry point can
-    // bypass it. A dense pedalled passage replaces a sounding voice rather than
-    // going silent. A note is refused, to be tried on a later tick, only while
-    // every voice is waiting or too many steals are still ahead.
+    // bypass it. At the cap a dense pedalled passage replaces its oldest
+    // sounding voice rather than going silent, but only once the new note is
+    // due: stealing ahead would cut the old voice before its replacement
+    // sounds, and leave a deferred fade for stops and speed changes to chase.
+    // Fading voices hold their nodes until they end, so they are capped too.
+    // A refused note is tried again on a later tick, at most a tick late.
+    const now = context.currentTime;
     if (
       this.voices.size >= MAX_REFERENCE_VOICES &&
-      (this.pendingSteals(context.currentTime) >= MAX_REFERENCE_VOICES ||
-        !this.steal(when))
+      (when > now + DUE_SECONDS ||
+        this.fading.size >= MAX_REFERENCE_VOICES ||
+        !this.steal(now))
     )
       return false;
     let source: AudioBufferSourceNode | undefined, gain: GainNode | undefined;
@@ -447,7 +433,12 @@ export class ReferenceAudio {
       gain.gain.setValueAtTime(level, releaseAt);
       if (region.releaseSeconds < 100)
         gain.gain.setTargetAtTime(0, releaseAt, releaseTime);
-      source.connect(gain).connect(this.output?.input ?? context.destination);
+      source.connect(gain);
+      const room = this.output?.roomInput;
+      if (this.output && room) {
+        gain.connect(this.output.input);
+        gain.connect(room);
+      } else gain.connect(context.destination);
       this.roomUsed = true;
       // Seven time constants leaves less than 0.1% gain before cleanup.
       const sampleEnd = when + (buffer.duration - region.offset) / rate;
@@ -461,7 +452,7 @@ export class ReferenceAudio {
         file: region.file,
         start: when,
         end,
-        fadeAt: Infinity,
+        room,
         ids,
         pass,
       };
