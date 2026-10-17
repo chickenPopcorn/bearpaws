@@ -472,12 +472,14 @@ describe("practice studio integration", () => {
       else if (change === "seek") studio.seek(1);
       else advance(studio, 2.1);
       expect(studio.transport.playing).toBe(true);
-      expect(studio.audio.stop).toHaveBeenCalled();
+      if (change === "seek")
+        expect(studio.audio.stop).toHaveBeenCalledWith(false);
       expect(
         vi
           .mocked(studio.audio.stop)
           .mock.calls.every(([release]) => release === false),
       ).toBe(true);
+      expect(studio.audio.setPlaybackNotes).not.toHaveBeenCalledWith([]);
     },
   );
 
@@ -1245,8 +1247,11 @@ describe("practice studio integration", () => {
     studio.mode("listen");
     await studio.play();
     vi.mocked(studio.audio.stop).mockClear();
+    vi.mocked(studio.audio.schedule).mockClear();
     advance(studio, fixture.duration + 0.25);
-    expect(studio.audio.stop).toHaveBeenCalledExactlyOnceWith(false, false);
+    // Voices of the last pass end by the loop end, so the wrap lets them ring.
+    expect(studio.audio.stop).not.toHaveBeenCalled();
+    expect(studio.audio.schedule).toHaveBeenCalledOnce();
     expect(studio.transport.playing).toBe(true);
     expect(studio.position).toBeCloseTo(0.25);
   });

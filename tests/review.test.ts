@@ -930,6 +930,7 @@ function audioContext() {
     start: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     playbackRate: { value: number };
+    onended: (() => void) | null;
   }[] = [];
   const envelopes: {
     setTargetAtTime: ReturnType<typeof vi.fn>;
@@ -947,7 +948,7 @@ function audioContext() {
         stop: vi.fn(),
         connect: vi.fn(),
         disconnect: vi.fn(),
-        onended: null,
+        onended: null as (() => void) | null,
       };
       source.connect.mockImplementation((target) => target);
       sources.push(source);
@@ -959,6 +960,7 @@ function audioContext() {
           setValueAtTime: vi.fn(),
           linearRampToValueAtTime: vi.fn(),
           setTargetAtTime: vi.fn(),
+          cancelAndHoldAtTime: vi.fn(),
         },
         connect: vi.fn(),
         disconnect: vi.fn(),
@@ -1000,10 +1002,14 @@ describe("reference audio scheduling with a fake Web Audio context", () => {
     expect(sources).toHaveLength(1);
 
     context.currentTime = 10.2;
+    // Studio.seek stops the reference before it moves the transport.
+    audio.stop(false);
     transport.seek(0.2, context.currentTime);
     audio.schedule([n], transport, true);
     expect(sources).toHaveLength(2);
-    expect(sources[0].stop).toHaveBeenLastCalledWith();
+    expect(sources[0].stop.mock.lastCall![0]).toBeCloseTo(10.25);
+    expect(envelopes[0].disconnect).not.toHaveBeenCalled();
+    sources[0].onended!();
     expect(envelopes[0].disconnect).toHaveBeenCalled();
     expect(sources[1].start).toHaveBeenCalledWith(10.2, region.offset);
     expect(envelopes[1].setTargetAtTime.mock.calls[0][1]).toBeCloseTo(10.8);
@@ -1012,7 +1018,7 @@ describe("reference audio scheduling with a fake Web Audio context", () => {
     audio.stop();
     expect(audio.voices.size).toBe(0);
     expect(audio.scheduled.size).toBe(0);
-    expect(sources[1].stop).toHaveBeenLastCalledWith();
+    expect(sources[1].stop.mock.lastCall![0]).toBeCloseTo(10.25);
     audio.schedule([n], transport, true);
     expect(sources).toHaveLength(2);
   });

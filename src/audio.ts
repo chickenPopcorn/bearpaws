@@ -383,9 +383,10 @@ export class ReferenceAudio {
   schedule(notes: Note[], transport: Transport, enabled: boolean) {
     if (!enabled || !transport.playing || !this.context) return;
     if (this.cycle !== transport.cycle) {
-      // A loop changes scheduled notes but its room tail should keep ringing.
-      // Explicit pause, seek and song changes reset the room through stop().
-      this.stop(false, false);
+      // A new pass schedules its notes again. The last pass's voices end by
+      // the loop end, so they ring out, and so does the room tail. Explicit
+      // pause, seek and song changes fade voices and reset the room in stop().
+      this.scheduled = new Set();
       this.cycle = transport.cycle;
     }
     const now = this.now(),

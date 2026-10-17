@@ -143,7 +143,7 @@ describe("synthetic room impulse", () => {
 });
 
 describe("shared reference sound bus", () => {
-  it("reuses the room processor across automatic loop boundaries and cycle changes", async () => {
+  it("lets voices ring and reuses the room processor across automatic loop wraps", async () => {
     const { context, audioContext } = contextFixture();
     const audio = new ReferenceAudio();
     audio.context = audioContext;
@@ -165,16 +165,22 @@ describe("shared reference sound bus", () => {
         channel: 0,
       },
     ];
+    const sources = () =>
+      context.createBufferSource.mock.results.map((result) => result.value);
     for (let iteration = 0; iteration < 20; iteration++) {
       context.currentTime = iteration;
+      // The browser ends each source at its scheduled stop time.
+      for (const source of sources())
+        if (source.stop.mock.lastCall![0] <= iteration) source.onended?.();
       transport.update(iteration);
-      // Studio stops the previous cycle before the next scheduling pass.
-      audio.stop(false, false);
       audio.schedule(notes, transport, true);
       expect(audio.scheduled.has("loop-note")).toBe(true);
-      expect(audio.voices.size).toBe(1);
     }
     expect(context.createBufferSource).toHaveBeenCalledTimes(20);
+    // A wrap leaves the last pass's release ringing instead of cutting it.
+    for (const source of sources()) expect(source.stop).toHaveBeenCalledOnce();
+    expect(audio.voices.size).toBeGreaterThan(1);
+    expect(audio.voices.size).toBeLessThan(5);
     expect(context.createConvolver).toHaveBeenCalledOnce();
     expect(context.createBuffer).toHaveBeenCalledOnce();
     // Explicit pause/seek still removes the previous passage's room tail.

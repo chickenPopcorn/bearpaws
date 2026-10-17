@@ -443,8 +443,6 @@ export class Studio {
     if (playing) {
       this.position = this.transport.update(now, this.waitGate);
       if (cycle !== this.transport.cycle) {
-        // Replace note scheduling without rebuilding the room on each pass.
-        this.audio.stop(false, false);
         this.passEpoch =
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();
