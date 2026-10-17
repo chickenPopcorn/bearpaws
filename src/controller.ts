@@ -28,7 +28,10 @@ export class Studio {
   private selectedNotes: Song["notes"] = [];
   scoringEpoch = 0;
   songs = builtInSongs();
-  song = this.songs[0];
+  // Loading writes the selection, so start on the saved built-in song (if
+  // any) rather than overwrite it before the library loads, or fails to.
+  song =
+    this.songs.find((song) => song.id === this.savedSelection) ?? this.songs[0];
   audio = new ReferenceAudio();
   input = new MidiState();
   transport = new Transport(this.song.duration);

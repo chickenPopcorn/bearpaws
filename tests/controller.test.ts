@@ -1209,6 +1209,20 @@ describe("practice studio integration", () => {
     expect(restored.transport.loop).toEqual([0.5, 2.5]);
   });
 
+  it("keeps the saved built-in song when the local library is unavailable", async () => {
+    const saved = builtInSongs()[2];
+    env.values.set("settings", { selected: saved.id });
+    const studio = new Studio();
+    active.push(studio);
+    expect(studio.song.id).toBe(saved.id);
+    expect(env.values.get("settings")).toMatchObject({ selected: saved.id });
+    vi.mocked(library).mockRejectedValueOnce(new Error("blocked"));
+    await studio.init();
+    expect(studio.song.id).toBe(saved.id);
+    expect(studio.storageNotice).toMatch(/unavailable/);
+    expect(env.values.get("settings")).toMatchObject({ selected: saved.id });
+  });
+
   it("restores the previously selected imported song after loading the local library", async () => {
     const imported = song([[60, 1]], "imported");
     env.values.set("settings", { selected: "imported" });
