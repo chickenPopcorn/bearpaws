@@ -1,6 +1,10 @@
 import { useEffect, useEffectEvent, useState } from "react";
-import { isBuiltInSong } from "./lessons";
-import { collections, collectionForSong } from "./collections";
+import {
+  collections,
+  collectionForSong,
+  songsInCollection,
+  type CollectionId,
+} from "./collections";
 import type { Song } from "./song";
 
 const searchText = (text: string) =>
@@ -9,6 +13,11 @@ const songMatches = (song: Song, term: string) =>
   searchText(
     `${song.title} ${song.lesson?.composer ?? song.source?.composer ?? ""}`,
   ).includes(term);
+const allExpanded = () =>
+  Object.fromEntries(collections.map(({ id }) => [id, true])) as Record<
+    CollectionId,
+    boolean
+  >;
 
 export function SongLibrary({
   songs,
@@ -22,11 +31,7 @@ export function SongLibrary({
   onImport(): void;
 }) {
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState({
-    classes: true,
-    songs: true,
-    pops: true,
-  });
+  const [expanded, setExpanded] = useState(allExpanded);
   const revealSelection = useEffectEvent(() => {
     const group = collectionForSong(selected).id;
     setExpanded((current) => ({ ...current, [group]: true }));
@@ -41,7 +46,7 @@ export function SongLibrary({
   const term = searchText(query.trim());
   const groups = collections.map((group) => ({
     ...group,
-    songs: songs.filter((song) => collectionForSong(song.id).id === group.id),
+    songs: songsInCollection(songs, group.id),
   }));
   return (
     <>
@@ -57,8 +62,7 @@ export function SongLibrary({
         onChange={(event) => {
           const value = event.target.value;
           setQuery(value);
-          if (value.trim())
-            setExpanded({ classes: true, songs: true, pops: true });
+          if (value.trim()) setExpanded(allExpanded());
         }}
       />
       {groups.map((group) => {
@@ -99,9 +103,7 @@ export function SongLibrary({
                         ? `${song.lesson.level} · ${song.lesson.bpm} BPM · Fingering`
                         : song.source
                           ? "Full piano · No finger numbers"
-                          : isBuiltInSong(song.id)
-                            ? "Original exercise · Both hands"
-                            : "Imported MIDI · On this browser"}
+                          : "Imported MIDI · On this browser"}
                     </small>
                   </button>
                 ))}

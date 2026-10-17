@@ -22,7 +22,7 @@ import { LoopBoundInput } from "./LoopBoundInput";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { isBuiltInSong } from "./lessons";
-import { collectionForSong } from "./collections";
+import { collectionForSong, songsInCollection } from "./collections";
 import "./style.css";
 const studio = new Studio();
 const stamp = (t: number) =>
@@ -119,14 +119,10 @@ function Piano() {
     />
   );
 }
-function PracticeControls({
-  className = "toolbar-preferences",
-}: {
-  className?: string;
-}) {
+function PracticeControls() {
   const s = studio.settings;
   return (
-    <div className={className}>
+    <div className="toolbar-preferences">
       <div className="tabs" role="group" aria-label="Practice mode">
         {(["listen", "wait", "rhythm"] as const).map((mode) => (
           <button
@@ -175,10 +171,9 @@ function App() {
       playing &&
       !!gate &&
       Math.abs(gate.start - studio.position) < 0.002;
+  const connected = studio.midi.status === "connected";
   const collection = collectionForSong(studio.song.id);
-  const collectionSongs = studio.songs.filter(
-    (song) => collectionForSong(song.id).id === collection.id,
-  );
+  const collectionSongs = songsInCollection(studio.songs, collection.id);
   const songIndex = collectionSongs.findIndex(
     (song) => song.id === studio.song.id,
   );
@@ -234,11 +229,7 @@ function App() {
   }, []);
   const stageNotice = studio.audio.loading
     ? "Loading grand piano sound…"
-    : studio.notice === "That’s it. Follow the next notes." ||
-        studio.notice ===
-          "Passage complete. Review your notes below, or restart."
-      ? ""
-      : studio.notice;
+    : studio.notice;
   const startPlayback = async () => {
     setBusy(true);
     try {
@@ -292,12 +283,8 @@ function App() {
           aria-expanded={deviceOpen}
           onClick={() => setDeviceOpen(!deviceOpen)}
         >
-          <span
-            className={`dot ${studio.midi.status === "connected" ? "connected" : ""}`}
-          />
-          {studio.midi.status === "connected"
-            ? "Piano connected"
-            : "Connect your piano"}
+          <span className={`dot ${connected ? "connected" : ""}`} />
+          {connected ? "Piano connected" : "Connect your piano"}
           <span aria-hidden="true">⌄</span>
         </button>
       </header>
@@ -305,9 +292,7 @@ function App() {
         <section className="connection" aria-label="Piano connection">
           <div>
             <strong>
-              {studio.midi.status === "connected"
-                ? "Your piano is ready"
-                : "Make room for music"}
+              {connected ? "Your piano is ready" : "Make room for music"}
             </strong>
             <p role="status">{studio.midi.message}</p>
           </div>
@@ -390,8 +375,6 @@ function App() {
                   </>
                 ) : studio.song.lesson ? (
                   `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
-                ) : isBuiltInSong(studio.song.id) ? (
-                  "An original beginning · Chords, changes & a simple melody"
                 ) : (
                   `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`
                 )}
@@ -452,9 +435,7 @@ function App() {
                     className="square"
                     aria-label="Restart passage"
                     title="Restart passage"
-                    onClick={() =>
-                      studio.seek(studio.loopEnabled ? studio.loopStart : 0)
-                    }
+                    onClick={() => studio.seek(0)}
                   >
                     ↺
                   </button>
@@ -677,11 +658,7 @@ function App() {
               <input
                 type="checkbox"
                 checked={s.names}
-                onChange={(e) => {
-                  s.names = e.target.checked;
-                  studio.persist();
-                  studio.emit();
-                }}
+                onChange={(e) => studio.names(e.target.checked)}
               />{" "}
               Note names
             </label>
@@ -811,7 +788,7 @@ function App() {
               </p>
               {misses.length > 0 && (
                 <div className="misses">
-                  {misses.slice(0, 6).map((m, i) => (
+                  {misses.map((m, i) => (
                     <button
                       key={i}
                       title="Replay around this missed note"

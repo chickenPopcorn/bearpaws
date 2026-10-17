@@ -278,6 +278,11 @@ export class Studio {
     this.persist();
     this.emit();
   }
+  names(enabled: boolean) {
+    this.settings.names = enabled;
+    this.persist();
+    this.emit();
+  }
   tolerance(value: number) {
     this.settings.tolerance = value;
     this.persist();
@@ -452,7 +457,7 @@ export class Studio {
         // The transport has finished, but the final piano release can still
         // be ringing. Explicit pause/seek/song changes continue to stop audio.
         this.audio.setPlaybackNotes([]);
-        this.notice = "Passage complete. Review your notes below, or restart.";
+        this.notice = "";
         this.save();
       }
       if (now - this.lastSave > 1) {
@@ -488,7 +493,7 @@ export class Studio {
         );
         if (advanced) {
           this.transport.seek(this.position, now);
-          this.notice = "That’s it. Follow the next notes.";
+          this.notice = "";
         }
       }
     }

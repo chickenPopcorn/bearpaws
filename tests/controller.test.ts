@@ -427,7 +427,7 @@ describe("practice studio integration", () => {
       vi.mocked(studio.audio.stop).mockClear();
       advance(studio, 4 / speed + 0.001);
       expect(studio.transport.playing).toBe(false);
-      expect(studio.notice).toMatch(/Passage complete/);
+      expect(studio.notice).toBe("");
       expect(studio.audio.stop).not.toHaveBeenCalled();
       studio.pause();
       expect(studio.audio.stop).toHaveBeenCalledOnce();
