@@ -21,6 +21,9 @@ import {
   isNotePlayed,
   pitchPosition,
   rhythmForBeats,
+  SCORE_INSET,
+  SCORE_MARGIN,
+  SCORE_PREFIX,
   scoreTimeAtX,
   scoreViewport,
   type ScoreNote,
@@ -307,21 +310,19 @@ export function SheetTimeline({
     // stretching the notes or leaving empty margins beside the staffs.
     (size.width * bounds.height) / size.height,
   );
-  const prefix = 88;
   const viewport: ScoreViewport = frozen || following;
-  const window = viewport;
   const { viewWidth, measureWidth } = viewport;
   const noteX = (measure: number, offset: number) =>
-    prefix +
-    (measure - window.first) * measureWidth +
-    24 +
+    SCORE_PREFIX +
+    (measure - viewport.first) * measureWidth +
+    SCORE_INSET +
     (offset / score.meter.measureAt(measure).length) * measureWidth;
   const layout = useMemo(() => {
     const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
     const drawn: DrawNote[] = [];
     const rests: { x: number; y: number; beats: number; key: string }[] = [];
     let condensed = false;
-    for (let measure = window.first; measure < window.last; measure++) {
+    for (let measure = viewport.first; measure < viewport.last; measure++) {
       const barLength = score.meter.measureAt(measure).length;
       const bar = (score.measures.get(measure) || []).filter((item) => {
         const hand = hands.get(item.note.track);
@@ -330,7 +331,7 @@ export function SheetTimeline({
       // Bound even a malicious/dense MIDI with thousands of notes on one beat.
       const limit = Math.min(
         80,
-        Math.floor(240 / (window.last - window.first)),
+        Math.floor(240 / (viewport.last - viewport.first)),
       );
       condensed ||= bar.length > limit;
       const visible =
@@ -414,7 +415,8 @@ export function SheetTimeline({
             rests.push({
               x:
                 beats === barLength
-                  ? prefix + (measure - window.first + 0.5) * measureWidth
+                  ? SCORE_PREFIX +
+                    (measure - viewport.first + 0.5) * measureWidth
                   : noteX(measure, start),
               y: hand === "right" ? 84 : 192,
               beats,
@@ -431,8 +433,8 @@ export function SheetTimeline({
     };
   }, [
     score,
-    window.first,
-    window.last,
+    viewport.first,
+    viewport.last,
     measureWidth,
     handSignature,
     song.lesson,
@@ -440,17 +442,17 @@ export function SheetTimeline({
 
   const beatInMeasure = Math.max(0, beat - currentBar.start);
   const marker = Math.max(
-    prefix,
+    SCORE_PREFIX,
     Math.min(
-      viewWidth - 15,
+      viewWidth - SCORE_MARGIN,
       noteX(currentMeasure, Math.min(currentBar.length, beatInMeasure)) -
         viewport.offset,
     ),
   );
   const countIn = beat < -0.001;
   const bars = Array.from(
-    { length: window.last - window.first },
-    (_, index) => window.first + index,
+    { length: viewport.last - viewport.first },
+    (_, index) => viewport.first + index,
   );
   const seekPointer = (
     event: PointerEvent<SVGSVGElement>,
@@ -479,11 +481,11 @@ export function SheetTimeline({
     const local = point.matrixTransform(matrix.inverse());
     // The clef/count-in area also provides a way back to the very beginning.
     const time =
-      axis.first === 0 && local.x <= prefix
+      axis.first === 0 && local.x <= SCORE_PREFIX
         ? 0
         : scoreTimeAtX(
             local.x,
-            { ...axis, beatsPerBar: score.meter },
+            { ...axis, meter: score.meter },
             score.clock,
             score.leadInBeats,
             song.duration,
@@ -571,7 +573,7 @@ export function SheetTimeline({
         aria-label={
           onSeek
             ? "Song position on sheet music"
-            : `Piano score, bars ${window.first + 1} to ${window.last}. Played and past notes fade to half opacity.`
+            : `Piano score, bars ${viewport.first + 1} to ${viewport.last}. Played and past notes fade to half opacity.`
         }
         aria-valuemin={onSeek ? 0 : undefined}
         aria-valuemax={onSeek ? song.duration : undefined}
@@ -593,16 +595,16 @@ export function SheetTimeline({
         <defs>
           <clipPath id={clipId}>
             <rect
-              x={prefix}
+              x={SCORE_PREFIX}
               y={bounds.minimum}
-              width={viewWidth - prefix - 15}
+              width={viewWidth - SCORE_PREFIX - SCORE_MARGIN}
               height={bounds.height}
             />
           </clipPath>
         </defs>
         <g className="sheet-staff-line" fill="none">
           {[64, 74, 84, 94, 104, 172, 182, 192, 202, 212].map((y) => (
-            <line key={y} x1={30} x2={viewWidth - 15} y1={y} y2={y} />
+            <line key={y} x1={30} x2={viewWidth - SCORE_MARGIN} y1={y} y2={y} />
           ))}
           <path d="M 27 64 Q 17 74 23 108 Q 27 132 18 138 Q 27 144 23 168 Q 17 202 27 212" />
         </g>
@@ -640,7 +642,8 @@ export function SheetTimeline({
             transform={`translate(${-viewport.offset} 0)`}
           >
             {bars.map((measure) => {
-              const left = prefix + (measure - window.first) * measureWidth;
+              const left =
+                SCORE_PREFIX + (measure - viewport.first) * measureWidth;
               const bar = score.meter.measureAt(measure);
               return (
                 <g key={measure}>

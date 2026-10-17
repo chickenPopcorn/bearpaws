@@ -1,46 +1,11 @@
 import type { Mode } from "./engine";
-import type { Note, Song, Tempo } from "./song";
+import type { Note, Song } from "./song";
+import { createBeatClock, lastIndexAtOrBefore } from "./timeline";
 
-/** The inverse of the MIDI tick clock, so the staff follows tempo changes. */
-export function createBeatClock(ppq: number, changes: Tempo[]) {
-  const resolution = ppq > 0 ? ppq : 480;
-  const sorted = [{ tick: 0, microseconds: 500000 }, ...changes].sort(
-    (a, b) => a.tick - b.tick,
-  );
-  let seconds = 0,
-    lastTick = 0,
-    tempo = 500000;
-  const segments = sorted.map((change) => {
-    seconds += ((change.tick - lastTick) * tempo) / resolution / 1e6;
-    lastTick = change.tick;
-    tempo = change.microseconds;
-    return {
-      beat: change.tick / resolution,
-      seconds,
-      secondsPerBeat: change.microseconds / 1e6,
-    };
-  });
-  const find = (value: number, key: "beat" | "seconds") => {
-    let low = 0,
-      high = segments.length;
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (segments[middle][key] <= value) low = middle + 1;
-      else high = middle;
-    }
-    return segments[Math.max(0, low - 1)];
-  };
-  return {
-    at(time: number) {
-      const segment = find(time, "seconds");
-      return segment.beat + (time - segment.seconds) / segment.secondsPerBeat;
-    },
-    time(beat: number) {
-      const segment = find(beat, "beat");
-      return segment.seconds + (beat - segment.beat) * segment.secondsPerBeat;
-    },
-  };
-}
+/** Horizontal score layout: clef and meter prefix, first-note inset, right margin. */
+export const SCORE_PREFIX = 88;
+export const SCORE_INSET = 24;
+export const SCORE_MARGIN = 15;
 
 export interface Rhythm {
   beats: number;
@@ -167,16 +132,8 @@ export function createMeterMap(
     if (beat === previous.beat) segments[segments.length - 1] = segment;
     else segments.push(segment);
   }
-  const find = (value: number, key: "beat" | "measure") => {
-    let low = 0,
-      high = segments.length;
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (segments[middle][key] <= value) low = middle + 1;
-      else high = middle;
-    }
-    return Math.max(0, low - 1);
-  };
+  const find = (value: number, key: "beat" | "measure") =>
+    Math.max(0, lastIndexAtOrBefore(segments, key, value));
   const measureAt = (index: number) => {
     const measure = Math.max(0, Math.floor(index));
     const segmentIndex = find(measure, "measure");
@@ -208,20 +165,15 @@ export function createMeterMap(
     const bar = measureAt(coordinate);
     return bar.start + (Math.max(0, coordinate) - bar.measure) * bar.length;
   };
-  return { at, measureAt, coordinate, beatAt };
+  return { leadIn, at, measureAt, coordinate, beatAt };
 }
 
-type MeterAxis = number | ReturnType<typeof createMeterMap>;
-const measureCoordinate = (beat: number, meter: MeterAxis) =>
-  typeof meter === "number" ? beat / meter : meter.coordinate(beat);
-const beatAtCoordinate = (measure: number, meter: MeterAxis) =>
-  typeof meter === "number" ? measure * meter : meter.beatAt(measure);
+type MeterMap = ReturnType<typeof createMeterMap>;
 
 export function buildScore(song: Song) {
   const clock = createBeatClock(song.ppq, song.tempos);
   const meter = createMeterMap(song);
-  const beatsPerBar = meter.measureAt(0).beatsPerBar;
-  const leadInBeats = Math.max(0, song.leadInBeats || 0);
+  const leadInBeats = meter.leadIn;
   const measures = new Map<number, ScoreNote[]>();
   let lastBeat = 0;
   for (const note of song.notes) {
@@ -255,7 +207,6 @@ export function buildScore(song: Song) {
   return {
     clock,
     meter,
-    beatsPerBar,
     leadInBeats,
     measureCount: Math.max(
       1,
@@ -265,26 +216,18 @@ export function buildScore(song: Song) {
   };
 }
 
-/** A bounded, following window; a very long MIDI never creates a huge SVG. */
-export function scoreWindow(measure: number, total: number, count = 3) {
-  const size = Math.max(1, Math.min(Math.floor(count), Math.max(1, total)));
-  const current = Math.max(0, Math.min(total - 1, Math.floor(measure)));
-  const first = Math.max(0, Math.min(current - 1, total - size));
-  return { first, last: first + size };
-}
-
 /** Follow the music continuously, retaining one extra bar at the incoming edge. */
 export function scoreViewport(
   beat: number,
   total: number,
-  beatsPerBar: MeterAxis,
+  meter: MeterMap,
   count = 3,
   width = 960,
 ) {
   const measures = Math.max(1, Math.floor(total));
   const size = Math.max(1, Math.min(Math.floor(count), measures));
   const viewWidth = Math.max(320, width);
-  const available = viewWidth - 88 - 15;
+  const available = viewWidth - SCORE_PREFIX - SCORE_MARGIN;
   // Leave room for the opening inset and the final note's head and label.
   const measureWidth = (available - 48) / size;
   // Let the opening notes move across the page, then hold the reading position
@@ -293,8 +236,8 @@ export function scoreViewport(
     0,
     Math.min(
       (measures - size) * measureWidth,
-      measureCoordinate(Math.max(0, beat), beatsPerBar) * measureWidth +
-        24 -
+      meter.coordinate(Math.max(0, beat)) * measureWidth +
+        SCORE_INSET -
         available * 0.34,
     ),
   );
@@ -314,18 +257,19 @@ export function scoreBeatAtX(
   firstMeasure: number,
   lastMeasure: number,
   measureWidth: number,
-  beatsPerBar: MeterAxis,
-  prefix = 88,
+  meter: MeterMap,
   offset = 0,
 ) {
   const last = Math.max(firstMeasure + 1, lastMeasure);
   const width = Math.max(36, measureWidth);
-  return beatAtCoordinate(
+  return meter.beatAt(
     Math.max(
       firstMeasure,
-      Math.min(last, firstMeasure + (x + offset - prefix - 24) / width),
+      Math.min(
+        last,
+        firstMeasure + (x + offset - SCORE_PREFIX - SCORE_INSET) / width,
+      ),
     ),
-    beatsPerBar,
   );
 }
 
@@ -335,7 +279,7 @@ export function scoreTimeAtX(
     first: number;
     last: number;
     measureWidth: number;
-    beatsPerBar: MeterAxis;
+    meter: MeterMap;
     offset?: number;
   },
   clock: ReturnType<typeof createBeatClock>,
@@ -347,8 +291,7 @@ export function scoreTimeAtX(
     axis.first,
     axis.last,
     axis.measureWidth,
-    axis.beatsPerBar,
-    88,
+    axis.meter,
     axis.offset,
   );
   return Math.max(0, Math.min(duration, clock.time(beat + leadInBeats)));

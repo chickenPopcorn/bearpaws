@@ -1,4 +1,5 @@
 import { parseMidi } from "midi-file";
+import { createBeatClock, lastIndexAtOrBefore } from "./timeline";
 export type Hand = "left" | "right" | "off";
 export type Finger = 1 | 2 | 3 | 4 | 5;
 export interface Note {
@@ -139,32 +140,10 @@ function preflightTrack(
   }
 }
 
+/** Seconds at a MIDI tick. */
 export function tempoConverter(ppq: number, changes: Tempo[]) {
-  const sorted = [{ tick: 0, microseconds: 500000 }, ...changes].sort(
-    (a, b) => a.tick - b.tick,
-  );
-  const segments: { tick: number; microseconds: number; seconds: number }[] =
-    [];
-  let seconds = 0,
-    last = 0,
-    tempo = 500000;
-  for (const t of sorted) {
-    seconds += ((t.tick - last) * tempo) / ppq / 1e6;
-    segments.push({ ...t, seconds });
-    last = t.tick;
-    tempo = t.microseconds;
-  }
-  return (tick: number) => {
-    let lo = 0,
-      hi = segments.length;
-    while (lo < hi) {
-      const m = (lo + hi) >>> 1;
-      if (segments[m].tick <= tick) lo = m + 1;
-      else hi = m;
-    }
-    const s = segments[Math.max(0, lo - 1)];
-    return s.seconds + ((tick - s.tick) * s.microseconds) / ppq / 1e6;
-  };
+  const clock = createBeatClock(ppq, changes);
+  return (tick: number) => clock.time(tick / ppq);
 }
 export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
   if (bytes.length > 10 * 1024 * 1024)
@@ -345,16 +324,8 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     intervals.set(channel, list);
   }
   for (const n of notes) {
-    n.soundEnd = n.end;
     const list = intervals.get(n.channel) || [];
-    let lo = 0,
-      hi = list.length;
-    while (lo < hi) {
-      const m = (lo + hi) >>> 1;
-      if (list[m].start <= n.end) lo = m + 1;
-      else hi = m;
-    }
-    const interval = list[lo - 1];
+    const interval = list[lastIndexAtOrBefore(list, "start", n.end)];
     if (interval && n.end < interval.end) n.soundEnd = interval.end;
   }
   if (!notes.length)

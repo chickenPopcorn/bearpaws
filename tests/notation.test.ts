@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   buildScore,
-  createBeatClock,
   createMeterMap,
   isNotePlayed,
   pitchPosition,
   rhythmForBeats,
   scoreBeatAtX,
   scoreTimeAtX,
-  scoreWindow,
   scoreViewport,
 } from "../src/notation";
 import { builtInSongs } from "../src/lessons";
 import { tempoConverter, type Note, type Song } from "../src/song";
+import { createBeatClock } from "../src/timeline";
+
+/** A constant meter with no count-in. */
+const bars = (beatsPerBar: number) => createMeterMap({ ppq: 480, beatsPerBar });
 
 function note(id: string, start: number, end: number): Note {
   return {
@@ -99,7 +101,6 @@ describe("meter-aware score geometry", () => {
           viewport.last,
           viewport.measureWidth,
           meter,
-          88,
           viewport.offset,
         ),
       ).toBeCloseTo(beat, 8);
@@ -278,23 +279,9 @@ describe("sheet timeline progress", () => {
 });
 
 describe("bounded score rendering", () => {
-  it("keeps the current measure visible and clamps a three-measure window at both ends", () => {
-    expect(scoreWindow(0, 10, 3)).toEqual({ first: 0, last: 3 });
-    expect(scoreWindow(9, 10, 3)).toEqual({ first: 7, last: 10 });
-    expect(scoreWindow(0, 1, 3)).toEqual({ first: 0, last: 1 });
-    for (let measure = 0; measure < 10; measure++) {
-      const { first, last } = scoreWindow(measure, 10, 3);
-      expect(first).toBeGreaterThanOrEqual(0);
-      expect(last).toBeLessThanOrEqual(10);
-      expect(last - first).toBeLessThanOrEqual(3);
-      expect(measure).toBeGreaterThanOrEqual(first);
-      expect(measure).toBeLessThan(last);
-    }
-  });
-
   it("scrolls continuously across bars and when the rendered measure window rebases", () => {
     const screenX = (beat: number, noteBeat: number) => {
-      const viewport = scoreViewport(beat, 12, 4);
+      const viewport = scoreViewport(beat, 12, bars(4));
       return (
         88 +
         24 +
@@ -306,13 +293,13 @@ describe("bounded score rendering", () => {
     const afterBar = screenX(8.001, 12);
     expect(Math.abs(afterBar - beforeBar)).toBeLessThan(1);
 
-    const initial = scoreViewport(0, 12, 4);
+    const initial = scoreViewport(0, 12, bars(4));
     const rebaseBeat =
       ((initial.measureWidth + (initial.viewWidth - 103) * 0.34 - 24) /
         initial.measureWidth) *
       4;
-    const before = scoreViewport(rebaseBeat - 0.001, 12, 4);
-    const after = scoreViewport(rebaseBeat + 0.001, 12, 4);
+    const before = scoreViewport(rebaseBeat - 0.001, 12, bars(4));
+    const after = scoreViewport(rebaseBeat + 0.001, 12, bars(4));
     expect(after.first).toBe(before.first + 1);
     expect(
       Math.abs(
@@ -323,15 +310,15 @@ describe("bounded score rendering", () => {
 
   it("clamps smooth scrolling at both ends and renders only the viewport plus one extra bar", () => {
     for (const count of [1, 2, 3]) {
-      const start = scoreViewport(-10, 12, 4, count, 960);
+      const start = scoreViewport(-10, 12, bars(4), count, 960);
       expect(start.first).toBe(0);
       expect(start.offset).toBe(0);
-      const end = scoreViewport(10_000, 12, 4, count, 960);
+      const end = scoreViewport(10_000, 12, bars(4), count, 960);
       expect(end.first).toBe(12 - count);
       expect(end.last).toBe(12);
       expect(end.offset).toBeCloseTo(0);
       for (let beat = 0; beat <= 48; beat += 0.125) {
-        const viewport = scoreViewport(beat, 12, 4, count, 960);
+        const viewport = scoreViewport(beat, 12, bars(4), count, 960);
         expect(viewport.first).toBeGreaterThanOrEqual(0);
         expect(viewport.last).toBeLessThanOrEqual(12);
         expect(viewport.last - viewport.first).toBeLessThanOrEqual(count + 1);
@@ -339,7 +326,7 @@ describe("bounded score rendering", () => {
         expect(viewport.offset).toBeLessThan(viewport.measureWidth + 0.000001);
       }
     }
-    const short = scoreViewport(10, 1, 4, 3, 320);
+    const short = scoreViewport(10, 1, bars(4), 3, 320);
     expect(short).toMatchObject({
       first: 0,
       last: 1,
@@ -355,7 +342,7 @@ describe("bounded score rendering", () => {
   ])(
     "leaves room for the final short note at a %s-bar viewport",
     (count, width) => {
-      const viewport = scoreViewport(32, 8, 4, count, width);
+      const viewport = scoreViewport(32, 8, bars(4), count, width);
       for (const duration of [0.25, 0.0625]) {
         const x =
           88 +
@@ -372,33 +359,33 @@ describe("bounded score rendering", () => {
       note(`dense-${index}`, index * 0.5, index * 0.5 + 0.45),
     );
     const score = buildScore(song(notes, 25_000));
-    const window = scoreWindow(12_499, score.measureCount, 3);
+    const first = score.measureCount - 3;
     const visible = [];
-    for (let measure = window.first; measure < window.last; measure++)
+    for (let measure = first; measure < score.measureCount; measure++)
       visible.push(...(score.measures.get(measure) ?? []));
     expect(visible.length).toBeLessThanOrEqual(12);
     expect(visible.some((item) => item.note.id === "dense-49999")).toBe(true);
-    expect(visible.every((item) => item.measure >= window.first)).toBe(true);
+    expect(visible.every((item) => item.measure >= first)).toBe(true);
   });
 });
 
 describe("seeking on the printed score", () => {
   it("maps note positions back to fractional beats in the visible measure window", () => {
     // The first visible bar is bar five: the clefs and note inset are not time.
-    expect(scoreBeatAtX(112, 4, 7, 240, 4)).toBeCloseTo(16);
-    expect(scoreBeatAtX(232, 4, 7, 240, 4)).toBeCloseTo(18);
-    expect(scoreBeatAtX(352, 4, 7, 240, 4)).toBeCloseTo(20);
-    expect(scoreBeatAtX(382, 4, 7, 240, 4)).toBeCloseTo(20.5);
+    expect(scoreBeatAtX(112, 4, 7, 240, bars(4))).toBeCloseTo(16);
+    expect(scoreBeatAtX(232, 4, 7, 240, bars(4))).toBeCloseTo(18);
+    expect(scoreBeatAtX(352, 4, 7, 240, bars(4))).toBeCloseTo(20);
+    expect(scoreBeatAtX(382, 4, 7, 240, bars(4))).toBeCloseTo(20.5);
   });
 
   it("clamps dragging before or after the displayed measures to their boundaries", () => {
-    expect(scoreBeatAtX(-500, 4, 7, 240, 4)).toBe(16);
-    expect(scoreBeatAtX(10_000, 4, 7, 240, 4)).toBe(28);
-    expect(scoreBeatAtX(0, 0, 3, 240, 4)).toBe(0);
+    expect(scoreBeatAtX(-500, 4, 7, 240, bars(4))).toBe(16);
+    expect(scoreBeatAtX(10_000, 4, 7, 240, bars(4))).toBe(28);
+    expect(scoreBeatAtX(0, 0, 3, 240, bars(4))).toBe(0);
   });
 
   it("seeks to the note under the pointer after the score has translated", () => {
-    const viewport = scoreViewport(9.25, 12, 4);
+    const viewport = scoreViewport(9.25, 12, bars(4));
     const noteBeat = 12.5;
     const x =
       88 +
@@ -411,34 +398,33 @@ describe("seeking on the printed score", () => {
         viewport.first,
         viewport.last,
         viewport.measureWidth,
-        4,
-        88,
+        bars(4),
         viewport.offset,
       ),
     ).toBeCloseTo(noteBeat);
     const clock = createBeatClock(480, []);
     expect(
-      scoreTimeAtX(x, { ...viewport, beatsPerBar: 4 }, clock, 1, 30),
+      scoreTimeAtX(x, { ...viewport, meter: bars(4) }, clock, 1, 30),
     ).toBeCloseTo((noteBeat + 1) / 2);
   });
 
   it("uses the score meter and converts through the count-in and changing tempo", () => {
     // Two bars of 3/4, one count-in beat, initially 60 BPM then 120 BPM at beat four.
-    const beat = scoreBeatAtX(272, 0, 2, 240, 3);
+    const beat = scoreBeatAtX(272, 0, 2, 240, bars(3));
     expect(beat).toBeCloseTo(2);
     const clock = createBeatClock(480, [
       { tick: 0, microseconds: 1_000_000 },
       { tick: 1920, microseconds: 500_000 },
     ]);
     expect(clock.time(beat + 1)).toBeCloseTo(3);
-    const laterBeat = scoreBeatAtX(512, 0, 2, 240, 3);
+    const laterBeat = scoreBeatAtX(512, 0, 2, 240, bars(3));
     expect(laterBeat).toBeCloseTo(5);
     expect(clock.time(laterBeat + 1)).toBeCloseTo(5);
   });
 
   it("seeks by the supplied visible geometry and clamps to the actual song duration", () => {
     const clock = createBeatClock(480, []);
-    const geometry = { first: 4, last: 7, measureWidth: 240, beatsPerBar: 4 };
+    const geometry = { first: 4, last: 7, measureWidth: 240, meter: bars(4) };
     expect(scoreTimeAtX(112, geometry, clock, 1, 10)).toBeCloseTo(8.5);
     expect(scoreTimeAtX(232, geometry, clock, 1, 10)).toBeCloseTo(9.5);
     expect(scoreTimeAtX(10_000, geometry, clock, 1, 10)).toBe(10);
