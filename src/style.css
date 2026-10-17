@@ -787,20 +787,13 @@ h1 {
   background: #f8f6fa;
   font-size: 12px;
 }
-.finger-guide-title-button {
+.finger-guide-heading {
   color: #443b52;
   font-size: 16px;
   font-weight: 400;
   font-family: inherit;
   text-align: left;
-  padding: 0;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-}
-.finger-guide-title-button:hover {
-  color: var(--accent);
-  background: transparent;
+  margin: 0;
 }
 .finger-guide p {
   margin: 4px 0 0;

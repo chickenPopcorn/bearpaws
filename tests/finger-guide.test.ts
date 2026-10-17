@@ -11,49 +11,58 @@ const renderGuide = (piece = lesson(), left = true, right = true) =>
     createElement(FingerGuide, { song: piece, left, right }),
   );
 
-function storedPreference(value: unknown) {
-  vi.stubGlobal("localStorage", {
-    getItem: vi.fn((key: string) =>
-      key === "cadence:bear-paws" ? JSON.stringify(value) : null,
-    ),
-  });
+function storedPreference(value: string | null = null) {
+  const storage = {
+    getItem: vi.fn(() => value),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+  };
+  vi.stubGlobal("localStorage", storage);
+  return storage;
 }
 
-beforeEach(() => storedPreference(null));
+beforeEach(() => storedPreference());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("finger guide", () => {
-  it("keeps conventional hands as the default and exposes the surprise as a toggle", () => {
+  it("always shows bear paws with a heading and no mode toggle", () => {
     const markup = renderGuide();
-    expect(markup).toContain('aria-pressed="false"');
-    expect(markup).toContain("left hand viewed from above");
-    expect(markup).toContain("right hand viewed from above");
-    expect(markup).not.toContain('class="bear-paw"');
-  });
-
-  it("restores the bear-paw preference on a new render", () => {
-    storedPreference(true);
-    const markup = renderGuide();
-    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain(
+      '<h2 class="finger-guide-heading">Where your fingers go</h2>',
+    );
     expect(markup).toContain("Playful left bear paw finger guide");
     expect(markup).toContain("Playful right bear paw finger guide");
     expect(markup).not.toContain("hand viewed from above");
+    expect(markup).not.toContain("<button");
+    expect(markup).not.toContain("aria-pressed");
   });
 
-  it("still renders if the browser blocks preference storage", () => {
-    vi.stubGlobal("localStorage", {
-      getItem: () => {
-        throw new Error("Storage unavailable");
-      },
+  it("renders bear paws without accessing blocked browser storage", () => {
+    const unavailable = vi.fn(() => {
+      throw new Error("Storage unavailable");
     });
-    expect(renderGuide()).toContain('aria-pressed="false"');
+    vi.stubGlobal("localStorage", {
+      getItem: unavailable,
+      setItem: unavailable,
+      removeItem: unavailable,
+    });
+    const markup = renderGuide();
+    expect(markup).toContain("Playful left bear paw finger guide");
+    expect(markup).toContain("Playful right bear paw finger guide");
+    expect(unavailable).not.toHaveBeenCalled();
   });
 
-  it.each([false, "true", 1, {}, null])(
-    "uses human hands for an invalid or disabled stored preference (%j)",
+  it.each(["true", "false", '"true"', "1", "{}", "null", "{invalid", null])(
+    "ignores legacy, invalid, or missing browser preferences (%j)",
     (value) => {
-      storedPreference(value);
-      expect(renderGuide()).toContain('aria-pressed="false"');
+      const storage = storedPreference(value);
+      const markup = renderGuide();
+      expect(markup).toContain("Playful left bear paw finger guide");
+      expect(markup).toContain("Playful right bear paw finger guide");
+      expect(markup).not.toContain("hand viewed from above");
+      expect(storage.getItem).not.toHaveBeenCalled();
+      expect(storage.setItem).not.toHaveBeenCalled();
+      expect(storage.removeItem).not.toHaveBeenCalled();
     },
   );
 
@@ -77,7 +86,7 @@ describe("finger guide", () => {
     const markup = renderGuide(lesson(), false);
     expect(markup).toContain('class="hand-position left inactive"');
     expect(markup).toContain("Left hand · off");
-    expect(markup).toContain("left hand viewed from above");
+    expect(markup).toContain("Playful left bear paw finger guide");
   });
 
   it("omits the guide for imported pieces without reliable finger annotations", () => {
