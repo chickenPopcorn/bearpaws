@@ -214,6 +214,7 @@ const PassagePanel = memo(function PassagePanel({
         <label>
           From{" "}
           <LoopBoundInput
+            key={song.id}
             label="Loop start seconds"
             value={loopStart}
             min={0}
@@ -231,6 +232,7 @@ const PassagePanel = memo(function PassagePanel({
         <label>
           To{" "}
           <LoopBoundInput
+            key={song.id}
             label="Loop end seconds"
             value={loopEnd}
             min={loopStart + 0.2}

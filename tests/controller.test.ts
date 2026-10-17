@@ -1254,6 +1254,28 @@ describe("practice studio integration", () => {
     expect(restored.transport.loop).toEqual([0.5, 2.5]);
   });
 
+  it("does not restart practice on the saved built-in song when the library loads late", async () => {
+    const saved = builtInSongs()[2];
+    env.values.set("settings", { selected: saved.id });
+    let finish!: (songs: Song[]) => void;
+    vi.mocked(library).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const studio = create();
+    const loading = studio.init();
+    await studio.play();
+    expect(studio.transport.playing).toBe(true);
+    const transport = studio.transport;
+    finish([]);
+    await loading;
+    expect(studio.song.id).toBe(saved.id);
+    expect(studio.transport).toBe(transport);
+    expect(studio.transport.playing).toBe(true);
+  });
+
   it("keeps the saved built-in song when the local library is unavailable", async () => {
     const saved = builtInSongs()[2];
     env.values.set("settings", { selected: saved.id });

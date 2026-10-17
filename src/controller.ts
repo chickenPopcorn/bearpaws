@@ -169,7 +169,9 @@ export class Studio {
         ...songs.filter((song) => !isBuiltInSong(song.id)),
       ];
       const selected = this.songs.find((s) => s.id === this.savedSelection);
-      if (selected) this.load(selected);
+      // A saved built-in song is already active; reloading it would stop any
+      // practice that started before the library finished loading.
+      if (selected && selected.id !== this.song.id) this.load(selected);
       this.emit();
     } catch {
       if (generation !== this.lifecycleGeneration) return;
