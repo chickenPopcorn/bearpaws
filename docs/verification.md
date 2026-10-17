@@ -4,7 +4,7 @@ Updated October 17, 2026 for the BearPaws library, practice controls, full An Ji
 
 ## Automated checks
 
-- `npm test`: 463 tests across 26 suites passed.
+- `npm test`: 462 tests across 26 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: 6 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
@@ -44,15 +44,14 @@ to open the page. The CI artifact includes the complete bank.
 The sound tests cover preference migration and validation, live updates without
 restarting playback or cancelling sample preparation, one shared sound bus,
 deterministic sample-rate-aware stereo room responses, post-mix peak protection,
-reuse of the room processor across short automatic loops, a direct Original
-path that bypasses the second compressor,
-room-tail flushing, and recovery after allocation failures.
+reuse of the room processor across short automatic loops, room-tail flushing,
+and recovery after allocation failures. Legacy sound-profile selections are
+discarded while their room amount is preserved. Natural is the only sound path.
 
 ## Local browser checks
 
 The Natural sound development build was checked at `http://127.0.0.1:4189/`:
-Natural/Original switches and Room adjustments kept playback running; preferences
-are global; the native sound popover remains visible in fullscreen; Escape
+Room adjustments kept playback running; the room preference is global; the native sound popover remains visible in fullscreen; Escape
 closes it without leaving fullscreen, including after keyboard focus moves
 to another toolbar control. Initial native OfflineAudioContext renders at
 `b7267de` compared the

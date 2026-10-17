@@ -80,13 +80,17 @@ describe("piano sound settings", () => {
     "uses default ambience for non-finite/non-numeric %j",
     (ambience) => expect(normalizePianoSound({ ambience }).ambience).toBe(0.22),
   );
-  it("clamps valid ambience and preserves the dry comparison preset", () => {
-    expect(normalizePianoSound({ profile: "original", ambience: -2 })).toEqual({
-      profile: "original",
+  it("clamps valid ambience", () => {
+    expect(normalizePianoSound({ ambience: -2 })).toEqual({
       ambience: 0,
     });
     expect(normalizePianoSound({ ambience: 3 }).ambience).toBe(1);
     expect(normalizePianoSound({ ambience: 0 }).ambience).toBe(0);
+  });
+  it("discards a legacy sound profile while retaining its room setting", () => {
+    expect(
+      normalizePianoSound({ profile: "original", ambience: 0.37 }),
+    ).toEqual({ ambience: 0.37 });
   });
 });
 
@@ -132,19 +136,6 @@ describe("synthetic room impulse", () => {
 });
 
 describe("shared reference sound bus", () => {
-  it("routes Original directly around the safety compressor", () => {
-    const { context, audioContext } = contextFixture();
-    createPianoSoundBus(audioContext, { profile: "original", ambience: 0.22 });
-    const compressor = context.createDynamicsCompressor.mock.results[0].value;
-    const natural = context.createGain.mock.results[2].value;
-    const direct = context.createGain.mock.results[3]?.value;
-    expect(direct).toBeDefined();
-    expect(compressor.connect).toHaveBeenCalledWith(direct);
-    expect(direct!.connect).toHaveBeenCalledWith(context.destination);
-    expect(direct!.gain.value).toBe(1);
-    expect(natural.gain.value).toBe(0);
-  });
-
   it("reuses the room processor across automatic loop boundaries and cycle changes", async () => {
     const { context, audioContext } = contextFixture();
     const audio = new ReferenceAudio();
@@ -189,7 +180,7 @@ describe("shared reference sound bus", () => {
     const bus = createPianoSoundBus(audioContext, DEFAULT_PIANO_SOUND);
     const [compressor, safety] =
       context.createDynamicsCompressor.mock.results.map((v) => v.value);
-    const [dry, wet, master, original] = context.createGain.mock.results.map(
+    const [dry, wet, master] = context.createGain.mock.results.map(
       (v) => v.value,
     );
     const convolver = context.createConvolver.mock.results[0].value;
@@ -207,75 +198,14 @@ describe("shared reference sound bus", () => {
     expect(safety.ratio.value).toBe(20);
     expect(wet.gain.value).toBeCloseTo(0.154);
     expect(master.gain.value).toBe(0.92);
-    expect(original.gain.value).toBe(0);
+    expect(context.createGain).toHaveBeenCalledTimes(3);
     expect(convolver.normalize).toBe(false);
-  });
-
-  it("keeps the original dry compression and bypasses the extra limiter", () => {
-    const { context, audioContext } = contextFixture();
-    createPianoSoundBus(audioContext, { profile: "original", ambience: 1 });
-    const [compressor, safety] =
-      context.createDynamicsCompressor.mock.results.map((v) => v.value);
-    const [dry, wet, master, original] = context.createGain.mock.results.map(
-      (v) => v.value,
-    );
-    expect(
-      Object.fromEntries(
-        ["threshold", "knee", "ratio", "attack", "release"].map((key) => [
-          key,
-          compressor[key as "ratio"].value,
-        ]),
-      ),
-    ).toEqual({
-      threshold: -10,
-      knee: 12,
-      ratio: 4,
-      attack: 0.003,
-      release: 0.25,
-    });
-    expect(safety.ratio.value).toBe(20);
-    expect(dry.gain.value).toBe(1);
-    expect(wet.gain.value).toBe(0);
-    expect(master.gain.value).toBe(0);
-    expect(original.gain.value).toBe(1);
-  });
-
-  it("crossfades live profiles to exact endpoints without disconnecting either path", () => {
-    const { context, audioContext } = contextFixture();
-    const bus = createPianoSoundBus(audioContext, DEFAULT_PIANO_SOUND);
-    const [, , natural, original] = context.createGain.mock.results.map(
-      (v) => v.value,
-    );
-    bus.setSound({ profile: "original", ambience: 0.22 });
-    expect(natural.gain.cancelAndHoldAtTime).toHaveBeenCalledWith(9);
-    expect(original.gain.cancelAndHoldAtTime).toHaveBeenCalledWith(9);
-    expect(natural.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(
-      0,
-      9.08,
-    );
-    expect(original.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(
-      1,
-      9.08,
-    );
-    bus.setSound({ profile: "natural", ambience: 0.22 });
-    expect(natural.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(
-      0.92,
-      9.08,
-    );
-    expect(original.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(
-      0,
-      9.08,
-    );
-    expect(natural.disconnect).not.toHaveBeenCalled();
-    expect(original.disconnect).not.toHaveBeenCalled();
-    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(2);
-    expect(context.createConvolver).toHaveBeenCalledOnce();
   });
 
   it("smooths repeated live changes without allocating nodes or changing active notes", async () => {
     const { context, audioContext } = contextFixture();
     const audio = new ReferenceAudio();
-    audio.setSound({ profile: "original", ambience: 0.6 });
+    audio.setSound({ ambience: 0.6 });
     expect(audio.context).toBeNull();
     expect(context.createBuffer).not.toHaveBeenCalled();
     audio.context = audioContext;
@@ -284,21 +214,23 @@ describe("shared reference sound bus", () => {
       (v) => v.value,
     );
     const wet = context.createGain.mock.results[1].value;
-    expect(compressor.ratio.value).toBe(4);
+    expect(compressor.ratio.value).toBe(1.65);
     const region = selectPianoRegion(60, 0.8)!;
     audio.samples.set(region.file, { duration: 20 } as AudioBuffer);
     audio.tone(60, 0.8, 10, 2);
     audio.scheduled.add("held-note");
     const source = context.createBufferSource.mock.results[0].value;
     const previousStop = source.stop.mock.calls.slice();
-    audio.setSound({ profile: "natural", ambience: 0.4 });
-    audio.setSound({ profile: "natural", ambience: 0.7 });
+    audio.setSound({ ambience: 0.4 });
+    audio.setSound({ ambience: 0.7 });
     expect(wet.gain.cancelAndHoldAtTime).toHaveBeenNthCalledWith(2, 9);
     expect(wet.gain.setTargetAtTime).toHaveBeenLastCalledWith(
       0.7 * 0.7,
       9,
       0.04,
     );
+    expect(compressor.ratio.setTargetAtTime).not.toHaveBeenCalled();
+    expect(compressor.threshold.setTargetAtTime).not.toHaveBeenCalled();
     expect(source.stop.mock.calls).toEqual(previousStop);
     expect(audio.voices.size).toBe(1);
     expect(audio.scheduled.has("held-note")).toBe(true);
@@ -319,7 +251,7 @@ describe("shared reference sound bus", () => {
     expect(next.buffer).toBe(first.buffer);
     expect(context.createBuffer).toHaveBeenCalledOnce();
     expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(2);
-    expect(context.createGain).toHaveBeenCalledTimes(4);
+    expect(context.createGain).toHaveBeenCalledTimes(3);
   });
 
   it("contains a room-reset allocation failure and rebuilds on explicit retry", async () => {

@@ -493,11 +493,8 @@ function App() {
                   {stamp(studio.position)} / {stamp(studio.song.duration)}
                 </span>
                 <PianoSoundControls
-                  profile={s.soundProfile}
                   ambience={s.ambience}
-                  onChange={(profile, ambience) =>
-                    studio.sound(profile, ambience)
-                  }
+                  onChange={(ambience) => studio.sound(ambience)}
                 />
                 {fullscreen.expanded && (
                   <div

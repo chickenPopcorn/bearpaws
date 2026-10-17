@@ -18,42 +18,32 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
 });
-async function render(
-  profile: "natural" | "original" = "natural",
-  ambience = 0.22,
-) {
+async function render(ambience = 0.22) {
   await act(async () =>
-    root.render(
-      <PianoSoundControls
-        profile={profile}
-        ambience={ambience}
-        onChange={onChange}
-      />,
-    ),
+    root.render(<PianoSoundControls ambience={ambience} onChange={onChange} />),
   );
 }
-it("offers a labelled native popover and retains the room amount when switching profile", async () => {
+it("offers Natural piano in a labelled native popover without a profile selector", async () => {
   await render();
   const button = container.querySelector("button")!;
   const panel = container.querySelector("[popover]")!;
   expect(button.textContent).toBe("Piano sound");
   expect(button.getAttribute("popovertarget")).toBe(panel.id);
-  const select = container.querySelector("select")!;
-  await act(async () => {
-    select.value = "original";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  expect(onChange).toHaveBeenLastCalledWith("original", 0.22);
+  expect(panel.textContent).toContain("Natural piano");
+  expect(container.querySelector("select")).toBeNull();
+  expect(panel.textContent).not.toContain("Original");
 });
-it("shows the selected room amount and disables it only for Original", async () => {
-  await render("natural", 0.38);
-  expect(container.querySelector("output")?.textContent).toBe("38%");
-  expect(container.querySelector("input")?.disabled).toBe(false);
-  await render("original", 0.38);
-  expect(container.querySelector("output")?.textContent).toBe("Off");
-  expect(container.querySelector("input")?.disabled).toBe(true);
-});
-it("updates the room amount without switching the sound profile", async () => {
+it.each([0, 0.38])(
+  "shows the room amount and always enables adjustment: %s",
+  async (ambience) => {
+    await render(ambience);
+    expect(container.querySelector("output")?.textContent).toBe(
+      `${Math.round(ambience * 100)}%`,
+    );
+    expect(container.querySelector("input")?.disabled).toBe(false);
+  },
+);
+it("updates the room amount", async () => {
   await render();
   const input = container.querySelector("input")!;
   await act(async () => {
@@ -63,7 +53,7 @@ it("updates the room amount without switching the sound profile", async () => {
     )!.set!.call(input, "47");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  expect(onChange).toHaveBeenLastCalledWith("natural", 0.47);
+  expect(onChange).toHaveBeenLastCalledWith(0.47);
 });
 it("leaves Escape available to the native popover and fullscreen handler", async () => {
   await render();

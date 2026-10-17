@@ -162,7 +162,7 @@ describe("bounded reference audio", () => {
     const master = context.createGain.mock.results[2].value;
     expect(master.connect).toHaveBeenCalledWith(context.destination);
     audio.tone(60, 0.8, 0, 1);
-    const gain = context.createGain.mock.results[4].value;
+    const gain = context.createGain.mock.results[3].value;
     expect(gain.connect).toHaveBeenCalledWith(output);
   });
 

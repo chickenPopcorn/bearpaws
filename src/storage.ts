@@ -1,10 +1,6 @@
 import type { Song } from "./song";
 import type { Mode } from "./engine";
-import {
-  DEFAULT_PIANO_SOUND,
-  normalizePianoSound,
-  type PianoSoundProfile,
-} from "./pianoSound";
+import { DEFAULT_PIANO_SOUND, normalizePianoSound } from "./pianoSound";
 export interface Settings {
   mode: Mode;
   speed: number;
@@ -14,7 +10,6 @@ export interface Settings {
   reference: boolean;
   names: boolean;
   selected: string;
-  soundProfile: PianoSoundProfile;
   ambience: number;
 }
 export interface Progress {
@@ -35,7 +30,6 @@ export const defaults: Settings = {
   reference: true,
   names: true,
   selected: "cadence-ode-to-joy-v1",
-  soundProfile: DEFAULT_PIANO_SOUND.profile,
   ambience: DEFAULT_PIANO_SOUND.ambience,
 };
 export function read<T>(key: string, fallback: T): T {
@@ -59,11 +53,9 @@ export function settings(): Settings {
   const saved = read<Partial<Settings>>("settings", {}),
     s = { ...defaults, ...(saved && typeof saved === "object" ? saved : {}) };
   const sound = normalizePianoSound({
-    profile: s.soundProfile,
     ambience: s.ambience,
   });
   return {
-    ...s,
     mode: ["listen", "wait", "rhythm"].includes(s.mode) ? s.mode : "wait",
     speed: Number.isFinite(s.speed)
       ? Math.max(0.25, Math.min(1.5, s.speed))
@@ -76,7 +68,6 @@ export function settings(): Settings {
     reference: !!s.reference,
     names: !!s.names,
     selected: typeof s.selected === "string" ? s.selected : defaults.selected,
-    soundProfile: sound.profile,
     ambience: sound.ambience,
   };
 }

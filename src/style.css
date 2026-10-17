@@ -406,11 +406,9 @@ h1 {
   background: #faf9fd;
   box-shadow: 0 8px 24px #2d263517;
 }
-.piano-sound-panel select {
+.piano-sound-name {
   display: block;
-  width: 100%;
-  margin: 7px 0 16px;
-  font: inherit;
+  margin-bottom: 16px;
 }
 .piano-sound-panel input {
   width: 100%;

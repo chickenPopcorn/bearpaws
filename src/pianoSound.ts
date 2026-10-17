@@ -1,12 +1,8 @@
-export type PianoSoundProfile = "natural" | "original";
-
 export interface PianoSoundSettings {
-  profile: PianoSoundProfile;
   ambience: number;
 }
 
 export const DEFAULT_PIANO_SOUND: Readonly<PianoSoundSettings> = {
-  profile: "natural",
   ambience: 0.22,
 };
 
@@ -15,7 +11,6 @@ export function normalizePianoSound(value: unknown): PianoSoundSettings {
     value && typeof value === "object" ? value : {}
   ) as Partial<PianoSoundSettings>;
   return {
-    profile: settings.profile === "original" ? "original" : "natural",
     ambience:
       typeof settings.ambience === "number" &&
       Number.isFinite(settings.ambience)
@@ -77,7 +72,6 @@ export function createRoomImpulse(context: BaseAudioContext): AudioBuffer {
 }
 
 const SMOOTH_SECONDS = 0.04;
-const PROFILE_FADE_SECONDS = 0.08;
 const NATURAL_COMPRESSOR = {
   threshold: -14,
   knee: 18,
@@ -85,14 +79,6 @@ const NATURAL_COMPRESSOR = {
   attack: 0.012,
   release: 0.32,
 };
-const ORIGINAL_COMPRESSOR = {
-  threshold: -10,
-  knee: 12,
-  ratio: 4,
-  attack: 0.003,
-  release: 0.25,
-};
-
 export interface PianoSoundBus {
   input: AudioNode;
   setSound(settings: PianoSoundSettings): void;
@@ -121,7 +107,6 @@ export function createPianoSoundBus(
     const wet = remember(context.createGain());
     const safety = remember(context.createDynamicsCompressor());
     const master = remember(context.createGain());
-    const original = remember(context.createGain());
     const impulse = createRoomImpulse(context);
     const makeConvolver = () => {
       const node = context.createConvolver();
@@ -140,9 +125,12 @@ export function createPianoSoundBus(
     compressor.connect(convolver);
     wet.connect(safety);
     safety.connect(master).connect(context.destination);
-    // Web Audio compressors add 6ms of lookahead even at a 1:1 ratio. Original
-    // keeps the previous single-compressor delay; only Natural adds the second.
-    compressor.connect(original).connect(context.destination);
+    for (const key of Object.keys(
+      NATURAL_COMPRESSOR,
+    ) as (keyof typeof NATURAL_COMPRESSOR)[])
+      compressor[key].value = NATURAL_COMPRESSOR[key];
+    dry.gain.value = 1;
+    master.gain.value = 0.92;
     safety.threshold.value = -3;
     safety.knee.value = 0;
     safety.ratio.value = 20;
@@ -151,31 +139,17 @@ export function createPianoSoundBus(
 
     const update = (settings: PianoSoundSettings, immediate: boolean) => {
       const sound = normalizePianoSound(settings);
-      const natural = sound.profile === "natural";
-      const target = natural ? NATURAL_COMPRESSOR : ORIGINAL_COMPRESSOR;
-      const set = (param: AudioParam, value: number, fade = false) => {
-        if (immediate) {
-          param.value = value;
-          return;
-        }
+      const target = sound.ambience * 0.7;
+      if (immediate) wet.gain.value = target;
+      else {
         const now = context.currentTime;
-        if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(now);
+        if (wet.gain.cancelAndHoldAtTime) wet.gain.cancelAndHoldAtTime(now);
         else {
-          param.cancelScheduledValues(now);
-          param.setValueAtTime(param.value, now);
+          wet.gain.cancelScheduledValues(now);
+          wet.gain.setValueAtTime(wet.gain.value, now);
         }
-        if (fade)
-          param.linearRampToValueAtTime(value, now + PROFILE_FADE_SECONDS);
-        else param.setTargetAtTime(value, now, SMOOTH_SECONDS);
-      };
-      for (const key of Object.keys(target) as (keyof typeof target)[])
-        set(compressor[key], target[key]);
-      set(dry.gain, 1);
-      set(wet.gain, natural ? sound.ambience * 0.7 : 0);
-      // Natural keeps post-mix peak protection. Finite crossfades reach exact
-      // zero so Original has no residual sound from the delayed safety path.
-      set(master.gain, natural ? 0.92 : 0, true);
-      set(original.gain, natural ? 0 : 1, true);
+        wet.gain.setTargetAtTime(target, now, SMOOTH_SECONDS);
+      }
     };
     update(initial, true);
     return {

@@ -1,18 +1,15 @@
 import { useId, useRef, useState } from "react";
-import type { PianoSoundProfile } from "./pianoSound";
 
 export function PianoSoundControls({
-  profile,
   ambience,
   onChange,
 }: {
-  profile: PianoSoundProfile;
   ambience: number;
-  onChange(profile: PianoSoundProfile, ambience: number): void;
+  onChange(ambience: number): void;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
-  const profileSelect = useRef<HTMLSelectElement>(null);
+  const roomInput = useRef<HTMLInputElement>(null);
   const [position, setPosition] = useState({ top: 16, left: 16 });
   return (
     <div className="piano-sound">
@@ -43,45 +40,25 @@ export function PianoSoundControls({
         role="group"
         aria-label="Piano sound options"
         onToggle={(event) => {
-          if (event.newState === "open") profileSelect.current?.focus();
+          if (event.newState === "open") roomInput.current?.focus();
         }}
       >
-        <label htmlFor={`${id}-profile`}>Sound</label>
-        <select
-          ref={profileSelect}
-          id={`${id}-profile`}
-          value={profile}
-          autoFocus
-          onChange={(event) =>
-            onChange(event.target.value as PianoSoundProfile, ambience)
-          }
-        >
-          <option value="natural">Natural</option>
-          <option value="original">Original · dry</option>
-        </select>
+        <strong className="piano-sound-name">Natural piano</strong>
         <div className="piano-sound-amount">
           <label htmlFor={`${id}-room`}>Room</label>
-          <output htmlFor={`${id}-room`}>
-            {profile === "original" ? "Off" : `${Math.round(ambience * 100)}%`}
-          </output>
+          <output htmlFor={`${id}-room`}>{Math.round(ambience * 100)}%</output>
         </div>
         <input
+          ref={roomInput}
           id={`${id}-room`}
           type="range"
           min="0"
           max="100"
           step="1"
           value={Math.round(ambience * 100)}
-          disabled={profile === "original"}
-          onChange={(event) =>
-            onChange(profile, Number(event.target.value) / 100)
-          }
+          onChange={(event) => onChange(Number(event.target.value) / 100)}
         />
-        <p>
-          {profile === "natural"
-            ? "Gentle dynamics with a little room around each note."
-            : "The previous sound, for comparison."}
-        </p>
+        <p>Gentle dynamics with a little room around each note.</p>
       </div>
     </div>
   );

@@ -89,9 +89,9 @@ Your physical piano supplies live piano sound. The browser does not echo incomin
 ### Piano sound
 
 Open **Piano sound** above the score in either normal or fullscreen view.
-**Natural**, the default, uses gentler compression and subtle stereo room ambience.
-Adjust **Room** while listening, or choose **Original · dry** to compare the previous
-sound. The selection and room amount are remembered in this browser, across songs.
+**Natural** is the only piano sound, with gentler compression and subtle stereo
+room ambience. Adjust **Room** while listening; its level is remembered in this
+browser, across songs.
 Changes do not restart notes or the practice timeline. Pause, seek and song changes
 clear the room tail as well as scheduled notes.
 
