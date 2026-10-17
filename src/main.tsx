@@ -568,12 +568,7 @@ function App() {
               <input
                 type="checkbox"
                 checked={s.reference}
-                onChange={(e) => {
-                  s.reference = e.target.checked;
-                  studio.audio.stop();
-                  studio.persist();
-                  studio.emit();
-                }}
+                onChange={(e) => studio.reference(e.target.checked)}
               />{" "}
               Reference sound in Rhythm
             </label>

@@ -198,15 +198,49 @@ describe("USB MIDI connection lifecycle", () => {
   });
 
   it("surfaces denied permission and allows another explicit attempt", async () => {
-    const { midi, source } = setup();
+    const { midi, source, callbacks } = setup();
     source.requestMIDIAccess.mockRejectedValueOnce(
       new DOMException("Permission denied", "NotAllowedError"),
     );
     await midi.connect();
     expect(midi.status).toBe("denied");
     expect(midi.message).toContain("Import and Listen still work");
+    expect(callbacks.onReset).not.toHaveBeenCalled();
     await midi.connect();
     expect(midi.status).toBe("no-device");
+    expect(callbacks.onReset).not.toHaveBeenCalled();
+  });
+
+  it("resets a bound input once when replacing MIDI access", async () => {
+    const original = input("piano", "Original piano");
+    const replacement = input("piano", "Replacement piano");
+    const { midi, source, access, callbacks, send } = setup([original]);
+    await midi.connect();
+    send(original, [0x90, 60, 100]);
+    const oldHandler = original.onmidimessage;
+    const newAccess = {
+      inputs: new Map([[replacement.id, replacement]]),
+      onstatechange: null,
+    } as unknown as MIDIAccess;
+    source.requestMIDIAccess.mockResolvedValueOnce(newAccess);
+    callbacks.onReset.mockClear();
+    callbacks.onMessage.mockClear();
+
+    await midi.connect();
+
+    expect(callbacks.onReset).toHaveBeenCalledOnce();
+    expect(original.close).toHaveBeenCalledOnce();
+    expect(original.onmidimessage).toBeNull();
+    expect(access.onstatechange).toBeNull();
+    expect(midi.status).toBe("connected");
+    oldHandler?.call(original, {
+      data: new Uint8Array([0x90, 60, 100]),
+      timeStamp: 12,
+    } as MIDIMessageEvent);
+    expect(callbacks.onMessage).not.toHaveBeenCalled();
+    send(replacement, [0x90, 64, 100]);
+    expect(callbacks.onMessage).toHaveBeenCalledOnce();
+    midi.dispose();
   });
 
   it("reports port-open failure without repeatedly reopening on connection events, and supports retry", async () => {

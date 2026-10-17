@@ -4,7 +4,7 @@ Updated October 16, 2026 for the sampled-piano and practice-studio changes.
 
 ## Automated checks
 
-- `npm test`: 305 tests across 18 suites passed.
+- `npm test`: 319 tests across 18 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: 4 offline importer tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `npm audit --audit-level=moderate`: no known vulnerabilities reported after updating the test runner.
@@ -13,8 +13,9 @@ Updated October 16, 2026 for the sampled-piano and practice-studio changes.
 Coverage includes MIDI permissions and reconnect races; event timestamps and
 inclusive timing boundaries at every supported speed/tolerance; stale async
 play/preview cancellation; decoded-sample cache and voice limits; retention of
-active recordings through speed, seek and loop changes; recovery from unrelated
-sample-loading failures; complete
+active recordings through speed, seek and loop changes; repeated loop edits and
+sustained notes at loop boundaries; quiet-mode startup without sample loading;
+recovery from unrelated sample-loading failures; complete
 soundbank hashes and SFZ mappings; atomic importer publication; score scrolling,
 seeking geometry and label bounds; hand-guide preferences; fullscreen fallback,
 Escape, focus restoration, tab trapping and audio-before-fullscreen ordering.

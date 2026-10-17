@@ -40,6 +40,56 @@ function setup(inputs: MIDIInput[] = []) {
 }
 
 describe("automatic MIDI connection", () => {
+  it.each(["available", "connected later"] as const)(
+    "does not reset practice input during initial automatic access when a piano is %s",
+    async (availability) => {
+      const piano = port("first");
+      const permission = deferred<{ state: PermissionState }>();
+      const accessRequest = deferred<MIDIAccess>();
+      const { midi, query, source, access, callbacks, change } = setup(
+        availability === "available" ? [piano] : [],
+      );
+      query.mockReturnValue(permission.promise);
+      source.requestMIDIAccess.mockReturnValue(accessRequest.promise);
+
+      const automatic = midi.autoConnect();
+      permission.resolve({ state: "granted" });
+      await Promise.resolve();
+      expect(source.requestMIDIAccess).toHaveBeenCalledOnce();
+      expect(callbacks.onReset).not.toHaveBeenCalled();
+
+      accessRequest.resolve(access);
+      await automatic;
+      expect(callbacks.onReset).not.toHaveBeenCalled();
+      if (availability === "connected later") {
+        expect(midi.status).toBe("no-device");
+        change();
+        change();
+        expect(callbacks.onReset).not.toHaveBeenCalled();
+        (access.inputs as unknown as Map<string, MIDIInput>).set(
+          piano.id,
+          piano,
+        );
+        change();
+        await Promise.resolve();
+      }
+
+      expect(midi.status).toBe("connected");
+      expect(callbacks.onReset).not.toHaveBeenCalled();
+      piano.onmidimessage?.call(piano, {
+        data: new Uint8Array([0x90, 60, 90]),
+        timeStamp: 231.5,
+      } as MIDIMessageEvent);
+      expect(callbacks.onMessage).toHaveBeenCalledWith(
+        new Uint8Array([0x90, 60, 90]),
+        231.5,
+      );
+      midi.dispose();
+      expect(callbacks.onReset).toHaveBeenCalledOnce();
+      expect(piano.onmidimessage).toBeNull();
+    },
+  );
+
   it("silently connects the first available input when permission was already granted", async () => {
     const disconnected = port("unplugged", "disconnected");
     const first = port("first");

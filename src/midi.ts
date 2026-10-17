@@ -12,7 +12,7 @@ export interface MidiDevice {
 }
 export interface MidiCallbacks {
   onMessage(data: Uint8Array, timeStamp: number): void;
-  /** Clear physical keys, pedal state, and pending practice input whenever the source changes. */
+  /** Clear physical keys, pedals, and pending input when a bound source changes or is disposed. */
   onReset(): void;
   onChange(): void;
 }
@@ -214,7 +214,7 @@ export class MidiConnection {
     );
   }
 
-  private detach(): void {
+  private detach(forceReset = false): void {
     this.bindingGeneration++;
     const input = this.input;
     this.input = undefined;
@@ -223,7 +223,9 @@ export class MidiConnection {
       // Closing a disconnected port can reject; cleanup must still clear held keys and pedals.
       void input.close().catch(() => {});
     }
-    this.callbacks.onReset();
+    // Initial access and an empty scan have no physical state to clear. In
+    // particular, automatic connection must not cancel a pending Play request.
+    if (input || forceReset) this.callbacks.onReset();
   }
 
   dispose(): void {
@@ -231,7 +233,7 @@ export class MidiConnection {
     this.disposed = true;
     if (this.access) this.access.onstatechange = null;
     this.access = undefined;
-    this.detach();
+    this.detach(true);
     this.devices = [];
   }
 }

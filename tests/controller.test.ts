@@ -218,6 +218,7 @@ describe("practice studio integration", () => {
     "cancels pending sample preparation when %s changes",
     async (change) => {
       const studio = create(song([[60, 1]]));
+      studio.mode("listen");
       let finish!: () => void;
       env.prepareWait = new Promise<void>((resolve) => {
         finish = resolve;
@@ -278,6 +279,7 @@ describe("practice studio integration", () => {
     "reports sample preparation failure during %s without starting sound",
     async (action) => {
       const studio = create(song([[60, 1]]));
+      if (action === "play") studio.mode("listen");
       vi.mocked(studio.audio.prepare).mockRejectedValueOnce(
         new Error("Unable to load sample"),
       );
@@ -377,6 +379,201 @@ describe("practice studio integration", () => {
       expect(studio.position).toBeCloseTo(position);
     },
   );
+
+  it("resumes the latest loop range after repeated edits while samples load", async () => {
+    const studio = create(
+      song([
+        [60, 0.5],
+        [63, 2.5],
+      ]),
+    );
+    studio.mode("listen");
+    studio.bounds(0, 1.5);
+    studio.loop(true);
+    await studio.play();
+    vi.mocked(studio.audio.prepare).mockClear();
+    vi.mocked(studio.audio.setPlaybackNotes).mockClear();
+    let finishFirst!: () => void, finishLatest!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finishFirst = resolve;
+    });
+    studio.bounds(0, 2);
+    await vi.waitFor(() =>
+      expect(studio.audio.prepare).toHaveBeenCalledTimes(1),
+    );
+    const firstPreparation = vi.mocked(studio.audio.prepare).mock.results[0]
+      .value;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finishLatest = resolve;
+    });
+    studio.bounds(0, 3);
+    await vi.waitFor(() =>
+      expect(studio.audio.prepare).toHaveBeenCalledTimes(2),
+    );
+    finishFirst();
+    await firstPreparation;
+    await Promise.resolve();
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.audio.setPlaybackNotes).not.toHaveBeenCalled();
+    finishLatest();
+    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
+    expect(studio.transport.loop).toEqual([0, 3]);
+    expect(studio.audio.setPlaybackNotes).toHaveBeenCalledExactlyOnceWith(
+      studio.notes,
+    );
+  });
+
+  it.each(["pause", "seek", "mode", "song"] as const)(
+    "cancels loop-resume intent after an explicit %s during preparation",
+    async (change) => {
+      const studio = create(
+        song([
+          [60, 0.5],
+          [63, 2.5],
+        ]),
+      );
+      studio.mode("listen");
+      studio.bounds(0, 1.5);
+      studio.loop(true);
+      await studio.play();
+      vi.mocked(studio.audio.prepare).mockClear();
+      let finish!: () => void;
+      env.prepareWait = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      studio.bounds(0, 3);
+      await vi.waitFor(() =>
+        expect(studio.audio.prepare).toHaveBeenCalledOnce(),
+      );
+      const preparation = vi.mocked(studio.audio.prepare).mock.results[0].value;
+      if (change === "pause") studio.pause();
+      else if (change === "seek") studio.seek(1);
+      else if (change === "mode") studio.mode("wait");
+      else studio.load(song([[65, 0.5]], "replacement"));
+      studio.bounds(0, 2.8);
+      finish();
+      await preparation;
+      await Promise.resolve();
+      expect(studio.transport.playing).toBe(false);
+      expect(studio.audio.prepare).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("prepares sustained notes overlapping a loop boundary without adding scoring targets", async () => {
+    const fixture = song([
+      [60, 0.5],
+      [63, 2.5],
+    ]);
+    fixture.notes[0].soundEnd = 1.5;
+    const studio = create(fixture);
+    studio.mode("listen");
+    studio.bounds(1, 3);
+    studio.loop(true);
+    expect(studio.scoringNotes).toEqual([studio.notes[1]]);
+    await studio.play();
+    expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(studio.notes);
+    expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith(studio.notes);
+    expect(studio.position).toBe(1);
+  });
+
+  it.each(["wait", "rhythm"] as const)(
+    "starts %s practice without loading or pinning the sample bank when reference is off",
+    async (mode) => {
+      const studio = create(
+        song([
+          [60, 0.5],
+          [63, 2.5],
+        ]),
+      );
+      studio.mode(mode);
+      studio.reference(false);
+      vi.mocked(studio.audio.prepare).mockRejectedValue(
+        new Error("sample bank unavailable"),
+      );
+      await studio.play();
+      expect(studio.audio.prepare).not.toHaveBeenCalled();
+      expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith([]);
+      expect(studio.transport.playing).toBe(true);
+      advance(studio, 0.5);
+      midi(studio, [0x90, 60, 100]);
+      expect(studio.practice.hit.has("note-0")).toBe(true);
+    },
+  );
+
+  it("loads only the requested Wait chord when previewing a silent practice session", async () => {
+    const studio = create(
+      song([
+        [60, 0.5],
+        [63, 2.5],
+      ]),
+    );
+    await studio.play();
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    await studio.preview();
+    expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith([
+      studio.notes[0],
+    ]);
+  });
+
+  it("prepares reference samples before resuming an active quiet Rhythm session", async () => {
+    const studio = create(
+      song([
+        [60, 0.5],
+        [63, 2.5],
+      ]),
+    );
+    studio.mode("rhythm");
+    studio.reference(false);
+    await studio.play();
+    advance(studio, 0.25);
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    studio.reference(true);
+    expect(studio.transport.playing).toBe(false);
+    await vi.waitFor(() =>
+      expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
+        studio.notes,
+      ),
+    );
+    advance(studio, 1);
+    expect(studio.position).toBe(0.25);
+    finish();
+    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
+    expect(studio.position).toBe(0.25);
+    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith(
+      studio.notes,
+    );
+  });
+
+  it("can disable reference during preparation and ignores that stale completion", async () => {
+    const studio = create(
+      song([
+        [60, 0.5],
+        [63, 2.5],
+      ]),
+    );
+    studio.mode("rhythm");
+    studio.reference(false);
+    await studio.play();
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    studio.reference(true);
+    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
+    const preparation = vi.mocked(studio.audio.prepare).mock.results[0].value;
+    studio.reference(false);
+    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
+    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([]);
+    finish();
+    await preparation;
+    await Promise.resolve();
+    expect(studio.settings.reference).toBe(false);
+    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([]);
+    expect(studio.audio.prepare).toHaveBeenCalledOnce();
+  });
 
   it("keeps every built-in piece and restores the selected one after library loading", async () => {
     const builtIns = builtInSongs();
