@@ -1,0 +1,43 @@
+name: Codex review gate
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Pull request to refresh
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  statuses: write
+
+concurrency:
+  group: codex-review-gate-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_request_number }}
+  cancel-in-progress: true
+
+jobs:
+  publish-gate:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.user.id == 199175422)
+    runs-on: ubuntu-latest
+    steps:
+      # Never check out a PR head: this workflow has permission to publish statuses.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { runCodexReviewGate } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/codex-review-gate.mjs`);
+            await runCodexReviewGate({ github, context, core });
