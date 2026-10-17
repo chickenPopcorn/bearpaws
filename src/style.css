@@ -178,12 +178,13 @@ select {
 }
 .body {
   display: grid;
-  grid-template-columns: 408px minmax(0, 1fr);
+  /* Fits typical song details on one line; the few longest wrap. */
+  grid-template-columns: 340px minmax(0, 1fr);
 }
 .sidebar {
   background: #fff;
   border-right: 1px solid var(--line);
-  padding: 28px 17px;
+  padding: 28px 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -288,7 +289,7 @@ select {
   border: none;
   text-align: left;
   background: transparent;
-  padding: 6px 10px;
+  padding: 6px 8px;
   font-size: 15px;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -1163,9 +1164,6 @@ footer {
   }
   .app {
     margin: 12px;
-  }
-  .body {
-    grid-template-columns: 360px minmax(0, 1fr);
   }
   main {
     padding: 24px 22px;
