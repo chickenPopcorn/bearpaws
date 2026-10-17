@@ -628,8 +628,7 @@ h1 {
   fill: currentColor;
   stroke: currentColor;
 }
-.sheet-note-label,
-.sheet-label {
+.sheet-note-label {
   fill: #62576e;
   stroke: none;
   font-family: var(--score-font);
@@ -797,10 +796,6 @@ h1 {
   color: var(--accent);
   background: var(--soft);
   font-size: 13px;
-}
-.chord .held {
-  background: var(--accent);
-  color: #fff;
 }
 .chord .finger-note {
   min-width: 58px;
@@ -1243,9 +1238,6 @@ footer {
   }
   .coach {
     padding: 17px 14px;
-  }
-  .transport {
-    flex-wrap: wrap;
   }
   .speed {
     margin-left: auto;

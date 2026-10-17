@@ -1,6 +1,6 @@
-import { useId, useRef, useState } from "react";
+import { memo, useId, useRef, useState } from "react";
 
-export function PianoSoundControls({
+export const PianoSoundControls = memo(function PianoSoundControls({
   ambience,
   onChange,
 }: {
@@ -62,4 +62,4 @@ export function PianoSoundControls({
       </div>
     </div>
   );
-}
+});

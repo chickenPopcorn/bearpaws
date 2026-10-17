@@ -427,7 +427,7 @@ describe("practice studio integration", () => {
       vi.mocked(studio.audio.stop).mockClear();
       advance(studio, 4 / speed + 0.001);
       expect(studio.transport.playing).toBe(false);
-      expect(studio.notice).toMatch(/Passage complete/);
+      expect(studio.notice).toBe("");
       expect(studio.audio.stop).not.toHaveBeenCalled();
       studio.pause();
       expect(studio.audio.stop).toHaveBeenCalledOnce();
@@ -1056,6 +1056,73 @@ describe("practice studio integration", () => {
     expect(studio.practice.missed.size).toBe(0);
   });
 
+  it.each([
+    ["before", 0],
+    ["after", 0.1],
+  ] as const)(
+    "credits a Rhythm press just before a loop wrap, delivered %s it, to the next pass",
+    async (_, delay) => {
+      const studio = create(
+        song([
+          [60, 0],
+          [62, 1],
+        ]),
+      );
+      studio.mode("rhythm");
+      studio.bounds(0, 2);
+      studio.loop(true);
+      await studio.play();
+      midi(studio, [0x90, 60, 100]);
+      midi(studio, [0x80, 60, 0]);
+      advance(studio, 1);
+      midi(studio, [0x90, 62, 100]);
+      midi(studio, [0x80, 62, 0]);
+      advance(studio, 0.95);
+      env.now += delay;
+      midi(studio, [0x90, 60, 100], delay); // 50 ms early for the next pass.
+      midi(studio, [0x80, 60, 0]);
+      expect(studio.practice.stats.wrong).toBe(0);
+      advance(studio, 0.3);
+      expect(studio.position).toBeCloseTo(0.25 + delay);
+      expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+      expect(studio.practice.missed.size).toBe(0);
+      expect(studio.practice.feedback).toMatchObject([
+        { pitch: 60, offset: expect.closeTo(-0.05) },
+      ]);
+    },
+  );
+
+  it("scores a Rhythm press just after a loop wrap late for the previous pass's last note", async () => {
+    const studio = create(
+      song([
+        [62, 0.2],
+        [62, 1.95],
+      ]),
+    );
+    studio.mode("rhythm");
+    studio.bounds(0, 2);
+    studio.loop(true);
+    await studio.play();
+    advance(studio, 0.2);
+    midi(studio, [0x90, 62, 100]);
+    midi(studio, [0x80, 62, 0]);
+    advance(studio, 1.7);
+    advance(studio, 0.12);
+    expect(studio.position).toBeCloseTo(0.02);
+    midi(studio, [0x90, 62, 100]); // 70 ms late for the note at 1.95.
+    midi(studio, [0x80, 62, 0]);
+    expect(studio.practice.feedback).toMatchObject([
+      { kind: "late", pitch: 62, offset: expect.closeTo(0.07) },
+    ]);
+    // The new pass's first note, of the same pitch, is still to be played.
+    expect(studio.practice.hit.size).toBe(0);
+    advance(studio, 0.18);
+    midi(studio, [0x90, 62, 100]);
+    expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+    expect(studio.practice.missed.size).toBe(0);
+    expect(studio.practice.stats.wrong).toBe(0);
+  });
+
   it("rejects a Wait note outside the early tolerance, but accepts an exact-gate timestamp", async () => {
     const studio = create(song([[60, 1]]));
     studio.tolerance(0.5);
@@ -1200,6 +1267,35 @@ describe("practice studio integration", () => {
     expect([restored.loopStart, restored.loopEnd]).toEqual([0.5, 2.5]);
     restored.loop(true);
     expect(restored.transport.loop).toEqual([0.5, 2.5]);
+  });
+
+  it("ignores MIDI clock and active sensing without notifying views", async () => {
+    const studio = create(song([[60, 1]]));
+    studio.mode("listen");
+    await studio.play();
+    const listener = vi.fn();
+    studio.subscribe(listener);
+    const revision = studio.revision;
+    // Clock, start, continue, stop, active sensing and reset.
+    for (const status of [0xf8, 0xfa, 0xfb, 0xfc, 0xfe, 0xff])
+      midi(studio, [status]);
+    expect(listener).not.toHaveBeenCalled();
+    expect(studio.revision).toBe(revision);
+    midi(studio, [0x90, 60, 80]);
+    expect(listener).toHaveBeenCalled();
+    expect(studio.input.down.has(60)).toBe(true);
+    expect(studio.lastVelocity).toBe(80);
+  });
+
+  it("replaces the song on hand assignment so views can memoize on it", () => {
+    const studio = create(song([[60, 1]]));
+    const before = studio.song;
+    studio.assign(0, "left");
+    expect(studio.song).not.toBe(before);
+    expect(before.tracks[0].hand).toBe("right");
+    expect(studio.song.tracks[0].hand).toBe("left");
+    expect(studio.song.notes).toBe(before.notes);
+    expect(studio.notes).toHaveLength(1);
   });
 
   it("persists position, speed, hand assignments, loop and feedback settings per song", () => {

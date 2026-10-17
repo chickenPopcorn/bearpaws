@@ -186,6 +186,12 @@ const NoteGlyph = memo(function NoteGlyph({
   );
 });
 
+/** SMuFL time signature digits, which start at U+E080. */
+const timeSignatureDigits = (value: number) =>
+  String(value).replace(/\d/g, (digit) =>
+    String.fromCodePoint(0xe080 + Number(digit)),
+  );
+
 function Rest({ x, y, beats }: { x: number; y: number; beats: number }) {
   const rhythm = rhythmForBeats(beats);
   return (
@@ -260,18 +266,7 @@ export function SheetTimeline({
     return () => observer.disconnect();
   }, []);
 
-  const score = useMemo(
-    () => buildScore(song),
-    [
-      song,
-      song.notes,
-      song.tempos,
-      song.ppq,
-      song.beatsPerBar,
-      song.timeSignatures,
-      song.leadInBeats,
-    ],
-  );
+  const score = useMemo(() => buildScore(song), [song]);
   const selected = useMemo(
     () => new Set(selectedNotes.map((note) => note.id)),
     [selectedNotes],
@@ -282,10 +277,6 @@ export function SheetTimeline({
     Math.min(score.measureCount - 1, score.meter.at(beat).measure),
   );
   const currentBar = score.meter.measureAt(currentMeasure);
-  // Track assignment can change in place, so use its small signature as a cache key.
-  const handSignature = song.tracks
-    .map((track) => `${track.id}:${track.hand}`)
-    .join(",");
   // Keep the staff scale steady as notes enter and leave the viewport.
   const bounds = useMemo(() => {
     const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
@@ -300,7 +291,7 @@ export function SheetTimeline({
       maximum = Math.max(maximum, y + 42);
     }
     return { minimum, height: maximum - minimum };
-  }, [song.notes, handSignature]);
+  }, [song]);
   const following = scoreViewport(
     beat,
     score.measureCount,
@@ -431,14 +422,7 @@ export function SheetTimeline({
       rests,
       condensed,
     };
-  }, [
-    score,
-    viewport.first,
-    viewport.last,
-    measureWidth,
-    handSignature,
-    song.lesson,
-  ]);
+  }, [score, viewport.first, viewport.last, measureWidth, song]);
 
   const beatInMeasure = Math.max(0, beat - currentBar.start);
   const marker = Math.max(
@@ -615,26 +599,16 @@ export function SheetTimeline({
           {"\uE062"}
         </text>
         <g className="sheet-time-signature" textAnchor="middle" fontSize={40}>
-          <text x={74} y={74}>
-            {String(currentBar.numerator).replace(/\d/g, (digit) =>
-              String.fromCodePoint(0xe080 + Number(digit)),
-            )}
-          </text>
-          <text x={74} y={94}>
-            {String(currentBar.denominator).replace(/\d/g, (digit) =>
-              String.fromCodePoint(0xe080 + Number(digit)),
-            )}
-          </text>
-          <text x={74} y={182}>
-            {String(currentBar.numerator).replace(/\d/g, (digit) =>
-              String.fromCodePoint(0xe080 + Number(digit)),
-            )}
-          </text>
-          <text x={74} y={202}>
-            {String(currentBar.denominator).replace(/\d/g, (digit) =>
-              String.fromCodePoint(0xe080 + Number(digit)),
-            )}
-          </text>
+          {[74, 182].map((top) => (
+            <g key={top}>
+              <text x={74} y={top}>
+                {timeSignatureDigits(currentBar.numerator)}
+              </text>
+              <text x={74} y={top + 20}>
+                {timeSignatureDigits(currentBar.denominator)}
+              </text>
+            </g>
+          ))}
         </g>
         <g clipPath={`url(#${clipId})`}>
           <g
