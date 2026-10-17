@@ -65,10 +65,9 @@ Full screen expands the score and waterfall and starts the selected practice
 mode. Enter opens full screen and starts playback; it also resumes a paused
 full-screen session. Space pauses or resumes in either view. These
 shortcuts stay inactive while editing a field. Escape returns to the page;
-playback controls remain available in either view. Clicking “Where your fingers
-go” toggles the optional animated bear paws;
-that preference is saved separately in this browser, and reduced-motion settings
-disable their animation.
+playback controls remain available in either view. The finger guide always shows
+animated bear paws directly from the source, with no saved display preference.
+Reduced-motion settings disable their animation.
 On both hands, 1 means thumb and 5 means little finger. Changing a track to the
 opposite hand hides its original fingering; imported MIDI is not assigned
 guessed finger numbers.
@@ -86,10 +85,6 @@ guessed finger numbers.
 Reference audio coalesces duplicate pitches at the same onset and allows at most 64 active or scheduled voices, including previews. Extremely dense material can omit excess reference voices; MIDI input and scoring remain independent. The waterfall coalesces duplicate note shapes and draws at most 4,096 distinct visible rectangles per frame; the full note set still drives scoring. Recent feedback is limited to 256 entries and six missed-note replay anchors, with full-passage note counts, wrong-press totals and average timing retained separately.
 
 Your physical piano supplies live piano sound. The browser does not echo incoming USB notes; Listen, optional Rhythm reference, and on-screen previews use Accurate-Salamander Grand Piano 6.2a: eight recorded intensity layers of a Yamaha C5, in lossless 24-bit stereo FLAC. The player preserves the source preset’s per-key tuning, attack offsets and volume balance, with natural release tails. Only the recordings needed for the selected notes and velocities load before playback; decoded samples are reused within a 512 MiB cache. Very large selections may need one hand or a shorter loop. The complete bundled sample bank is about 358 MiB, but it is not downloaded in full on page load. No external audio service is contacted. Recording credits, adaptation details and the CC BY 3.0 license are in [the sample credits](public/audio/accurate-salamander/CREDITS.md). Key-down highlights are separate from pedal-sustained sound (teal dots). Switching inputs or disconnecting clears key/pedal state and pauses Wait/Rhythm; Listen continues. Seek/restart and loop transitions clear transient input and cancel scheduled reference audio. Leaving the page hidden pauses playback to avoid invisible practice and background scheduling gaps.
-
-## Illustration credit
-
-The finger guide adapts [Hand external anatomy, dorsum](https://commons.wikimedia.org/wiki/File:Hand_external_anatomy,_dorsum.svg) by Darryl Leja / the National Human Genome Research Institute, a public-domain US government work. The app omits fine joint markings, crops the wrist, recolors and mirrors the outline, and adds upright fingering numbers.
 
 ## Local data and file support
 
@@ -131,7 +126,7 @@ the earlier Sites registration attempt returned `Project owner is not linked to
 an account`, with no deployed URL.
 
 Local Chrome verification confirmed automatic connection to the available USB MIDI
-input after refresh, fullscreen autoplay, score seeking and the saved paw preference.
+input after refresh, fullscreen autoplay, score seeking and the bear-paw guide.
 This does not establish end-to-end physical-key timing or published-origin MIDI
 compatibility. See the verification document for that distinction.
 
