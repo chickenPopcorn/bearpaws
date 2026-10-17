@@ -730,6 +730,48 @@ describe("Rhythm matching and feedback", () => {
     expect(p.feedback.find((f) => f.pitch === 60)?.offset).toBeCloseTo(0.15);
     expect(p.feedback.at(-1)?.kind).toBe("wrong");
   });
+
+  it("credits a press just before a loop wrap to the next pass's first note", () => {
+    const p = new Practice(
+      [note("first", 60, 0), note("second", 62, 1)],
+      [0, 2],
+    );
+    p.reset(0);
+    p.input(60, 0, "rhythm", 0.2, 1, new Set([60]));
+    p.input(62, 1, "rhythm", 0.2, 1, new Set([62]));
+    p.input(60, 1.92, "rhythm", 0.2, 1, new Set([60]));
+    expect(p.feedback.map((f) => f.kind)).toEqual(["hit", "hit"]);
+    p.expire(1.99, 0.2, 1);
+    p.wrap();
+    expect(p.hit).toEqual(new Set(["first"]));
+    expect(p.feedback).toEqual([
+      { kind: "early", pitch: 60, at: 1.92, offset: expect.closeTo(-0.08) },
+    ]);
+    p.expire(1.5, 0.2, 1);
+    expect(p.missed).toEqual(new Set(["second"]));
+  });
+
+  it("scores a press just after a loop wrap late for the previous pass's last note", () => {
+    const p = new Practice(
+      [note("first", 62, 0.2), note("last", 62, 1.95)],
+      [0, 2],
+    );
+    p.reset(0);
+    p.input(62, 0.2, "rhythm", 0.2, 1, new Set([62]));
+    p.expire(1.99, 0.2, 1);
+    p.wrap();
+    // The press is nearer the previous pass's last note than this pass's first.
+    p.input(62, 0.02, "rhythm", 0.2, 1, new Set([62]));
+    expect(p.feedback).toEqual([
+      { kind: "late", pitch: 62, at: 0.02, offset: expect.closeTo(0.07) },
+    ]);
+    expect(p.hit.size).toBe(0);
+    p.input(62, 0.2, "rhythm", 0.2, 1, new Set([62]));
+    p.expire(0.5, 0.2, 1);
+    expect(p.hit).toEqual(new Set(["first"]));
+    expect(p.missed.size).toBe(0);
+    expect(p.stats.wrong).toBe(0);
+  });
 });
 
 describe("Wait for me chord and repeated-note gating", () => {

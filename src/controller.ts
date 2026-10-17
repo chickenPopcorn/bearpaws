@@ -1,4 +1,10 @@
-import { Practice, Transport, MidiState, type Mode } from "./engine";
+import {
+  Practice,
+  Transport,
+  MidiState,
+  TIMING_EPSILON,
+  type Mode,
+} from "./engine";
 import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
 import { checkMidiSize, parseSong, type Song, type Hand } from "./song";
@@ -29,6 +35,9 @@ export class Studio {
   private destroyed = false;
   private selectedNotes: Song["notes"] = [];
   scoringEpoch = 0;
+  // Where the current loop pass began. Earlier presses in this scoring
+  // session belong to the previous pass.
+  private passEpoch = -Infinity;
   songs = builtInSongs();
   // Loading writes the selection, so start on the saved built-in song (if
   // any) rather than overwrite it before the library loads, or fails to.
@@ -115,7 +124,7 @@ export class Studio {
   private restartScoring() {
     this.scoringEpoch = this.audio.now();
     this.input.clear();
-    this.practice = new Practice(this.scoringNotes);
+    this.practice = new Practice(this.scoringNotes, this.transport.loop);
     this.practice.reset(this.position);
   }
   private cancelPlaybackPreparation() {
@@ -428,13 +437,13 @@ export class Studio {
       if (cycle !== this.transport.cycle) {
         // Replace note scheduling without rebuilding the room on each pass.
         this.audio.stop(false, false);
-        this.scoringEpoch =
+        this.passEpoch =
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();
-        this.practice.reset(this.loopStart);
+        this.practice.wrap();
         // Replay this pass from its actual clock boundary so a late callback
         // records the first Wait hold at its true arrival time.
-        this.transport.seek(this.loopStart, this.scoringEpoch);
+        this.transport.seek(this.loopStart, this.passEpoch);
         this.position = this.transport.update(now, this.waitGate);
       }
       if (this.settings.mode === "rhythm")
@@ -476,13 +485,24 @@ export class Studio {
     const edge = this.input.message(data);
     if (edge) {
       this.lastVelocity = edge.velocity;
-      if (wasPlaying && event >= this.scoringEpoch) {
+      // A Rhythm press within the timing window before a loop wrap, delivered
+      // after it, is scored in the new pass's time. There it can be early for
+      // the pass's first notes or late for the previous pass's last ones.
+      const carried =
+        this.settings.mode === "rhythm" &&
+        event < this.passEpoch &&
+        this.passEpoch - event <= this.settings.tolerance + TIMING_EPSILON;
+      if (
+        wasPlaying &&
+        event >= this.scoringEpoch &&
+        (event >= this.passEpoch || carried)
+      ) {
         // Wait gates are recorded by tick; map again so delayed events retain
         // their actual position, including time spent held at the gate.
         const position =
           this.settings.mode === "wait"
             ? this.transport.eventAt(event).position
-            : mapped.position;
+            : mapped.position - (carried ? this.loopEnd - this.loopStart : 0);
         const advanced = this.practice.input(
           edge.pitch,
           position,

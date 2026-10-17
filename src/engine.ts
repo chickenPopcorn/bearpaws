@@ -1,7 +1,7 @@
 import type { Note } from "./song";
 export type Mode = "listen" | "wait" | "rhythm";
 // Keep inclusive timing windows stable after converting song time to wall time.
-const TIMING_EPSILON = 1e-6;
+export const TIMING_EPSILON = 1e-6;
 export interface Group {
   start: number;
   notes: Note[];
@@ -148,9 +148,17 @@ export interface Feedback {
   at: number;
   offset?: number;
 }
+interface Target {
+  note: Note;
+  /** Start in the current pass's song time. */
+  start: number;
+  /** The loop pass the note belongs to, relative to the current one. */
+  pass: -1 | 0 | 1;
+}
 export class Practice {
   notes: Note[];
   groups: Group[];
+  loop: [number, number] | null;
   from = 0;
   hit = new Set<string>();
   missed = new Set<string>();
@@ -160,6 +168,11 @@ export class Practice {
   private timingCount = 0;
   private timingAbsTotal = 0;
   private missFeedback: Feedback[] = [];
+  // Rhythm presses just before a loop wrap that were early for the next pass.
+  private nextHit = new Set<string>();
+  private nextFeedback: Feedback[] = [];
+  // The previous pass's unscored final notes, which can still be played late.
+  private previous: Target[] = [];
   get stats() {
     return {
       wrong: this.wrongCount,
@@ -186,9 +199,10 @@ export class Practice {
       if (this.missFeedback.length > 6) this.missFeedback.shift();
     }
   }
-  constructor(notes: Note[]) {
+  constructor(notes: Note[], loop: [number, number] | null = null) {
     this.notes = notes;
     this.groups = chords(notes);
+    this.loop = loop;
   }
   reset(position: number) {
     this.from = position;
@@ -197,8 +211,60 @@ export class Practice {
     this.feedback = [];
     this.missFeedback = [];
     this.wrongCount = this.timingCount = this.timingAbsTotal = 0;
+    this.nextHit = new Set();
+    this.nextFeedback = [];
+    this.previous = [];
     this.gateIndex = this.groups.findIndex((g) => g.start >= position - 0.001);
     if (this.gateIndex < 0) this.gateIndex = this.groups.length;
+  }
+  /** Start the loop's next pass, keeping Rhythm presses that span the wrap. */
+  wrap() {
+    const [start, end] = this.loop!;
+    const previous = this.notes
+      .filter(
+        (n) =>
+          n.start >= this.from - 0.001 &&
+          !this.hit.has(n.id) &&
+          !this.missed.has(n.id),
+      )
+      .map((note) => ({
+        note,
+        start: note.start - (end - start),
+        pass: -1 as const,
+      }));
+    const nextHit = this.nextHit,
+      nextFeedback = this.nextFeedback;
+    this.reset(start);
+    this.previous = previous;
+    for (const id of nextHit) this.hit.add(id);
+    for (const item of nextFeedback) this.recordFeedback(item);
+  }
+  /** Unscored Rhythm notes of this pitch, in the current pass's song time. */
+  private targets(pitch: number): Target[] {
+    const current = this.notes
+      .filter(
+        (n) =>
+          n.start >= this.from - 0.001 &&
+          n.pitch === pitch &&
+          !this.hit.has(n.id),
+      )
+      .map((note) => ({ note, start: note.start, pass: 0 as const }));
+    if (!this.loop) return current;
+    // The timing window spans the wrap: a press just after it can be late for
+    // the previous pass's last notes, and one just before it can be early for
+    // the next pass's first notes.
+    const length = this.loop[1] - this.loop[0];
+    return [
+      ...this.previous.filter((t) => t.note.pitch === pitch),
+      ...current,
+      ...this.notes
+        .filter((n) => n.pitch === pitch && !this.nextHit.has(n.id))
+        .map((note) => ({
+          note,
+          start: note.start + length,
+          pass: 1 as const,
+        })),
+    ];
   }
   get gate() {
     return this.groups[this.gateIndex];
@@ -235,43 +301,49 @@ export class Practice {
       }
       return;
     }
-    const candidates = this.notes.filter(
-      (n) =>
-        n.start >= this.from - 0.001 &&
-        n.pitch === pitch &&
-        !this.hit.has(n.id),
-    );
+    const candidates = this.targets(pitch);
     const nearest = candidates.sort(
       (a, b) => Math.abs(a.start - position) - Math.abs(b.start - position),
     )[0];
     const offset = nearest ? (position - nearest.start) / speed : Infinity;
     if (nearest && Math.abs(offset) <= tolerance + TIMING_EPSILON) {
-      for (const n of candidates.filter(
-        (n) => Math.abs(n.start - nearest.start) < 0.001,
-      )) {
-        this.hit.add(n.id);
-        this.missed.delete(n.id);
-      }
-      this.feedback = this.feedback.filter(
-        (f) =>
-          !(
-            f.kind === "miss" &&
-            f.pitch === nearest.pitch &&
-            Math.abs(f.at - nearest.start) < 0.001
-          ),
+      const chord = candidates.filter(
+        (t) =>
+          t.pass === nearest.pass && Math.abs(t.start - nearest.start) < 0.001,
       );
-      this.missFeedback = this.missFeedback.filter(
-        (f) =>
-          !(
-            f.pitch === nearest.pitch && Math.abs(f.at - nearest.start) < 0.001
-          ),
-      );
-      this.recordFeedback({
+      const feedback: Feedback = {
         kind: offset < -0.05 ? "early" : offset > 0.05 ? "late" : "hit",
         pitch,
         at: position,
         offset,
-      });
+      };
+      if (nearest.pass === 1) {
+        // The wrap is about to reset this pass, so credit the next one then.
+        for (const t of chord) this.nextHit.add(t.note.id);
+        this.nextFeedback.push(feedback);
+        return;
+      }
+      if (nearest.pass === -1) {
+        // That pass's review was reset at the wrap; only the timing remains.
+        this.previous = this.previous.filter((t) => !chord.includes(t));
+      } else {
+        for (const t of chord) {
+          this.hit.add(t.note.id);
+          this.missed.delete(t.note.id);
+        }
+        this.feedback = this.feedback.filter(
+          (f) =>
+            !(
+              f.kind === "miss" &&
+              f.pitch === pitch &&
+              Math.abs(f.at - nearest.start) < 0.001
+            ),
+        );
+        this.missFeedback = this.missFeedback.filter(
+          (f) => !(f.pitch === pitch && Math.abs(f.at - nearest.start) < 0.001),
+        );
+      }
+      this.recordFeedback(feedback);
     } else this.recordFeedback({ kind: "wrong", pitch, at: position });
   }
   expire(position: number, tolerance: number, speed: number) {
