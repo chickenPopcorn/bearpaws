@@ -70,6 +70,68 @@ const checkpoint = (values = {}) => ({
   created_at: FINISH,
   id: 100,
 });
+const nullCodeState = () => ({
+  code_review: {
+    ...cleanReview(),
+    has_any_findings: true,
+    has_unresolved_findings: null,
+  },
+  security_review: cleanReview(),
+});
+const receipt = (overrides = {}) => ({
+  id: "review-1",
+  databaseId: 101,
+  comments: { totalCount: 1 },
+  submittedAt: FINISH,
+  state: "COMMENTED",
+  body: "<!-- codex-review-receipt:v1 -->\nCode Review",
+  commit: { oid: HEAD },
+  author: {
+    __typename: "Bot",
+    login: "chatgpt-codex-connector",
+    databaseId: 199175422,
+  },
+  ...overrides,
+});
+const receiptPage = (
+  nodes = [receipt()],
+  hasNextPage = false,
+  endCursor = null,
+) => ({
+  repository: {
+    pullRequest: { reviews: { nodes, pageInfo: { hasNextPage, endCursor } } },
+  },
+});
+const reviewThread = (overrides = {}) => ({
+  isResolved: true,
+  isOutdated: false,
+  comments: {
+    nodes: [
+      {
+        databaseId: 201,
+        body: "A finding\n<!-- codex-code-review-finding:v1 -->",
+        pullRequestReview: receipt(),
+        author: {
+          __typename: "Bot",
+          login: "chatgpt-codex-connector",
+          databaseId: 199175422,
+        },
+      },
+    ],
+  },
+  ...overrides,
+});
+const threadPage = (
+  nodes = [reviewThread()],
+  hasNextPage = false,
+  endCursor = null,
+) => ({
+  repository: {
+    pullRequest: {
+      reviewThreads: { nodes, pageInfo: { hasNextPage, endCursor } },
+    },
+  },
+});
 const savedCheckpoint = (publish) =>
   JSON.parse(
     publish.mock.calls.findLast(
@@ -87,11 +149,13 @@ function setup(comments = [], events = [], statuses = []) {
   const get = vi.fn().mockResolvedValue({ data: pullRequest });
   const publish = vi.fn().mockResolvedValue({});
   const listComments = vi.fn();
+  const listCommentsForReview = vi.fn();
   const listEvents = vi.fn();
   const listCommitStatusesForRef = vi.fn();
   const github = {
+    graphql: vi.fn(),
     rest: {
-      pulls: { get },
+      pulls: { get, listCommentsForReview },
       issues: { listComments, listEvents },
       repos: { createCommitStatus: publish, listCommitStatusesForRef },
     },
@@ -120,6 +184,38 @@ function setup(comments = [], events = [], statuses = []) {
     publish,
     pullRequest,
   };
+}
+
+const findingComment = (overrides = {}) => ({
+  id: 201,
+  body: "A finding\n<!-- codex-code-review-finding:v1 -->",
+  pull_request_review_id: 101,
+  original_commit_id: HEAD,
+  user: { id: 199175422, login: "chatgpt-codex-connector[bot]", type: "Bot" },
+  ...overrides,
+});
+
+function setupFallback() {
+  const fixture = setup(
+    [withTimes(nullCodeState())],
+    [],
+    [checkpoint({ rc: Date.parse(START) })],
+  );
+  const originalPaginate = fixture.github.paginate.getMockImplementation();
+  const reviewComments = vi.fn().mockResolvedValue([findingComment()]);
+  fixture.github.paginate.mockImplementation((method, parameters) =>
+    method === fixture.github.rest.pulls.listCommentsForReview
+      ? reviewComments(parameters)
+      : originalPaginate(method, parameters),
+  );
+  const reviewGraphql = vi.fn().mockResolvedValue(receiptPage());
+  const threadGraphql = vi.fn();
+  fixture.github.graphql.mockImplementation((query, variables) =>
+    query.includes("reviews(first:100")
+      ? reviewGraphql(query, variables)
+      : threadGraphql(query, variables),
+  );
+  return { ...fixture, reviewGraphql, threadGraphql, reviewComments };
 }
 
 describe("Codex review merge gate", () => {
@@ -800,6 +896,532 @@ describe("Codex review merge gate", () => {
         c: Date.parse(REQUEST),
         s: Date.parse(REQUEST),
       });
+    },
+  );
+
+  it("accepts null unresolved metadata only with complete resolved Codex finding threads", async () => {
+    const { run, github, threadGraphql, get } = setupFallback();
+    threadGraphql.mockResolvedValue(threadPage());
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+    expect(threadGraphql).toHaveBeenCalledTimes(1);
+    expect(threadGraphql).toHaveBeenCalledWith(
+      expect.stringContaining("reviewThreads(first:100"),
+      {
+        owner: "chickenPopcorn",
+        name: "bearpaws",
+        number: 7,
+        cursor: null,
+      },
+    );
+    expect(get).toHaveBeenCalledTimes(3);
+  });
+
+  it("requires an observed Code Review start before attempting null-metadata fallback", async () => {
+    const { run, github } = setup([withTimes(nullCodeState())]);
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    expect(github.graphql).not.toHaveBeenCalled();
+  });
+
+  it.each(["missing", "unresolved", "resolved"])(
+    "verifies every finding in the selected review when another thread is %s",
+    async (state) => {
+      const { run, reviewGraphql, threadGraphql, reviewComments, github } =
+        setupFallback();
+      reviewGraphql.mockResolvedValue(
+        receiptPage([receipt({ comments: { totalCount: 2 } })]),
+      );
+      reviewComments.mockResolvedValue([
+        findingComment(),
+        findingComment({ id: 202 }),
+      ]);
+      const threads = [reviewThread()];
+      if (state !== "missing") {
+        const second = reviewThread({ isResolved: state === "resolved" });
+        second.comments.nodes[0].databaseId = 202;
+        threads.push(second);
+      }
+      threadGraphql.mockResolvedValue(threadPage(threads));
+      await expect(run()).resolves.toMatchObject({
+        state:
+          state === "missing"
+            ? "pending"
+            : state === "unresolved"
+              ? "failure"
+              : "success",
+      });
+      expect(github.paginate).toHaveBeenCalledWith(
+        github.rest.pulls.listCommentsForReview,
+        {
+          owner: "chickenPopcorn",
+          repo: "bearpaws",
+          pull_number: 7,
+          review_id: 101,
+          per_page: 100,
+        },
+      );
+    },
+  );
+
+  it("keeps partial REST comment propagation pending even when the visible thread is resolved", async () => {
+    const { run, reviewGraphql, threadGraphql } = setupFallback();
+    reviewGraphql.mockResolvedValue(
+      receiptPage([receipt({ comments: { totalCount: 2 } })]),
+    );
+    threadGraphql.mockResolvedValue(threadPage());
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("rejects a thread set that contains an unenumerated current finding", async () => {
+    const { run, threadGraphql } = setupFallback();
+    const second = reviewThread();
+    second.comments.nodes[0].databaseId = 202;
+    threadGraphql.mockResolvedValue(threadPage([reviewThread(), second]));
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("requires a marked trusted finding in the complete receipt comment set", async () => {
+    const { run, threadGraphql, reviewComments } = setupFallback();
+    reviewComments.mockResolvedValue([
+      findingComment({ body: "Not a finding" }),
+    ]);
+    threadGraphql.mockResolvedValue(threadPage());
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it.each([
+    { body: "An unclassified comment" },
+    { user: { id: 123, login: "someone", type: "User" } },
+    { in_reply_to_id: 201 },
+  ])(
+    "does not silently exclude an unexpected receipt comment: %j",
+    async (extra) => {
+      const { run, reviewGraphql, threadGraphql, reviewComments } =
+        setupFallback();
+      reviewGraphql.mockResolvedValue(
+        receiptPage([receipt({ comments: { totalCount: 2 } })]),
+      );
+      reviewComments.mockResolvedValue([
+        findingComment(),
+        findingComment({ id: 202, ...extra }),
+      ]);
+      threadGraphql.mockResolvedValue(threadPage());
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    },
+  );
+
+  it.each([
+    undefined,
+    [findingComment({ pull_request_review_id: 999 })],
+    [findingComment({ original_commit_id: OLD_HEAD })],
+    [findingComment({ user: null })],
+    [findingComment({ id: null })],
+    [findingComment(), findingComment()],
+  ])(
+    "fails closed for incomplete finding comment lists: %j",
+    async (comments) => {
+      const { run, reviewComments, publish } = setupFallback();
+      reviewComments.mockResolvedValue(comments);
+      await expect(run()).rejects.toThrow();
+      expect(publish).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          context: "Codex review gate",
+          state: "failure",
+        }),
+      );
+    },
+  );
+
+  it("fails closed when fetching the complete review comment list fails", async () => {
+    const { run, reviewComments } = setupFallback();
+    reviewComments.mockRejectedValue(new Error("Review comments unavailable"));
+    await expect(run()).rejects.toThrow("Review comments unavailable");
+  });
+
+  it.each([
+    { commit: { oid: OLD_HEAD } },
+    { submittedAt: BEFORE },
+    { submittedAt: START },
+    { submittedAt: "2026-10-17T06:04:00Z" },
+    { state: "PENDING" },
+    { body: "A quoted or unrelated review receipt" },
+    { author: { __typename: "Bot", login: "attacker", databaseId: 199175422 } },
+    {
+      author: {
+        __typename: "Bot",
+        login: "chatgpt-codex-connector",
+        databaseId: 123,
+      },
+    },
+  ])(
+    "does not count receipts from another head, run or author: %j",
+    async (values) => {
+      const { run, reviewGraphql, threadGraphql } = setupFallback();
+      reviewGraphql.mockResolvedValue(receiptPage([receipt(values)]));
+      threadGraphql.mockResolvedValue(threadPage());
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    },
+  );
+
+  it.each(["COMMENTED", "DISMISSED"])(
+    "keeps task completion independent of a %s GitHub review decision",
+    async (state) => {
+      const { run, reviewGraphql, threadGraphql } = setupFallback();
+      reviewGraphql.mockResolvedValue(receiptPage([receipt({ state })]));
+      threadGraphql.mockResolvedValue(threadPage());
+      await expect(run()).resolves.toMatchObject({ state: "success" });
+      threadGraphql.mockResolvedValue(
+        threadPage([reviewThread({ isResolved: false })]),
+      );
+      await expect(run()).resolves.toMatchObject({ state: "failure" });
+    },
+  );
+
+  it.each([
+    { commit: { oid: OLD_HEAD } },
+    { id: "earlier-review", submittedAt: BEFORE },
+    { id: "earlier-run", submittedAt: "2026-10-17T06:02:30Z" },
+  ])(
+    "historical resolved threads cannot replace missing current findings: %j",
+    async (values) => {
+      const thread = reviewThread();
+      thread.comments.nodes[0].pullRequestReview = receipt(values);
+      const { run, threadGraphql } = setupFallback();
+      threadGraphql.mockResolvedValue(threadPage([thread]));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    },
+  );
+
+  it("still blocks an unresolved finding from an older commit", async () => {
+    const old = reviewThread({ isResolved: false, isOutdated: true });
+    old.comments.nodes[0].pullRequestReview = receipt({
+      id: "old-review",
+      commit: { oid: OLD_HEAD },
+      submittedAt: BEFORE,
+    });
+    const { run, threadGraphql } = setupFallback();
+    threadGraphql.mockResolvedValue(threadPage([reviewThread(), old]));
+    await expect(run()).resolves.toMatchObject({ state: "failure" });
+  });
+
+  it("selects the latest current receipt across every review page", async () => {
+    const { run, reviewGraphql, threadGraphql } = setupFallback();
+    reviewGraphql
+      .mockResolvedValueOnce(
+        receiptPage(
+          [receipt({ id: "old-review", submittedAt: BEFORE })],
+          true,
+          "review-page-2",
+        ),
+      )
+      .mockResolvedValueOnce(receiptPage());
+    threadGraphql.mockResolvedValue(threadPage());
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+    expect(reviewGraphql).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({ cursor: "review-page-2" }),
+    );
+  });
+
+  it("ignores old timestamp ties once a newer unambiguous receipt arrives", async () => {
+    const { run, reviewGraphql, threadGraphql } = setupFallback();
+    reviewGraphql
+      .mockResolvedValueOnce(
+        receiptPage(
+          [
+            receipt({ id: "old-a", submittedAt: BEFORE }),
+            receipt({ id: "old-b", submittedAt: BEFORE }),
+          ],
+          true,
+          "next",
+        ),
+      )
+      .mockResolvedValueOnce(receiptPage());
+    threadGraphql.mockResolvedValue(threadPage());
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+  });
+
+  it("fails closed for two distinct latest receipts sharing a submission time", async () => {
+    const { run, reviewGraphql } = setupFallback();
+    reviewGraphql.mockResolvedValue(
+      receiptPage([receipt(), receipt({ id: "ambiguous" })]),
+    );
+    await expect(run()).rejects.toThrow("Ambiguous latest");
+  });
+
+  it.each([
+    undefined,
+    { repository: null },
+    { errors: [{ message: "Partial result" }], ...receiptPage() },
+    receiptPage([null]),
+    receiptPage([receipt({ submittedAt: null })]),
+    receiptPage([receipt({ databaseId: null })]),
+    receiptPage([receipt({ comments: { totalCount: null } })]),
+    receiptPage([receipt({ commit: null })]),
+    receiptPage([receipt({ author: null })]),
+    receiptPage([receipt()], true, null),
+  ])("fails closed on malformed receipt responses: %j", async (response) => {
+    const { run, reviewGraphql, publish } = setupFallback();
+    reviewGraphql.mockResolvedValue(response);
+    await expect(run()).rejects.toThrow();
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        context: "Codex review gate",
+        state: "failure",
+      }),
+    );
+  });
+
+  it("fails closed if receipt pagination repeats or later fails", async () => {
+    const loop = setupFallback();
+    loop.reviewGraphql.mockResolvedValue(receiptPage([], true, "loop"));
+    await expect(loop.run()).rejects.toThrow("pagination");
+    const failure = setupFallback();
+    failure.reviewGraphql
+      .mockResolvedValueOnce(receiptPage([receipt()], true, "next"))
+      .mockRejectedValueOnce(new Error("Receipts unavailable"));
+    await expect(failure.run()).rejects.toThrow("Receipts unavailable");
+  });
+
+  it.each([
+    null,
+    receipt({ id: null }),
+    receipt({ submittedAt: null }),
+    receipt({ commit: null }),
+    receipt({ author: null }),
+  ])(
+    "fails closed on malformed finding review provenance: %j",
+    async (review) => {
+      const thread = reviewThread();
+      thread.comments.nodes[0].pullRequestReview = review;
+      const { run, threadGraphql } = setupFallback();
+      threadGraphql.mockResolvedValue(threadPage([thread]));
+      await expect(run()).rejects.toThrow("provenance");
+    },
+  );
+
+  it.each([
+    { code: { has_unresolved_findings: true }, expected: "failure" },
+    { code: { has_any_findings: false }, expected: "pending" },
+    { code: { has_unresolved_findings: undefined }, expected: "pending" },
+    { code: { commit_sha: OLD_HEAD }, expected: "pending" },
+    { code: { status: "running" }, expected: "pending" },
+    { security: { has_unresolved_findings: null }, expected: "pending" },
+    { security: { has_unresolved_findings: true }, expected: "failure" },
+    { security: { commit_sha: OLD_HEAD }, expected: "pending" },
+    { security: { status: "running" }, expected: "pending" },
+  ])(
+    "never broadens the thread fallback prerequisites: %j",
+    async ({ code, security, expected }) => {
+      const state = nullCodeState();
+      Object.assign(state.code_review, code);
+      Object.assign(state.security_review, security);
+      const { run, github } = setup(
+        [withTimes(state)],
+        [],
+        [checkpoint({ rc: Date.parse(START) })],
+      );
+      await expect(run()).resolves.toMatchObject({ state: expected });
+      expect(github.graphql).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not use thread resolution to bypass review freshness", async () => {
+    const { run, github } = setup(
+      [withTimes(nullCodeState())],
+      [],
+      [checkpoint({ b: Date.parse(REQUEST) })],
+    );
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    expect(github.graphql).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    "unresolved Codex threads fail even when outdated=%s",
+    async (isOutdated) => {
+      const { run, github, threadGraphql } = setupFallback();
+      threadGraphql.mockResolvedValue(
+        threadPage([
+          reviewThread(),
+          reviewThread({ isResolved: false, isOutdated }),
+        ]),
+      );
+      await expect(run()).resolves.toMatchObject({ state: "failure" });
+    },
+  );
+
+  it("includes unmarked unresolved Codex threads once findings provenance is established", async () => {
+    const unmarked = reviewThread({ isResolved: false });
+    unmarked.comments.nodes[0].body = "Another Codex thread";
+    const { run, github, threadGraphql } = setupFallback();
+    threadGraphql.mockResolvedValue(threadPage([reviewThread(), unmarked]));
+    await expect(run()).resolves.toMatchObject({ state: "failure" });
+  });
+
+  it.each([
+    { threads: [] },
+    {
+      threads: [
+        reviewThread({
+          comments: {
+            nodes: [
+              {
+                databaseId: 202,
+                body: "No finding marker",
+                pullRequestReview: receipt(),
+                author: {
+                  __typename: "Bot",
+                  login: "chatgpt-codex-connector",
+                  databaseId: 199175422,
+                },
+              },
+            ],
+          },
+        }),
+      ],
+    },
+  ])(
+    "requires at least one proven Codex finding, not merely an empty clean thread list",
+    async ({ threads }) => {
+      const { run, github, threadGraphql } = setupFallback();
+      threadGraphql.mockResolvedValue(threadPage(threads));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    },
+  );
+
+  it.each([
+    {
+      __typename: "User",
+      login: "chatgpt-codex-connector",
+      databaseId: 199175422,
+    },
+    { __typename: "Bot", login: "chatgpt-codex-connector", databaseId: 123 },
+    { __typename: "Bot", login: "attacker", databaseId: 199175422 },
+  ])("rejects spoofed finding authors: %j", async (author) => {
+    const thread = reviewThread();
+    thread.comments.nodes[0].author = author;
+    const { run, github, threadGraphql } = setupFallback();
+    threadGraphql.mockResolvedValue(threadPage([thread]));
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("reads all thread pages before passing and checks later unresolved findings", async () => {
+    const { run, github, threadGraphql } = setupFallback();
+    threadGraphql
+      .mockResolvedValueOnce(threadPage([reviewThread()], true, "page-2"))
+      .mockResolvedValueOnce(
+        threadPage([reviewThread({ isResolved: false, isOutdated: true })]),
+      );
+    await expect(run()).resolves.toMatchObject({ state: "failure" });
+    expect(threadGraphql).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({ cursor: "page-2" }),
+    );
+  });
+
+  it("accepts resolved findings only after every page finishes successfully", async () => {
+    const { run, github, threadGraphql } = setupFallback();
+    threadGraphql
+      .mockResolvedValueOnce(threadPage([reviewThread()], true, "next"))
+      .mockResolvedValueOnce(threadPage([reviewThread({ isOutdated: true })]));
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+    expect(threadGraphql).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    undefined,
+    { repository: null },
+    { errors: [{ message: "Partial result" }], ...threadPage() },
+    threadPage([null]),
+    threadPage([reviewThread({ comments: { nodes: [] } })]),
+    threadPage([reviewThread({ isResolved: null })]),
+    threadPage([
+      reviewThread({
+        comments: { nodes: [{ body: "missing author", author: null }] },
+      }),
+    ]),
+    threadPage([
+      reviewThread({
+        comments: {
+          nodes: [
+            {
+              databaseId: 202,
+              body: "unknown bot",
+              author: {
+                __typename: "Bot",
+                login: "chatgpt-codex-connector",
+                databaseId: null,
+              },
+            },
+          ],
+        },
+      }),
+    ]),
+    threadPage([reviewThread()], true, null),
+  ])(
+    "fails closed for partial or malformed thread responses: %j",
+    async (response) => {
+      const { run, github, threadGraphql, publish } = setupFallback();
+      threadGraphql.mockResolvedValue(response);
+      await expect(run()).rejects.toThrow();
+      expect(publish).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          context: "Codex review gate",
+          state: "failure",
+        }),
+      );
+    },
+  );
+
+  it("fails closed if a later thread page errors after resolved findings were read", async () => {
+    const { run, github, threadGraphql, publish } = setupFallback();
+    threadGraphql
+      .mockResolvedValueOnce(threadPage([reviewThread()], true, "next"))
+      .mockRejectedValueOnce(new Error("GraphQL unavailable"));
+    await expect(run()).rejects.toThrow("GraphQL unavailable");
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        context: "Codex review gate",
+        state: "failure",
+      }),
+    );
+  });
+
+  it("fails closed if pagination repeats a cursor", async () => {
+    const { run, github, threadGraphql } = setupFallback();
+    threadGraphql.mockResolvedValue(threadPage([reviewThread()], true, "loop"));
+    await expect(run()).rejects.toThrow("pagination");
+    expect(threadGraphql).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["head", "base", "closed"])(
+    "rechecks the PR after thread resolution when its %s changes",
+    async (change) => {
+      const { run, github, threadGraphql, get, pullRequest, publish } =
+        setupFallback();
+      const current =
+        change === "head"
+          ? { ...pullRequest, head: { sha: OLD_HEAD } }
+          : change === "base"
+            ? { ...pullRequest, base: { ref: "release" } }
+            : { ...pullRequest, state: "closed" };
+      get
+        .mockResolvedValueOnce({ data: pullRequest })
+        .mockResolvedValueOnce({ data: pullRequest })
+        .mockResolvedValueOnce({ data: current });
+      threadGraphql.mockResolvedValue(threadPage());
+      await expect(run()).resolves.toMatchObject(
+        change === "head"
+          ? { state: "pending", sha: OLD_HEAD }
+          : { skipped: true },
+      );
+      expect(publish).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: "Codex review gate",
+          state: "success",
+        }),
+      );
     },
   );
 });
