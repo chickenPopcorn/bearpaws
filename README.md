@@ -1,4 +1,4 @@
-# BearPaws · MIDI piano practice
+# Paw Pal · MIDI piano practice
 
 A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, and local browser storage. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
 

@@ -496,7 +496,7 @@ function App() {
   return (
     <div className="app">
       <header className="top">
-        <a className="brand" href="./" aria-label="BearPaws home">
+        <a className="brand" href="./" aria-label="Paw Pal home">
           <img
             className="brand-mark"
             src={`${import.meta.env.BASE_URL}bearpaws.svg?v=3`}
@@ -504,7 +504,7 @@ function App() {
             width="40"
             height="40"
           />
-          BearPaws
+          Paw Pal
         </a>
         <span className="eyebrow">A little practice. Every day.</span>
         <button

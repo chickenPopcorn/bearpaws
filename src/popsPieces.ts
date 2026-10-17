@@ -1,6 +1,6 @@
 import type { StarterPiece } from "./starterPieces";
 
-// A new, deliberately simple bearpaws arrangement of the traditional Jiangsu
+// A new, deliberately simple Paw Pal arrangement of the traditional Jiangsu
 // melody, not a commercial piano arrangement or a sampled performance.
 // Melody reference: Carnegie Hall, Musical Explorers, Chinese Traditional with
 // Qian Yi, Lesson 1, printed p. 82 (PDF p. 84), "Mo Li Hua":

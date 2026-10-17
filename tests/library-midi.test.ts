@@ -77,7 +77,7 @@ describe("downloadable beginner MIDI collection", () => {
         expect(fingers).toEqual(
           expected.map((note) => ({
             tick: exportedTick(song, note.start),
-            text: `BearPaws fingering: ${note.fingerHand} ${note.finger}; MIDI pitch ${note.pitch}`,
+            text: `Paw Pal fingering: ${note.fingerHand} ${note.finger}; MIDI pitch ${note.pitch}`,
           })),
         );
         expect(track.filter((event) => event.type === "setTempo")).toEqual([
