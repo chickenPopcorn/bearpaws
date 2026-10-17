@@ -96,6 +96,8 @@ function configure(
 }
 export interface PianoSoundBus {
   input: AudioNode;
+  /** The dry path alone: sound sent here never reaches the room. */
+  dryInput: AudioNode;
   setSound(settings: PianoSoundSettings): void;
   reset(): void;
   dispose(): void;
@@ -157,6 +159,7 @@ export function createPianoSoundBus(
     update(initial, true);
     return {
       input: compressor,
+      dryInput: dry,
       setSound: (settings) => update(settings, false),
       reset: () => {
         // Reusing the impulse avoids regenerating it. A fresh processor flushes

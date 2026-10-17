@@ -41,8 +41,9 @@ interface Voice {
   source: AudioBufferSourceNode;
   gain: GainNode;
   file: string;
-  /** Context time of the attack. */
+  /** Context times of the attack and of the scheduled stop. */
   start: number;
+  end: number;
   /** The scheduled notes this voice plays, and the set that records them. */
   ids: readonly string[];
   pass: Set<string>;
@@ -69,6 +70,8 @@ export class ReferenceAudio {
   scheduled = new Set<string>();
   /** Notes of the next loop pass, scheduled before the transport wraps. */
   private ahead = new Set<string>();
+  /** Context time at which the pass that `ahead` belongs to begins. */
+  private aheadStart = Infinity;
   private cycle = -1;
   error = "";
   get loading() {
@@ -109,12 +112,16 @@ export class ReferenceAudio {
           4
       : 32 * 1024 * 1024;
   }
-  /** Recordings that are sounding, scheduled, or being prepared. */
+  /**
+   * Recordings that are sounding, scheduled, or being prepared. A voice that
+   * is fading out ends within FADE_STOP_SECONDS, so it never holds memory a
+   * new passage needs: makeRoom() retires it instead.
+   */
   private inUse() {
     return new Set([
       ...this.playbackFiles,
       ...this.pins.keys(),
-      ...[...this.voices, ...this.fading].map((voice) => voice.file),
+      ...[...this.voices].map((voice) => voice.file),
     ]);
   }
   private makeRoom(bytes: number) {
@@ -129,6 +136,14 @@ export class ReferenceAudio {
       if (inUse.has(file)) continue;
       this.samples.delete(file);
       used -= this.bufferBytes(buffer);
+      // A fading source still holds the buffer; end it now to free the memory.
+      for (const voice of this.fading)
+        if (voice.file === file) {
+          try {
+            voice.source.stop();
+          } catch {}
+          this.disconnect(voice);
+        }
     }
     if (used + bytes > MAX_PIANO_CACHE_BYTES)
       throw new PianoMemoryError(MEMORY_MESSAGE);
@@ -289,11 +304,14 @@ export class ReferenceAudio {
   /** Cutting a sounding sample clicks. Fade it, and disconnect it once it ends. */
   private fade(voice: Voice, at: number) {
     this.voices.delete(voice);
+    this.fading.add(voice);
+    // A voice that stops by itself first needs no fade.
+    if (voice.end <= at) return;
     try {
       voice.gain.gain.cancelAndHoldAtTime(at);
       voice.gain.gain.setTargetAtTime(0, at, FADE_SECONDS);
       voice.source.stop(at + FADE_STOP_SECONDS);
-      this.fading.add(voice);
+      voice.end = at + FADE_STOP_SECONDS;
     } catch {
       try {
         voice.source.stop();
@@ -301,12 +319,16 @@ export class ReferenceAudio {
       this.disconnect(voice);
     }
   }
-  /** Fade the oldest sounding voice to make room for a new one. */
-  private steal(now: number) {
+  /**
+   * Make room for a voice that starts at `when`: fade the oldest voice that
+   * started before it, at that attack. Fading any earlier would silence it
+   * before its replacement sounds.
+   */
+  private steal(when: number) {
     let oldest: Voice | undefined;
     for (const voice of this.voices)
-      if (voice.start < (oldest?.start ?? now)) oldest = voice;
-    if (oldest) this.fade(oldest, now);
+      if (voice.start < (oldest?.start ?? when)) oldest = voice;
+    if (oldest) this.fade(oldest, when);
     return oldest !== undefined;
   }
   /**
@@ -328,11 +350,18 @@ export class ReferenceAudio {
     for (const voice of this.voices) this.fade(voice, now);
     this.scheduled.clear();
     this.ahead.clear();
+    this.aheadStart = Infinity;
     // Rebuilding the room flushes its tail. Skip it when there is no tail,
     // such as while dragging the playhead with nothing playing.
     try {
-      if (resetRoom && this.roomUsed) {
-        this.output?.reset();
+      if (resetRoom && this.roomUsed && this.output) {
+        // Fading voices would feed the fresh room and leave a new tail of the
+        // old passage. Let them finish on the dry path instead.
+        for (const voice of this.fading) {
+          voice.gain.disconnect();
+          voice.gain.connect(this.output.dryInput);
+        }
+        this.output.reset();
         this.roomUsed = false;
       }
     } catch {
@@ -342,6 +371,7 @@ export class ReferenceAudio {
       this.error = "The piano sound could not reset. Please try Play again.";
     }
   }
+  /** Returns false only when the voice cap refused the note, so it can be tried again. */
   tone(
     pitch: number,
     velocity: number,
@@ -357,19 +387,16 @@ export class ReferenceAudio {
       this.playbackBlocked ||
       velocity <= 0
     )
-      return;
+      return true;
     const region = selectPianoRegion(pitch, velocity);
-    if (!region) return;
+    if (!region) return true;
     const buffer = this.samples.get(region.file);
-    if (!buffer) return;
+    if (!buffer) return true;
     // The cap includes future scheduled voices and previews: no entry point can
-    // bypass it. A dense pedalled passage replaces its oldest sounding voice
-    // rather than going silent; only voices that are all waiting refuse a note.
-    if (
-      this.voices.size >= MAX_REFERENCE_VOICES &&
-      !this.steal(context.currentTime)
-    )
-      return;
+    // bypass it. A dense pedalled passage replaces a sounding voice rather than
+    // going silent; only voices that are all waiting refuse a note.
+    if (this.voices.size >= MAX_REFERENCE_VOICES && !this.steal(when))
+      return false;
     let source: AudioBufferSourceNode | undefined, gain: GainNode | undefined;
     try {
       source = context.createBufferSource();
@@ -397,24 +424,25 @@ export class ReferenceAudio {
         gain.gain.setTargetAtTime(0, releaseAt, releaseTime);
       source.connect(gain).connect(this.output?.input ?? context.destination);
       this.roomUsed = true;
+      // Seven time constants leaves less than 0.1% gain before cleanup.
+      const sampleEnd = when + (buffer.duration - region.offset) / rate;
+      const end =
+        region.releaseSeconds >= 100
+          ? sampleEnd
+          : Math.min(sampleEnd, releaseAt + releaseTime * 7 + 0.02);
       const voice = {
         source,
         gain,
         file: region.file,
         start: when,
+        end,
         ids,
         pass,
       };
       this.voices.add(voice);
       source.onended = () => this.disconnect(voice);
       source.start(when, region.offset);
-      // Seven time constants leaves less than 0.1% gain before cleanup.
-      const sampleEnd = when + (buffer.duration - region.offset) / rate;
-      source.stop(
-        region.releaseSeconds >= 100
-          ? sampleEnd
-          : Math.min(sampleEnd, releaseAt + releaseTime * 7 + 0.02),
-      );
+      source.stop(end);
     } catch {
       this.playbackBlocked = true;
       for (const voice of this.voices)
@@ -428,24 +456,32 @@ export class ReferenceAudio {
       } catch {}
       this.error = "Reference sound could not start. Pause and try Play again.";
     }
+    return true;
   }
   schedule(notes: Note[], transport: Transport, enabled: boolean) {
     if (!enabled || !transport.playing || !this.context) return;
+    const now = this.now(),
+      position = transport.at(now),
+      loop = transport.loop;
     if (this.cycle !== transport.cycle) {
       // A new pass keeps the notes scheduled ahead for it. The last pass's
       // voices end by the loop end, so they ring out, and so does the room
       // tail. Pause, seek and song changes call stop(), which clears both.
-      this.scheduled = this.ahead;
+      // After a stall longer than a loop, the transport skips whole passes:
+      // the notes scheduled ahead then played in a pass that has already
+      // gone, and the current pass starts with nothing scheduled.
+      const passSeconds = loop ? (loop[1] - loop[0]) / transport.speed : 0;
+      this.scheduled =
+        now < this.aheadStart + passSeconds ? this.ahead : new Set();
       this.ahead = new Set();
+      this.aheadStart = Infinity;
       this.cycle = transport.cycle;
     }
-    const now = this.now(),
-      position = transport.at(now),
-      loop = transport.loop;
     this.schedulePass(notes, transport, now, position, this.scheduled);
     // Start the next pass within the lookahead too. Waiting for the tick
     // that observes the wrap would strike its first notes up to a tick late.
-    if (loop && position + LOOKAHEAD_SECONDS * transport.speed >= loop[1])
+    if (loop && position + LOOKAHEAD_SECONDS * transport.speed >= loop[1]) {
+      this.aheadStart = now + (loop[1] - position) / transport.speed;
       this.schedulePass(
         notes,
         transport,
@@ -453,6 +489,7 @@ export class ReferenceAudio {
         position - (loop[1] - loop[0]),
         this.ahead,
       );
+    }
   }
   /**
    * Schedule one pass's notes that start within the lookahead. `position` is
@@ -478,7 +515,6 @@ export class ReferenceAudio {
         n.start >= to
       )
         continue;
-      pass.add(n.id);
       const key = `${n.pitch}:${n.start}`,
         previous = attacks.get(key);
       // Duplicate tracks at the same onset need one sound, with the longest pedal tail.
@@ -492,8 +528,13 @@ export class ReferenceAudio {
     for (const n of attacks.values()) {
       const start = (Math.max(n.start, head) - position) / transport.speed,
         end = (Math.min(n.soundEnd, to) - position) / transport.speed;
-      if (end > 0)
-        this.tone(n.pitch, n.velocity, now + start, end - start, n.ids, pass);
+      // A note the voice cap refused stays unscheduled, so a later tick can
+      // play it once a voice is free.
+      if (
+        end <= 0 ||
+        this.tone(n.pitch, n.velocity, now + start, end - start, n.ids, pass)
+      )
+        for (const id of n.ids) pass.add(id);
     }
   }
 }

@@ -349,6 +349,53 @@ describe("bounded reference audio", () => {
     for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
       expect(gain(i).cancelAndHoldAtTime).toHaveBeenCalledTimes(i < 50 ? 1 : 0);
   });
+  it("fades a stolen voice at its replacement's attack, not when the lookahead allocates", () => {
+    const { audio, context, nodes } = fixture();
+    const gain = (index: number) =>
+      context.createGain.mock.results[index].value.gain;
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      audio.tone(36 + (i % 60), 0.8, i / 100, 10);
+    context.currentTime = 0.4;
+    audio.tone(100, 0.8, 0.5, 1);
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenCalledWith(0.5);
+    expect(gain(0).setTargetAtTime).toHaveBeenLastCalledWith(0, 0.5, 0.008);
+    expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(0.55);
+  });
+  it("retries a note the voice cap refused once a voice is free", () => {
+    const { audio, transport, context, nodes } = fixture();
+    const notes = Array.from({ length: MAX_REFERENCE_VOICES + 1 }, (_, i) => ({
+      ...note(i, 30 + i),
+      start: 0.05,
+    }));
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
+    expect(audio.scheduled.has(String(MAX_REFERENCE_VOICES))).toBe(false);
+    nodes[0].onended!();
+    context.currentTime = 0.02;
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    expect(nodes.at(-1)!.start.mock.calls[0][0]).toBeCloseTo(0.05);
+    expect(audio.scheduled.has(String(MAX_REFERENCE_VOICES))).toBe(true);
+  });
+  it("lets voices fading after a stop finish on the dry path, outside the fresh room", async () => {
+    const { audio, context } = fixture();
+    await audio.unlock();
+    const [dry] = context.createGain.mock.results.map((result) => result.value);
+    const [compressor] = context.createDynamicsCompressor.mock.results.map(
+      (result) => result.value,
+    );
+    audio.tone(60, 0.8, 0, 2);
+    const voice = context.createGain.mock.results[3].value;
+    expect(voice.connect).toHaveBeenLastCalledWith(compressor);
+    context.currentTime = 1;
+    audio.stop();
+    expect(context.createConvolver).toHaveBeenCalledTimes(2);
+    expect(voice.disconnect).toHaveBeenCalledOnce();
+    expect(voice.connect).toHaveBeenLastCalledWith(dry);
+    audio.tone(64, 0.8, 1, 2);
+    const next = context.createGain.mock.results[4].value;
+    expect(next.connect).toHaveBeenLastCalledWith(compressor);
+  });
   it("keeps a dense pedalled passage sounding past the voice cap", () => {
     const { audio, transport, context } = fixture();
     const notes = Array.from({ length: 200 }, (_, i) => ({
@@ -425,6 +472,21 @@ describe("bounded reference audio", () => {
       expect(nodes).toHaveLength(7);
     });
 
+    it("schedules the current pass afresh after a stall longer than a loop", () => {
+      const { nodes, tick } = loopFixture();
+      tick(0);
+      tick(0.9);
+      expect(nodes).toHaveLength(6);
+      // The clock skips the passes that began at 1 s and 2 s.
+      tick(3.3);
+      // Position 0.8: notes 1, 2 and 3 are sounding and are struck now.
+      expect(starts(nodes).slice(6)).toEqual([
+        expect.closeTo(3.3),
+        expect.closeTo(3.3),
+        expect.closeTo(3.3),
+      ]);
+    });
+
     it("moves next-pass voices to a new speed before the wrap", () => {
       const { audio, transport, context, nodes, tick } = loopFixture();
       tick(0);
@@ -481,6 +543,38 @@ describe("piano sample loading", () => {
   const response = () => ({
     ok: true,
     arrayBuffer: async () => new ArrayBuffer(8),
+  });
+
+  it("does not let a fading voice's recording block a new passage", async () => {
+    const { audio, context, nodes } = fixture(false);
+    const bytes = 200 * 1024 * 1024;
+    const fading = fileFor(60),
+      first = fileFor(63),
+      second = fileFor(66);
+    audio.samples.set(fading, sizedBuffer(bytes));
+    instrumentMetadata.files = {
+      [first]: { duration: bytes / (sampleRate * 8), channels: 2 },
+      [second]: { duration: bytes / (sampleRate * 8), channels: 2 },
+    };
+    context.decodeAudioData
+      .mockResolvedValueOnce(sizedBuffer(bytes))
+      .mockResolvedValueOnce(sizedBuffer(bytes));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response()),
+    );
+    await audio.unlock();
+    audio.tone(60, 0.8, 0, 2);
+    context.currentTime = 1;
+    // The voice fades for 50 ms. Both new recordings fit once it has gone.
+    audio.stop();
+    await audio.prepare([sound(63), sound(66)]);
+    expect(audio.samples.has(first)).toBe(true);
+    expect(audio.samples.has(second)).toBe(true);
+    expect(audio.samples.has(fading)).toBe(false);
+    // Under memory pressure the fading voice ends at once.
+    expect(nodes[0].stop).toHaveBeenLastCalledWith();
+    expect(nodes[0].disconnect).toHaveBeenCalledOnce();
   });
 
   it("loads only requested recordings, shares concurrent work, and reuses decoded samples", async () => {
