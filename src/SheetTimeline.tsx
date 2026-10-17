@@ -371,8 +371,10 @@ export function SheetTimeline({
         chord.previousY = pitch.y;
         chord.displaced = displaced;
         const x = noteX(measure, item.offset);
-        const row = chordRows.get(chordKey) || 0;
-        chordRows.set(chordKey, row + 1);
+        const index = chordRows.get(chordKey) || 0;
+        chordRows.set(chordKey, index + 1);
+        // Notes arrive low to high; stack labels high to low like the staff.
+        const row = chord.count - 1 - index;
         const finger = suggestedFinger(item.note, hand);
         drawn.push({
           score: item,
