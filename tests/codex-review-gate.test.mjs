@@ -29,23 +29,83 @@ const summary = (
   updated_at: updatedAt,
   html_url: `${PR_URL}#issuecomment-${id}`,
 });
+const BEFORE = "2026-10-17T06:00:00Z";
+const REQUEST = "2026-10-17T06:01:00Z";
+const START = "2026-10-17T06:02:00Z";
+const FINISH = "2026-10-17T06:03:00Z";
+const withTimes = (state, code = FINISH, security = FINISH) => {
+  const comment = summary(state, 10, FINISH);
+  comment.body += `\n| 📝 **Code Review** | ${state.code_review?.status} <relative-time datetime="${code}">${code}</relative-time> |\n| 🔒 **Security Review** | ${state.security_review?.status} <relative-time datetime="${security}">${security}</relative-time> |`;
+  return comment;
+};
+const completed = () => ({
+  code_review: cleanReview(),
+  security_review: cleanReview(),
+});
+const running = () => ({
+  code_review: { ...cleanReview(), status: "running" },
+  security_review: { ...cleanReview(), status: "running" },
+});
+const command = (body = "@codex review", association = "OWNER") => ({
+  id: 20,
+  body,
+  author_association: association,
+  created_at: REQUEST,
+  updated_at: REQUEST,
+});
+const checkpoint = (values = {}) => ({
+  context: "Codex review checkpoint",
+  state: "success",
+  creator: { id: 41898282, login: "github-actions[bot]", type: "Bot" },
+  description: JSON.stringify({
+    v: 1,
+    p: 7,
+    b: 0,
+    c: 0,
+    s: 0,
+    rc: 0,
+    rs: 0,
+    ...values,
+  }),
+  created_at: FINISH,
+  id: 100,
+});
+const savedCheckpoint = (publish) =>
+  JSON.parse(
+    publish.mock.calls.findLast(
+      ([status]) => status.context === "Codex review checkpoint",
+    )[0].description,
+  );
 
-function setup(comments = []) {
+function setup(comments = [], events = [], statuses = []) {
   const pullRequest = {
     state: "open",
     head: { sha: HEAD },
+    base: { ref: "main" },
     html_url: PR_URL,
   };
   const get = vi.fn().mockResolvedValue({ data: pullRequest });
   const publish = vi.fn().mockResolvedValue({});
   const listComments = vi.fn();
+  const listEvents = vi.fn();
+  const listCommitStatusesForRef = vi.fn();
   const github = {
     rest: {
       pulls: { get },
-      issues: { listComments },
-      repos: { createCommitStatus: publish },
+      issues: { listComments, listEvents },
+      repos: { createCommitStatus: publish, listCommitStatusesForRef },
     },
-    paginate: vi.fn().mockResolvedValue(comments),
+    paginate: vi
+      .fn()
+      .mockImplementation((method) =>
+        Promise.resolve(
+          method === listEvents
+            ? events
+            : method === listComments
+              ? comments
+              : statuses,
+        ),
+      ),
   };
   const context = {
     repo: { owner: "chickenPopcorn", repo: "bearpaws" },
@@ -80,7 +140,7 @@ describe("Codex review merge gate", () => {
         per_page: 100,
       },
     );
-    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenCalledTimes(3);
     expect(publish).toHaveBeenLastCalledWith({
       owner: "chickenPopcorn",
       repo: "bearpaws",
@@ -285,7 +345,7 @@ describe("Codex review merge gate", () => {
         expect(publish).not.toHaveBeenCalled();
         expect(github.paginate).not.toHaveBeenCalled();
       } else {
-        expect(publish).toHaveBeenCalledTimes(1);
+        expect(publish).toHaveBeenCalledTimes(2);
         expect(publish).toHaveBeenCalledWith(
           expect.objectContaining({ state: "pending" }),
         );
@@ -333,6 +393,413 @@ describe("Codex review merge gate", () => {
       context.payload = { inputs: { pull_request_number: value } };
       await expect(run()).rejects.toThrow("positive pull request number");
       expect(get).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not overwrite a shared head's status for a PR targeting another branch", async () => {
+    const { run, get, github, pullRequest, publish } = setup([summary()]);
+    get.mockResolvedValue({
+      data: { ...pullRequest, base: { ref: "release" } },
+    });
+    await expect(run()).resolves.toEqual({ skipped: true });
+    expect(github.paginate).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("cannot pass if the base changes away from main during verification", async () => {
+    const { run, get, pullRequest, publish } = setup([summary()]);
+    get.mockResolvedValueOnce({ data: pullRequest }).mockResolvedValueOnce({
+      data: { ...pullRequest, base: { ref: "release" } },
+    });
+    await expect(run()).resolves.toEqual({ skipped: true });
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({ context: "Codex review checkpoint" }),
+    );
+    expect(publish).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: "Codex review gate",
+        state: "success",
+      }),
+    );
+  });
+
+  it("retains retarget barriers across later refreshes and requires fresh starts for both reviews", async () => {
+    const events = [{ event: "base_ref_changed", created_at: REQUEST }];
+    const first = setup([withTimes(completed())], events);
+    await expect(first.run()).resolves.toMatchObject({ state: "pending" });
+    const saved = savedCheckpoint(first.publish);
+    expect(saved.b).toBe(Date.parse(REQUEST));
+    const next = setup([withTimes(completed())], [], [checkpoint(saved)]);
+    await expect(next.run()).resolves.toMatchObject({ state: "pending" });
+    const fresh = setup([withTimes(running(), START, START)], events, [
+      checkpoint(saved),
+    ]);
+    await expect(fresh.run()).resolves.toMatchObject({ state: "pending" });
+    const finished = setup([withTimes(completed())], events, [
+      checkpoint(savedCheckpoint(fresh.publish)),
+    ]);
+    await expect(finished.run()).resolves.toMatchObject({ state: "success" });
+  });
+
+  it("does not accept an old run that finishes after a retarget", async () => {
+    const oldStart = withTimes(running(), BEFORE, BEFORE);
+    const result = setup(
+      [withTimes(completed())],
+      [{ event: "base_ref_changed", created_at: REQUEST }],
+    );
+    result.context.payload.comment = withTimes(completed());
+    result.context.payload.changes = { body: { from: oldStart.body } };
+    await expect(result.run()).resolves.toMatchObject({ state: "pending" });
+    expect(savedCheckpoint(result.publish)).toMatchObject({
+      rc: Date.parse(BEFORE),
+      rs: Date.parse(BEFORE),
+    });
+  });
+
+  it("recovers fresh running starts from the trusted completed edit's previous body", async () => {
+    const finished = withTimes(completed());
+    const { run, context, publish } = setup(
+      [finished],
+      [{ event: "base_ref_changed", created_at: REQUEST }],
+    );
+    context.payload.comment = finished;
+    context.payload.changes = {
+      body: { from: withTimes(running(), START, START).body },
+    };
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+    expect(savedCheckpoint(publish)).toMatchObject({
+      rc: Date.parse(START),
+      rs: Date.parse(START),
+    });
+  });
+
+  it("requires both starts after retarget, even when both completion times are new", async () => {
+    const { run } = setup(
+      [withTimes(completed())],
+      [],
+      [
+        checkpoint({
+          b: Date.parse(REQUEST),
+          rc: Date.parse(START),
+          rs: Date.parse(BEFORE),
+        }),
+      ],
+    );
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("uses the base-change payload immediately before issue events are visible", async () => {
+    const { run, context, publish } = setup([withTimes(completed())]);
+    context.payload.pull_request.updated_at = REQUEST;
+    context.payload.changes = { base: { ref: { from: "release" } } };
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    expect(savedCheckpoint(publish).b).toBe(Date.parse(REQUEST));
+  });
+
+  it.each(["OWNER", "COLLABORATOR", "MEMBER"])(
+    "invalidates both reviews when an authorized %s requests Code Review",
+    async (association) => {
+      const { run, publish } = setup([
+        withTimes(completed()),
+        command("@codex review", association),
+      ]);
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+      expect(savedCheckpoint(publish)).toMatchObject({
+        c: Date.parse(REQUEST),
+        s: Date.parse(REQUEST),
+      });
+    },
+  );
+
+  it("keeps code-triggered Security Review pending when only a fresh Code Review has run", async () => {
+    const { run } = setup(
+      [withTimes(completed()), command()],
+      [],
+      [checkpoint({ rc: Date.parse(START) })],
+    );
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("a Security Review command requires only a fresh security run", async () => {
+    const { run, publish } = setup(
+      [withTimes(completed(), BEFORE), command("@codex security review")],
+      [],
+      [checkpoint({ rs: Date.parse(START) })],
+    );
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+    expect(savedCheckpoint(publish)).toMatchObject({
+      c: 0,
+      s: Date.parse(REQUEST),
+    });
+  });
+
+  it("a deleted request remains pending on subsequent bot updates", async () => {
+    const first = setup([withTimes(completed())]);
+    first.context.payload.comment = command();
+    first.context.payload.action = "deleted";
+    await expect(first.run()).resolves.toMatchObject({ state: "pending" });
+    const saved = savedCheckpoint(first.publish);
+    await expect(
+      setup([withTimes(completed())], [], [checkpoint(saved)]).run(),
+    ).resolves.toMatchObject({ state: "pending" });
+    const fresh = setup([withTimes(completed())], [], [checkpoint(saved)]);
+    fresh.context.payload.comment = withTimes(completed());
+    fresh.context.payload.changes = {
+      body: { from: withTimes(running(), START, START).body },
+    };
+    await expect(fresh.run()).resolves.toMatchObject({ state: "success" });
+  });
+
+  it("preserves a command edited out of the triggering comment", async () => {
+    const { run, context, publish } = setup([withTimes(completed())]);
+    context.payload.comment = command("Thanks");
+    context.payload.changes = { body: { from: "@codex review" } };
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    expect(savedCheckpoint(publish).c).toBe(Date.parse(REQUEST));
+  });
+
+  it.each([
+    command("@codex review", "NONE"),
+    command("Please see `@codex review`"),
+    command("> @codex review"),
+  ])(
+    "does not invalidate clean reviews for an unauthorized or quoted request",
+    async (comment) => {
+      await expect(setup([summary(), comment]).run()).resolves.toMatchObject({
+        state: "success",
+      });
+    },
+  );
+
+  it("does not use a later summary edit time as a review completion timestamp", async () => {
+    const comment = withTimes(completed(), BEFORE, FINISH);
+    comment.updated_at = FINISH;
+    await expect(
+      setup(
+        [comment],
+        [],
+        [
+          checkpoint({
+            c: Date.parse(REQUEST),
+            rc: Date.parse(START),
+          }),
+        ],
+      ).run(),
+    ).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("missing per-review timestamps cannot satisfy a freshness barrier", async () => {
+    await expect(
+      setup(
+        [summary()],
+        [],
+        [
+          checkpoint({
+            c: Date.parse(REQUEST),
+            rc: Date.parse(START),
+          }),
+        ],
+      ).run(),
+    ).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("ignores spoofed previous-body metadata when acknowledging fresh starts", async () => {
+    const { run, context } = setup([withTimes(completed()), command()]);
+    context.payload.comment = {
+      ...withTimes(completed()),
+      user: { id: 123, login: "attacker", type: "User" },
+    };
+    context.payload.changes = {
+      body: { from: withTimes(running(), START, START).body },
+    };
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("does not acknowledge a running review of a different commit", async () => {
+    const oldRun = running();
+    oldRun.code_review.commit_sha = OLD_HEAD;
+    const { run, context, publish } = setup([
+      withTimes(completed()),
+      command(),
+    ]);
+    context.payload.comment = withTimes(completed());
+    context.payload.changes = {
+      body: { from: withTimes(oldRun, START, START).body },
+    };
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    expect(savedCheckpoint(publish).rc).toBe(0);
+  });
+
+  it("binds checkpoints to the PR number on this commit", async () => {
+    const other = checkpoint({ p: 8, b: Date.parse(REQUEST) });
+    await expect(setup([summary()], [], [other]).run()).resolves.toMatchObject({
+      state: "success",
+    });
+  });
+
+  it("ignores a spoofed checkpoint that claims fresh running starts", async () => {
+    const spoof = checkpoint({ rc: Date.parse(START), rs: Date.parse(START) });
+    spoof.creator.id = 123;
+    await expect(
+      setup([withTimes(completed()), command()], [], [spoof]).run(),
+    ).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it.each([
+    "invalid json",
+    JSON.stringify({ v: 2, p: 7, b: 0, c: 0, s: 0, rc: 0, rs: 0 }),
+    JSON.stringify({ v: 1, p: 7, b: 0, c: -1, s: 0, rc: 0, rs: 0 }),
+  ])("fails closed for a malformed trusted checkpoint", async (description) => {
+    const status = { ...checkpoint(), description };
+    const { run, publish } = setup([summary()], [], [status]);
+    await expect(run()).rejects.toBeInstanceOf(Error);
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        context: "Codex review gate",
+        state: "failure",
+      }),
+    );
+  });
+
+  it("serializes maximum timestamp barriers within GitHub's 140-character limit", async () => {
+    const { run, publish } = setup(
+      [summary(), { ...command(), updated_at: "unreadable" }],
+      [{ event: "base_ref_changed", created_at: "unreadable" }],
+    );
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    const status = publish.mock.calls.find(
+      ([value]) => value.context === "Codex review checkpoint",
+    )[0];
+    expect(status.description.length).toBeLessThanOrEqual(140);
+    expect(savedCheckpoint(publish)).toMatchObject({
+      b: Number.MAX_SAFE_INTEGER,
+      c: Number.MAX_SAFE_INTEGER,
+      s: Number.MAX_SAFE_INTEGER,
+    });
+  });
+
+  it.each(["listEvents", "listCommitStatusesForRef"])(
+    "fails the gate when %s cannot verify persisted freshness",
+    async (method) => {
+      const { run, github, publish } = setup([summary()]);
+      const error = new Error("GitHub unavailable");
+      const target = github.rest.issues[method] ?? github.rest.repos[method];
+      github.paginate.mockImplementation((called) =>
+        called === target ? Promise.reject(error) : Promise.resolve([]),
+      );
+      await expect(run()).rejects.toBe(error);
+      expect(publish).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          context: "Codex review gate",
+          state: "failure",
+        }),
+      );
+    },
+  );
+
+  it("cannot publish a passing gate if saving the checkpoint fails", async () => {
+    const { run, publish } = setup([summary()]);
+    publish
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error("Checkpoint rejected"));
+    await expect(run()).rejects.toThrow("Checkpoint rejected");
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        context: "Codex review gate",
+        state: "failure",
+      }),
+    );
+  });
+
+  it("evaluates a completed webhook when REST still returns Running in the same second", async () => {
+    const stale = withTimes(running(), START, START);
+    const current = withTimes(completed());
+    // Both API representations can share updated_at's second-level precision.
+    stale.updated_at = current.updated_at;
+    const { run, context } = setup(
+      [stale],
+      [{ event: "base_ref_changed", created_at: REQUEST }],
+    );
+    context.payload.action = "edited";
+    context.payload.comment = current;
+    context.payload.changes = { body: { from: stale.body } };
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+  });
+
+  it("uses a newly created trusted summary absent from the REST response", async () => {
+    const { run, context } = setup();
+    context.payload.action = "created";
+    context.payload.comment = summary();
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+  });
+
+  it("does not reuse REST's old clean result after the webhook reports Running", async () => {
+    const current = withTimes(running(), START, START);
+    const { run, context, publish } = setup([summary()]);
+    context.payload.action = "edited";
+    context.payload.comment = current;
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    expect(savedCheckpoint(publish)).toMatchObject({
+      rc: Date.parse(START),
+      rs: Date.parse(START),
+    });
+  });
+
+  it("ignores an untrusted current payload even if it claims a newer clean completion", async () => {
+    const { run, context } = setup([withTimes(running(), START, START)]);
+    context.payload.comment = {
+      ...withTimes(completed()),
+      user: { id: 123, login: "attacker", type: "User" },
+    };
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("does not let an older delayed webhook roll back newer REST failure metadata", async () => {
+    const failed = completed();
+    failed.code_review.has_unresolved_findings = true;
+    const listed = withTimes(failed);
+    const oldPayload = summary();
+    const { run, context } = setup([listed]);
+    context.payload.comment = oldPayload;
+    await expect(run()).resolves.toMatchObject({ state: "failure" });
+  });
+
+  it("does not resurrect a deleted summary from either its payload or stale REST copy", async () => {
+    const removed = summary();
+    const { run, context } = setup([removed]);
+    context.payload.action = "deleted";
+    context.payload.comment = removed;
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it.each([
+    "```\n@codex review\n```",
+    "```text\n@codex security review\n```",
+    "~~~markdown\n@codex review\n~~~",
+    "````\n```\n@codex review\n````",
+    "  ~~~\n@codex review\n  ~~~~",
+    "```\n~~~\n@codex review\n```",
+    "```\n@codex review",
+    "    @codex review",
+    "\t@codex security review",
+    " \t@codex review",
+  ])("ignores a literal review command example: %j", async (body) => {
+    await expect(
+      setup([summary(), command(body)]).run(),
+    ).resolves.toMatchObject({ state: "success" });
+  });
+
+  it.each(["```", "~~~~"])(
+    "recognizes a real request after a %s fenced example closes",
+    async (fence) => {
+      const body = `${fence}text\n@codex security review\n${fence}\n   @codex review`;
+      const { run, publish } = setup([summary(), command(body)]);
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+      expect(savedCheckpoint(publish)).toMatchObject({
+        c: Date.parse(REQUEST),
+        s: Date.parse(REQUEST),
+      });
     },
   );
 });
