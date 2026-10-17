@@ -601,6 +601,41 @@ describe("clock-driven transport", () => {
 });
 
 describe("Rhythm matching and feedback", () => {
+  it.each([0.25, 0.5, 0.75, 1, 1.25, 1.5])(
+    "includes the exact timing boundaries at %sx speed without accepting a millisecond outside",
+    (speed) => {
+      for (const tolerance of [0.12, 0.22, 0.35]) {
+        for (const direction of [-1, 1]) {
+          const exact = new Practice([note("boundary", 60, 1)]);
+          exact.input(
+            60,
+            1 + direction * tolerance * speed,
+            "rhythm",
+            tolerance,
+            speed,
+            new Set([60]),
+          );
+          expect(exact.hit.has("boundary")).toBe(true);
+          const outside = new Practice([note("outside", 60, 1)]);
+          outside.input(
+            60,
+            1 + direction * (tolerance + 0.001) * speed,
+            "rhythm",
+            tolerance,
+            speed,
+            new Set([60]),
+          );
+          expect(outside.hit.size).toBe(0);
+        }
+        const expiring = new Practice([note("boundary", 60, 1)]);
+        expiring.expire(1 + tolerance * speed, tolerance, speed);
+        expect(expiring.missed.size).toBe(0);
+        expiring.expire(1 + (tolerance + 0.001) * speed, tolerance, speed);
+        expect(expiring.missed.has("boundary")).toBe(true);
+      }
+    },
+  );
+
   it("scores correct, early, late and wrong pitches using the configurable tolerance", () => {
     const p = new Practice([
       note("a", 60, 1),
@@ -729,9 +764,37 @@ describe("Wait for me chord and repeated-note gating", () => {
     expect(p.gate?.start).toBe(2);
   });
 
-  it("does not accept anticipatory notes or release a gate for a wrong pitch", () => {
+  it.each(
+    [0.5, 1, 1.5].flatMap((speed) =>
+      [0.1, 0.499, 0.5].map((early) => ({ speed, early })),
+    ),
+  )(
+    "accepts Wait input $early seconds early at $speed speed",
+    ({ speed, early }) => {
+      const p = new Practice([note("c", 60, 1)]);
+      expect(
+        p.input(60, 1 - early * speed, "wait", 0.5, speed, new Set([60])),
+      ).toBe(true);
+      expect(p.hit).toEqual(new Set(["c"]));
+      expect(p.gate).toBeUndefined();
+    },
+  );
+
+  it.each([0.5, 1, 1.5])(
+    "rejects Wait input 501ms early at %sx speed",
+    (speed) => {
+      const p = new Practice([note("c", 60, 1)]);
+      expect(
+        p.input(60, 1 - 0.501 * speed, "wait", 0.5, speed, new Set([60])),
+      ).toBeUndefined();
+      expect(p.hit.size).toBe(0);
+      expect(p.gate?.start).toBe(1);
+    },
+  );
+
+  it("does not accept notes outside the timing window or release a gate for a wrong pitch", () => {
     const p = new Practice([note("c", 60, 1)]);
-    p.input(60, 0.8, "wait", 0.2, 1, new Set([60]));
+    p.input(60, 0.799, "wait", 0.2, 1, new Set([60]));
     expect(p.hit.size).toBe(0);
     p.input(61, 1, "wait", 0.2, 1, new Set([61]));
     expect(p.feedback[0].kind).toBe("wrong");
@@ -760,21 +823,67 @@ describe("Wait for me chord and repeated-note gating", () => {
     expect(p.hit.size).toBe(2);
   });
 
-  it("does not borrow a held pitch from the preceding chord to satisfy the next chord", () => {
-    const p = new Practice([
-      note("first", 60, 1),
-      note("repeat", 60, 2),
-      note("e", 64, 2),
-    ]);
-    expect(p.input(60, 1, "wait", 0.2, 1, new Set([60]))).toBe(true);
-    expect(p.input(64, 2, "wait", 0.2, 1, new Set([60, 64]))).toBeUndefined();
-    expect(p.gate?.start).toBe(2);
-    expect(p.input(60, 2, "wait", 0.2, 1, new Set([60, 64]))).toBe(true);
-    p.reset(1);
-    expect(p.hit.size).toBe(0);
-    expect(p.feedback).toEqual([]);
-    expect(p.gate?.start).toBe(1);
+  it("requires a new note-on for the next repeated note even when both timing windows overlap", () => {
+    const p = new Practice([note("first", 60, 1), note("second", 60, 1.25)]);
+    const state = new MidiState();
+    function deliver(data: number[], position: number) {
+      const event = state.message(data);
+      return (
+        event && p.input(event.pitch, position, "wait", 0.5, 1, state.down)
+      );
+    }
+    expect(deliver([0x90, 60, 100], 0.8)).toBe(true);
+    expect(p.hit).toEqual(new Set(["first"]));
+    expect(deliver([0x90, 60, 100], 0.9)).toBeUndefined();
+    expect(p.gate?.start).toBe(1.25);
+    deliver([0xb0, 64, 127], 0.9);
+    deliver([0x80, 60, 0], 0.9);
+    expect(state.sounding.has(60)).toBe(true);
+    expect(deliver([0x90, 60, 80], 0.9)).toBe(true);
+    expect(p.hit).toEqual(new Set(["first", "second"]));
   });
+
+  it("accepts an early chord only while every pitch is physically held", () => {
+    const p = new Practice([note("c", 60, 1), note("e", 64, 1)]);
+    const state = new MidiState();
+    function deliver(data: number[], position: number) {
+      const event = state.message(data);
+      return (
+        event && p.input(event.pitch, position, "wait", 0.5, 1, state.down)
+      );
+    }
+    expect(deliver([0x90, 60, 100], 0.6)).toBeUndefined();
+    deliver([0xb0, 64, 127], 0.65);
+    deliver([0x80, 60, 0], 0.65);
+    expect(deliver([0x90, 64, 100], 0.7)).toBeUndefined();
+    expect(state.sounding).toEqual(new Set([60, 64]));
+    expect(p.gate?.start).toBe(1);
+    expect(deliver([0x90, 60, 100], 0.8)).toBe(true);
+    expect(p.gate).toBeUndefined();
+  });
+
+  it.each([0, 0.3])(
+    "does not borrow a held pitch from the preceding chord when played %s seconds early",
+    (early) => {
+      const p = new Practice([
+        note("first", 60, 1),
+        note("repeat", 60, 2),
+        note("e", 64, 2),
+      ]);
+      expect(p.input(60, 1 - early, "wait", 0.5, 1, new Set([60]))).toBe(true);
+      expect(
+        p.input(64, 2 - early, "wait", 0.5, 1, new Set([60, 64])),
+      ).toBeUndefined();
+      expect(p.gate?.start).toBe(2);
+      expect(p.input(60, 2 - early, "wait", 0.5, 1, new Set([60, 64]))).toBe(
+        true,
+      );
+      p.reset(1);
+      expect(p.hit.size).toBe(0);
+      expect(p.feedback).toEqual([]);
+      expect(p.gate?.start).toBe(1);
+    },
+  );
 
   it("resumes an incomplete chord after pause, then resets chord presses on seek and loop replay", () => {
     const p = new Practice([

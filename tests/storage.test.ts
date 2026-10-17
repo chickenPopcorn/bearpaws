@@ -61,6 +61,10 @@ it("recovers corrupt or invalid storage shapes without crashing", () => {
   values.set("cadence:progress:broken", "null");
   expect(progress("broken", 5).position).toBe(0);
 });
+it("migrates the removed 500ms tolerance to the widest available setting", () => {
+  write("settings", { tolerance: 0.5 });
+  expect(settings().tolerance).toBe(0.35);
+});
 it("reports quota or denied storage instead of throwing", () => {
   vi.stubGlobal("localStorage", {
     getItem: () => {

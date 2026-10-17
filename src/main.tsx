@@ -6,12 +6,32 @@ import React, {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { Studio } from "./controller";
-import { draw, keyLayout, range } from "./render";
-import { noteName, type Hand } from "./song";
+import { draw, pianoKeyAt } from "./render";
+import { noteName, suggestedFinger, fingerNames, type Hand } from "./song";
+import { FingerGuide } from "./FingerGuide";
+import { SheetTimeline } from "./SheetTimeline";
+import { usePianoFullscreen } from "./usePianoFullscreen";
+import { isBuiltInSong } from "./lessons";
 import "./style.css";
 const studio = new Studio();
 const stamp = (t: number) =>
   `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+
+function SongTitle({ title }: { title: string }) {
+  const letter = /\p{L}/u.exec(title);
+  if (!letter) return <>{title}</>;
+  return (
+    <>
+      <span className="sr-only">{title}</span>
+      <span aria-hidden="true">
+        {title.slice(0, letter.index)}
+        <span className="song-title-initial">{letter[0]}</span>
+        {title.slice(letter.index + letter[0].length)}
+      </span>
+    </>
+  );
+}
+
 const shortcuts: Record<string, number> = {
   z: 48,
   x: 50,
@@ -61,19 +81,11 @@ function Piano() {
     const rect = e.currentTarget.getBoundingClientRect(),
       x = (e.clientX - rect.left) / rect.width,
       y = e.clientY - rect.top;
-    if (y < rect.height - 100) return;
-    const [min, max] = range(studio.song),
-      keys = keyLayout(min, max);
-    const key = keys
-      .filter(
-        (k) =>
-          (!k.black || y < rect.height - 37) && x >= k.x && x < k.x + k.width,
-      )
-      .sort((a, b) => Number(b.black) - Number(a.black))[0];
-    if (key) {
+    const pitch = pianoKeyAt(studio.song, x, y, rect.height);
+    if (pitch !== undefined) {
       e.currentTarget.setPointerCapture(e.pointerId);
-      pointers.current.set(e.pointerId, key.pitch);
-      studio.virtual(key.pitch, true);
+      pointers.current.set(e.pointerId, pitch);
+      studio.virtual(pitch, true);
     }
   };
   const release = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -96,12 +108,53 @@ function Piano() {
     />
   );
 }
+function PracticeControls({
+  className = "toolbar-preferences",
+}: {
+  className?: string;
+}) {
+  const s = studio.settings;
+  return (
+    <div className={className}>
+      <div className="tabs" role="group" aria-label="Practice mode">
+        {(["listen", "wait", "rhythm"] as const).map((mode) => (
+          <button
+            key={mode}
+            aria-pressed={s.mode === mode}
+            onClick={() => studio.mode(mode)}
+          >
+            {mode === "wait"
+              ? "Wait for me"
+              : mode === "listen"
+                ? "Listen"
+                : "Rhythm"}
+          </button>
+        ))}
+      </div>
+      <div className="hands" role="group" aria-label="Practice hands">
+        {(["left", "right"] as const).map((hand) => (
+          <button
+            key={hand}
+            aria-pressed={s[hand]}
+            onClick={() => studio.hand(hand)}
+          >
+            <span className={`swatch ${hand}`} />
+            {hand === "left" ? "Left" : "Right"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 function App() {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [deviceOpen, setDeviceOpen] = useState(true),
     [showKeys, setShowKeys] = useState(false),
     [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  const fullscreen = usePianoFullscreen(() => {
+    if (!studio.transport.playing && !busy) void startPlayback();
+  });
   const s = studio.settings,
     p = studio.practice,
     playing = studio.transport.playing,
@@ -159,13 +212,24 @@ function App() {
       document.removeEventListener("visibilitychange", hidden);
     };
   }, []);
-  const toggle = async () => {
-    if (playing) studio.pause();
-    else {
-      setBusy(true);
+  const stageNotice = studio.audio.loading
+    ? "Loading grand piano sound…"
+    : studio.notice === "That’s it. Follow the next notes." ||
+        studio.notice ===
+          "Passage complete. Review your notes below, or restart."
+      ? ""
+      : studio.notice;
+  const startPlayback = async () => {
+    setBusy(true);
+    try {
       await studio.play();
+    } finally {
       setBusy(false);
     }
+  };
+  const toggle = async () => {
+    if (playing) studio.pause();
+    else await startPlayback();
   };
   const misses = p.recentMisses,
     stats = p.stats,
@@ -250,9 +314,11 @@ function App() {
             >
               {song.title}
               <small>
-                {song.id.startsWith("cadence-")
-                  ? "Original exercise · Both hands"
-                  : "Imported MIDI · On this browser"}
+                {song.lesson
+                  ? `${song.lesson.level} · ${song.lesson.bpm} BPM · Fingering`
+                  : isBuiltInSong(song.id)
+                    ? "Original exercise · Both hands"
+                    : "Imported MIDI · On this browser"}
               </small>
             </button>
           ))}
@@ -274,10 +340,6 @@ function App() {
             Your songs stay here.
             <br />
             No uploads. No account.
-            <br />
-            <a href="./examples/first-steps.mid" download>
-              Download example MIDI
-            </a>
           </p>
           <div className="side-footer">
             <strong>One phrase at a time.</strong>Slow it down.
@@ -289,11 +351,15 @@ function App() {
           <div className="song-head">
             <div>
               <div className="kicker">Practice studio</div>
-              <h1>{studio.song.title}</h1>
+              <h1>
+                <SongTitle title={studio.song.title} />
+              </h1>
               <p>
-                {studio.song.id.startsWith("cadence-")
-                  ? "An original beginning · Chords, changes & a simple melody"
-                  : `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`}
+                {studio.song.lesson
+                  ? `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
+                  : isBuiltInSong(studio.song.id)
+                    ? "An original beginning · Chords, changes & a simple melody"
+                    : `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`}
               </p>
             </div>
             <span className="chip">Saved on this browser</span>
@@ -303,52 +369,29 @@ function App() {
               {studio.storageNotice}
             </p>
           )}
-          <div className="options">
-            <div className="tabs" aria-label="Practice mode">
-              {(["listen", "wait", "rhythm"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  aria-pressed={s.mode === mode}
-                  onClick={() => studio.mode(mode)}
-                >
-                  {mode === "wait"
-                    ? "Wait for me"
-                    : mode === "listen"
-                      ? "Listen"
-                      : "Rhythm"}
-                </button>
-              ))}
-            </div>
-            <div className="hands" aria-label="Practice hands">
-              {(["left", "right"] as const).map((hand) => (
-                <button
-                  key={hand}
-                  aria-pressed={s[hand]}
-                  onClick={() => studio.hand(hand)}
-                >
-                  <span className={`swatch ${hand}`} />
-                  {hand === "left" ? "Left" : "Right"}
-                </button>
-              ))}
-            </div>
-          </div>
+          <FingerGuide song={studio.song} left={s.left} right={s.right} />
           <div className={`workspace ${s.mode === "wait" ? "guided" : ""}`}>
-            <div className="work-main">
-              <div className="roll">
-                <div className="roll-caption">
-                  <span>
-                    {s.mode === "listen"
-                      ? "Follow the music"
-                      : s.mode === "wait"
-                        ? "Your pace. Your next note."
-                        : "Find your rhythm"}
-                  </span>
-                  <span>5 seconds ahead</span>
-                </div>
-                <Piano />
-              </div>
-              <div className="transport">
-                <div className="transport-buttons">
+            <div
+              id="piano-stage"
+              ref={fullscreen.stage}
+              className={`work-main ${fullscreen.expanded ? "piano-expanded" : ""}`}
+              role={fullscreen.expanded ? "dialog" : "region"}
+              aria-label="Piano practice"
+              aria-modal={fullscreen.expanded || undefined}
+              tabIndex={-1}
+            >
+              <div className="practice-toolbar" aria-label="Practice controls">
+                {fullscreen.expanded && (
+                  <strong className="fullscreen-song-title">
+                    <SongTitle title={studio.song.title} />
+                  </strong>
+                )}
+                <PracticeControls />
+                <div
+                  className="transport-buttons"
+                  role="group"
+                  aria-label="Playback"
+                >
                   <button
                     className="square"
                     aria-label="Restart passage"
@@ -364,7 +407,7 @@ function App() {
                     disabled={busy}
                     onClick={() => void toggle()}
                   >
-                    {playing ? "Ⅱ Pause" : "▷ Play"}
+                    {busy ? "Loading piano…" : playing ? "Ⅱ Pause" : "▷ Play"}
                   </button>
                   <button
                     className="square"
@@ -393,69 +436,104 @@ function App() {
                   {stamp(studio.position)} / {stamp(studio.song.duration)}
                 </span>
               </div>
-              <input
-                className="seek"
-                type="range"
-                aria-label="Song position"
-                min="0"
-                max={studio.song.duration}
-                step=".01"
-                value={studio.position}
-                onChange={(e) => studio.seek(Number(e.target.value))}
+              {stageNotice && (
+                <div className="piano-notice" role="status">
+                  {stageNotice}
+                </div>
+              )}
+              <SheetTimeline
+                song={studio.song}
+                position={studio.position}
+                mode={s.mode}
+                hit={p.hit}
+                selectedNotes={studio.notes}
+                from={p.from}
+                onSeek={(position) => studio.seek(position)}
               />
-              <div className="status" role="status" aria-live="polite">
-                <span aria-hidden="true">✧</span>
-                {studio.notice ||
-                  (waiting
-                    ? `Your turn · ${[...new Set(gate!.notes.map((n) => noteName(n.pitch)))].join(" + ")}`
-                    : s.mode === "listen"
-                      ? "Listen first. Let the notes lead the way."
+              <div className="roll">
+                <div className="roll-caption">
+                  <span>
+                    {s.mode === "listen"
+                      ? "Follow the music"
                       : s.mode === "wait"
-                        ? "Play each highlighted note or chord. The music waits for you."
-                        : "Keep the beat. Notes and timing are checked as you play.")}
+                        ? "Your pace. Your next note."
+                        : "Find your rhythm"}
+                  </span>
+                  <div className="roll-actions">
+                    <span>5 seconds ahead</span>
+                    <button
+                      className="fullscreen-toggle"
+                      aria-label={
+                        fullscreen.expanded
+                          ? "Exit full screen"
+                          : "Full screen piano"
+                      }
+                      aria-expanded={fullscreen.expanded}
+                      aria-controls="piano-stage"
+                      title={
+                        fullscreen.expanded
+                          ? "Exit full screen (Esc)"
+                          : "Full screen and play"
+                      }
+                      onClick={() => void fullscreen.toggle()}
+                    >
+                      <span aria-hidden="true">
+                        {fullscreen.expanded ? "↙" : "⛶"}
+                      </span>
+                      {fullscreen.expanded ? "Exit full screen" : "Full screen"}
+                    </button>
+                  </div>
+                </div>
+                <Piano />
               </div>
             </div>
             {s.mode === "wait" && (
               <aside className="coach">
                 <div className="kicker">Let’s play together</div>
                 <h2>
-                  {waiting
-                    ? "Take your time."
-                    : "A little chord.\nA great beginning."}
+                  {waiting ? "Take your time." : "Find your first notes."}
                 </h2>
                 <p>
-                  Press the highlighted keys together. Release repeated notes
-                  before playing them again.
+                  Play the highlighted keys with the suggested fingers. Release
+                  repeated notes before playing them again.
                 </p>
                 <div className="chord">
-                  {[...new Set((gate?.notes || []).map((n) => n.pitch))].map(
-                    (pitch) => (
+                  {[
+                    ...new Map(
+                      (gate?.notes || []).map((n) => [
+                        `${n.track}:${n.pitch}`,
+                        n,
+                      ]),
+                    ).values(),
+                  ].map((note) => {
+                    const hand =
+                      studio.song.tracks.find((t) => t.id === note.track)
+                        ?.hand ?? "off";
+                    const finger = suggestedFinger(note, hand);
+                    return (
                       <span
-                        className={studio.input.down.has(pitch) ? "held" : ""}
-                        key={pitch}
+                        className={`finger-note ${hand} ${studio.input.down.has(note.pitch) ? "held" : ""}`}
+                        key={`${note.track}:${note.pitch}`}
                       >
-                        {noteName(pitch)}
+                        <small>{hand === "left" ? "Left" : "Right"}</small>
+                        <strong>{noteName(note.pitch)}</strong>
+                        {finger && (
+                          <small>
+                            {finger} · {fingerNames[finger]}
+                          </small>
+                        )}
                       </span>
-                    ),
-                  )}
+                    );
+                  })}
                 </div>
                 <p className="small">
                   {waiting
-                    ? "Hold the whole chord to move on."
+                    ? "Hold all highlighted keys to move on."
                     : "Next notes in your selected hands."}
                 </p>
                 <button
-                  onClick={async () => {
-                    await studio.audio.unlock();
-                    gate?.notes.forEach((n) =>
-                      studio.audio.tone(
-                        n.pitch,
-                        n.velocity,
-                        studio.audio.now(),
-                        0.7,
-                      ),
-                    );
-                  }}
+                  disabled={studio.audio.loading}
+                  onClick={() => void studio.preview()}
                 >
                   Hear next notes
                 </button>
@@ -599,7 +677,7 @@ function App() {
                   {w}
                 </p>
               ))}
-              {!studio.song.id.startsWith("cadence-") && (
+              {!isBuiltInSong(studio.song.id) && (
                 <button
                   className="text-button"
                   onClick={() => void studio.remove()}
@@ -640,7 +718,7 @@ function App() {
                       ? `Missed ${noteName(recent.pitch)} at ${stamp(recent.at)}.`
                       : recent.kind === "hit"
                         ? "That’s it. Keep going."
-                        : `${noteName(recent.pitch)} · ${Math.abs(Math.round((recent.offset || 0) * 1000))} ms ${recent.kind}, within tolerance.`
+                        : `Matched ${noteName(recent.pitch)} · ${Math.abs(Math.round((recent.offset || 0) * 1000))} ms ${recent.kind}, within tolerance.`
                   : "Your note and timing feedback will appear here. Wait for me checks notes; Rhythm adds timing."}
               </p>
               {misses.length > 0 && (
@@ -716,6 +794,12 @@ function App() {
           <footer>
             Practice stays on this browser.{" "}
             <span>USB MIDI · Desktop Chrome / Edge · HTTPS required</span>
+            {" · "}
+            <a
+              href={`${import.meta.env.BASE_URL}audio/accurate-salamander/CREDITS.md`}
+            >
+              Accurate-Salamander · 8 layers · sound credits
+            </a>
           </footer>
         </main>
       </div>

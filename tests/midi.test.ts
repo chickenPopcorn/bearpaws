@@ -12,6 +12,15 @@ function input(id: string, name = id) {
     close: vi.fn().mockResolvedValue(undefined),
   } as unknown as MIDIInput;
 }
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 function setup(inputs: MIDIInput[] = []) {
   const access = {
     inputs: new Map(inputs.map((port) => [port.id, port])),
@@ -49,6 +58,73 @@ describe("USB MIDI connection lifecycle", () => {
       [new Uint8Array([0x90, 60, 0]), 207.5],
       [new Uint8Array([0xb0, 64, 127]), 210],
     ]);
+  });
+
+  it("waits for the selected input to open before reporting connected", async () => {
+    const piano = input("piano", "My piano");
+    const opening = deferred<MIDIPort>();
+    vi.mocked(piano.open).mockReturnValueOnce(opening.promise);
+    const { midi, change, callbacks } = setup([piano]);
+    await midi.connect();
+    expect(midi.status).toBe("opening");
+    expect(midi.message).toContain("Connecting to My piano");
+    change();
+    expect(midi.status).toBe("opening");
+    expect(piano.open).toHaveBeenCalledOnce();
+    callbacks.onChange.mockClear();
+    opening.resolve(piano);
+    await opening.promise;
+    expect(midi.status).toBe("connected");
+    expect(callbacks.onChange).toHaveBeenCalledOnce();
+  });
+
+  it.each(["resolve", "reject"] as const)(
+    "ignores a stale open %s and message handler after returning to the same input",
+    async (settlement) => {
+      const first = input("first"),
+        second = input("second");
+      const oldOpening = deferred<MIDIPort>();
+      const newOpening = deferred<MIDIPort>();
+      vi.mocked(first.open)
+        .mockReturnValueOnce(oldOpening.promise)
+        .mockReturnValueOnce(newOpening.promise);
+      const { midi, callbacks, send } = setup([first, second]);
+      await midi.connect();
+      const oldHandler = first.onmidimessage;
+      midi.select("second");
+      midi.select("first");
+      callbacks.onReset.mockClear();
+      if (settlement === "resolve") oldOpening.resolve(first);
+      else oldOpening.reject(new Error("Superseded open failed"));
+      await Promise.resolve();
+      expect(midi.status).toBe("opening");
+      expect(callbacks.onReset).not.toHaveBeenCalled();
+      oldHandler?.call(first, {
+        data: new Uint8Array([0x90, 60, 100]),
+        timeStamp: 12,
+      } as MIDIMessageEvent);
+      expect(callbacks.onMessage).not.toHaveBeenCalled();
+      newOpening.resolve(first);
+      await newOpening.promise;
+      expect(midi.status).toBe("connected");
+      send(first, [0x90, 64, 100]);
+      expect(callbacks.onMessage).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("ignores an open result after the input is unplugged", async () => {
+    const piano = input("piano");
+    const opening = deferred<MIDIPort>();
+    vi.mocked(piano.open).mockReturnValueOnce(opening.promise);
+    const { midi, change } = setup([piano]);
+    await midi.connect();
+    Object.defineProperty(piano, "state", { value: "disconnected" });
+    change();
+    expect(midi.status).toBe("disconnected");
+    opening.resolve(piano);
+    await opening.promise;
+    expect(midi.status).toBe("disconnected");
+    expect(piano.onmidimessage).toBeNull();
   });
 
   it("binds only the selected input and clears held input on device selection", async () => {
@@ -95,6 +171,8 @@ describe("USB MIDI connection lifecycle", () => {
       reconnected,
     );
     change();
+    expect(midi.status).toBe("opening");
+    await Promise.resolve();
     expect(midi.status).toBe("connected");
     expect(midi.selectedId).toBe("piano");
     send(reconnected, [0x90, 67, 80]);
@@ -113,6 +191,8 @@ describe("USB MIDI connection lifecycle", () => {
       input("new"),
     );
     change();
+    expect(midi.status).toBe("opening");
+    await Promise.resolve();
     expect(midi.status).toBe("connected");
     expect(midi.selectedId).toBe("new");
   });
@@ -141,6 +221,8 @@ describe("USB MIDI connection lifecycle", () => {
     expect(piano.open).toHaveBeenCalledOnce();
     midi.select("piano");
     expect(piano.open).toHaveBeenCalledTimes(2);
+    expect(midi.status).toBe("opening");
+    await Promise.resolve();
     expect(midi.status).toBe("connected");
   });
 

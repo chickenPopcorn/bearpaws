@@ -1,7 +1,8 @@
 import { Practice, Transport, MidiState, type Mode } from "./engine";
 import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
-import { exampleSong, parseSong, type Song, type Hand } from "./song";
+import { parseSong, type Song, type Hand } from "./song";
+import { builtInSongs, isBuiltInSong } from "./lessons";
 import {
   settings,
   write,
@@ -16,9 +17,14 @@ export class Studio {
   settings = settings();
   savedSelection = this.settings.selected;
   private playGeneration = 0;
+  private virtualRequests = new Map<number, number>();
+  private nextVirtualRequest = 0;
+  private lifecycleGeneration = 0;
+  private initialization: Promise<void> | undefined;
+  private destroyed = false;
   private selectedNotes: Song["notes"] = [];
   scoringEpoch = 0;
-  songs = [exampleSong()];
+  songs = builtInSongs();
   song = this.songs[0];
   audio = new ReferenceAudio();
   input = new MidiState();
@@ -45,7 +51,11 @@ export class Studio {
   loopEnd = this.song.duration;
   timer: ReturnType<typeof setInterval> | null = null;
   constructor() {
-    this.midi = new MidiConnection({
+    this.midi = this.createMidi();
+    this.load(this.song);
+  }
+  private createMidi() {
+    return new MidiConnection({
       onMessage: (data, time) => this.receive(data, time),
       onReset: () => {
         this.playGeneration++;
@@ -59,7 +69,6 @@ export class Studio {
       },
       onChange: () => this.emit(),
     });
-    this.load(this.song);
   }
   get scoringNotes() {
     return this.notes.filter(
@@ -89,23 +98,49 @@ export class Studio {
     this.revision++;
     for (const l of this.listeners) l();
   }
-  async init() {
+  init(): Promise<void> {
+    if (this.initialization) return this.initialization;
+    if (this.timer !== null) return Promise.resolve();
+    if (this.destroyed) {
+      this.midi = this.createMidi();
+      this.destroyed = false;
+    }
+    const generation = ++this.lifecycleGeneration;
+    void this.midi.autoConnect();
+    this.initialization = this.loadLibrary(generation).finally(() => {
+      if (generation === this.lifecycleGeneration)
+        this.initialization = undefined;
+    });
+    return this.initialization;
+  }
+  private async loadLibrary(generation: number) {
     try {
       const songs = await library();
-      this.songs = [this.songs[0], ...songs];
+      if (generation !== this.lifecycleGeneration) return;
+      this.songs = [
+        ...builtInSongs(),
+        ...songs.filter((song) => !isBuiltInSong(song.id)),
+      ];
       const selected = this.songs.find((s) => s.id === this.savedSelection);
       if (selected) this.load(selected);
       this.emit();
     } catch {
+      if (generation !== this.lifecycleGeneration) return;
       this.storageNotice =
         "Local song storage is unavailable. Imports work for this session.";
       this.emit();
     }
-    this.timer = setInterval(() => this.tick(), 20);
+    if (generation === this.lifecycleGeneration)
+      this.timer = setInterval(() => this.tick(), 20);
   }
   destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.lifecycleGeneration++;
+    this.initialization = undefined;
     this.playGeneration++;
-    if (this.timer) clearInterval(this.timer);
+    if (this.timer !== null) clearInterval(this.timer);
+    this.timer = null;
     this.save();
     this.audio.stop();
     this.midi.dispose();
@@ -234,6 +269,20 @@ export class Studio {
     this.save();
     this.emit();
   }
+  private async prepareAudio(
+    notes: Pick<Song["notes"][number], "pitch" | "velocity">[],
+    generation: number,
+  ) {
+    await this.audio.unlock();
+    if (generation !== this.playGeneration) return;
+    const preparation = this.audio.prepare(notes);
+    this.emit();
+    try {
+      await preparation;
+    } finally {
+      this.emit();
+    }
+  }
   async play() {
     const generation = ++this.playGeneration;
     if (!this.notes.length) {
@@ -243,7 +292,8 @@ export class Studio {
     }
     try {
       const p = this.position;
-      await this.audio.unlock();
+      this.audio.stop();
+      await this.prepareAudio(this.scoringNotes, generation);
       if (generation !== this.playGeneration) return;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
@@ -254,6 +304,7 @@ export class Studio {
         (this.position < this.loopStart || this.position >= this.loopEnd)
       )
         this.seek(this.loopStart);
+      this.audio.setPlaybackNotes(this.scoringNotes);
       this.transport.play(this.audio.now());
       this.progress.attempts++;
       this.notice = "";
@@ -262,6 +313,7 @@ export class Studio {
     } catch {
       if (generation !== this.playGeneration) return;
       this.notice =
+        this.audio.error ||
         "Browser audio could not start. Enable audio for this page and try Play again.";
       this.emit();
     }
@@ -333,7 +385,9 @@ export class Studio {
           Math.round((this.practice.hit.size / total) * 100),
         );
       if (!this.transport.playing) {
-        this.audio.stop();
+        // The transport has finished, but the final piano release can still
+        // be ringing. Explicit pause/seek/song changes continue to stop audio.
+        this.audio.setPlaybackNotes([]);
         this.notice = "Passage complete. Review your notes below, or restart.";
         this.save();
       }
@@ -377,14 +431,47 @@ export class Studio {
     this.emit();
   }
   virtual(pitch: number, on: boolean) {
+    const request = ++this.nextVirtualRequest;
+    if (on) this.virtualRequests.set(pitch, request);
+    else this.virtualRequests.delete(pitch);
     this.receive(
       new Uint8Array([on ? 0x9f : 0x8f, pitch, on ? 90 : 0]),
       performance.now(),
     );
     if (on) {
-      void this.audio
-        .unlock()
-        .then(() => this.audio.tone(pitch, 0.6, this.audio.now(), 0.4));
+      const generation = this.playGeneration;
+      void this.prepareAudio([{ pitch, velocity: 0.6 }], generation)
+        .then(() => {
+          if (
+            generation === this.playGeneration &&
+            this.virtualRequests.get(pitch) === request &&
+            this.input.down.has(pitch)
+          )
+            this.audio.tone(pitch, 0.6, this.audio.now(), 0.4);
+        })
+        .catch(() => {
+          if (generation !== this.playGeneration) return;
+          this.notice =
+            this.audio.error || "Piano sound is unavailable. Please try again.";
+          this.emit();
+        });
+    }
+  }
+  async preview() {
+    const generation = this.playGeneration;
+    const notes = [
+      ...new Map(this.practice.gate?.notes.map((n) => [n.pitch, n])).values(),
+    ];
+    try {
+      await this.prepareAudio(notes, generation);
+      if (generation !== this.playGeneration) return;
+      for (const n of notes)
+        this.audio.tone(n.pitch, n.velocity, this.audio.now(), 0.7);
+    } catch {
+      if (generation !== this.playGeneration) return;
+      this.notice =
+        this.audio.error || "Piano sound is unavailable. Please try again.";
+      this.emit();
     }
   }
   async import(file: File) {
@@ -421,7 +508,7 @@ export class Studio {
   }
   async remove() {
     const id = this.song.id;
-    if (id === "cadence-first-steps-v1") return;
+    if (isBuiltInSong(id)) return;
     this.pause();
     try {
       await deleteSong(id);

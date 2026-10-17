@@ -26,7 +26,7 @@ export const defaults: Settings = {
   tolerance: 0.22,
   reference: true,
   names: true,
-  selected: "cadence-first-steps-v1",
+  selected: "cadence-ode-to-joy-v1",
 };
 export function read<T>(key: string, fallback: T): T {
   try {
@@ -55,7 +55,7 @@ export function settings(): Settings {
       ? Math.max(0.25, Math.min(1.5, s.speed))
       : 0.75,
     tolerance: Number.isFinite(s.tolerance)
-      ? Math.max(0.08, Math.min(0.5, s.tolerance))
+      ? Math.max(0.08, Math.min(0.35, s.tolerance))
       : 0.22,
     left: !!s.left || !s.right,
     right: !!s.right,

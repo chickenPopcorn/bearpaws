@@ -8,3 +8,5 @@ coverage/
 .DS_Store
 work/
 *.tsbuildinfo
+*.log
+__pycache__/

@@ -1,0 +1,4 @@
+# Preserve upstream license/preset bytes, including their original whitespace.
+public/audio/accurate-salamander/source/*.sfz -text -whitespace
+public/audio/accurate-salamander/source/README-upstream.txt -text -whitespace
+public/fonts/*-OFL.txt -text -whitespace

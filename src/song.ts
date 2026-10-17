@@ -1,5 +1,6 @@
 import { parseMidi } from "midi-file";
 export type Hand = "left" | "right" | "off";
+export type Finger = 1 | 2 | 3 | 4 | 5;
 export interface Note {
   id: string;
   pitch: number;
@@ -9,6 +10,11 @@ export interface Note {
   soundEnd: number;
   track: number;
   channel: number;
+  finger?: Finger;
+  fingerHand?: "left" | "right";
+  /** Written length in quarter-note beats, before articulation shortens playback. */
+  notatedBeats?: number;
+  staccato?: boolean;
 }
 export interface Track {
   id: number;
@@ -28,8 +34,20 @@ export interface Song {
   duration: number;
   tempos: Tempo[];
   ppq: number;
+  beatsPerBar?: number;
+  leadInBeats?: number;
   warnings: string[];
+  lesson?: {
+    composer: string;
+    description: string;
+    level: string;
+    bpm: number;
+    handPositions: { left: string; right: string };
+  };
 }
+export const fingerNames = ["", "thumb", "index", "middle", "ring", "little"];
+export const suggestedFinger = (note: Note, hand: Hand) =>
+  note.fingerHand === hand ? note.finger : undefined;
 const MAX_NOTES = 50000;
 const MAX_EVENTS = 500000;
 const MAX_TRACKS = 256;
