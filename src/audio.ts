@@ -106,7 +106,12 @@ export class ReferenceAudio {
     context: AudioContext,
   ): Promise<AudioBuffer> {
     const cached = this.samples.get(file);
-    if (cached) return Promise.resolve(cached);
+    if (cached) {
+      // makeRoom() evicts in Map order; keep recently used recordings last.
+      this.samples.delete(file);
+      this.samples.set(file, cached);
+      return Promise.resolve(cached);
+    }
     const pending = this.pending.get(file);
     if (pending) return pending.promise;
     const size = this.estimateBytes(file, context);
