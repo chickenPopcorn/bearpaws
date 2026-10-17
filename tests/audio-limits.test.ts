@@ -362,6 +362,27 @@ describe("bounded reference audio", () => {
     expect(context.createBufferSource).toHaveBeenCalledTimes(200);
     expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
   });
+  it("moves only waiting voices to a new speed, so sounding notes are not struck again", () => {
+    const { audio, transport, context, nodes } = fixture();
+    const notes = [note(1, 60, 2), { ...note(2, 64, 2), start: 0.1 }];
+    audio.schedule(notes, transport, true);
+    audio.tone(67, 0.8, 0.3, 0.4);
+    expect(nodes).toHaveLength(3);
+    context.currentTime = 0.05;
+    transport.setSpeed(0.5, 0.05);
+    audio.reschedule();
+    expect(audio.scheduled).toEqual(new Set(["1"]));
+    const fades = context.createGain.mock.results.map(
+      (result) => result.value.gain.cancelAndHoldAtTime.mock.calls,
+    );
+    // The sounding note and the preview, which has no note to replay, remain.
+    expect(fades).toEqual([[], [[0.05]], []]);
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(4);
+    // 0.05 of the song remains before the note, played at half speed.
+    expect(nodes[3].start.mock.calls[0][0]).toBeCloseTo(0.15);
+    expect(nodes[0].stop).toHaveBeenCalledOnce();
+  });
   it("applies the same cap to direct previews and future-scheduled voices, then reuses freed slots", () => {
     const { audio, context, nodes } = fixture();
     for (let i = 0; i < 5000; i++) audio.tone(i % 128, 0.8, 100, 10);

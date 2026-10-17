@@ -291,7 +291,9 @@ export class Studio {
     if (this.transport.playing) this.tick(now);
     this.transport.setSpeed(speed, now);
     this.settings.speed = speed;
-    this.audio.stop(!this.transport.playing);
+    // Sounding notes ring on; only notes that have not started change speed.
+    if (this.transport.playing) this.audio.reschedule();
+    else this.audio.stop();
     this.persist();
     this.emit();
   }

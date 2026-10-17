@@ -30,6 +30,7 @@ vi.mock("../src/audio", () => ({
     setPlaybackNotes = vi.fn();
     setSound = vi.fn();
     stop = vi.fn();
+    reschedule = vi.fn();
     schedule = vi.fn();
     tone = vi.fn();
   },
@@ -433,6 +434,28 @@ describe("practice studio integration", () => {
       expect(studio.audio.stop).toHaveBeenCalledOnce();
     },
   );
+
+  it("moves only waiting reference notes to a new speed during playback", async () => {
+    const studio = create(
+      song([
+        [60, 0],
+        [64, 2],
+      ]),
+    );
+    studio.mode("listen");
+    await studio.play();
+    advance(studio, 0.2);
+    vi.mocked(studio.audio.stop).mockClear();
+    studio.speed(0.5);
+    expect(studio.audio.reschedule).toHaveBeenCalledOnce();
+    expect(studio.audio.stop).not.toHaveBeenCalled();
+    expect(studio.transport.playing).toBe(true);
+    studio.pause();
+    vi.mocked(studio.audio.stop).mockClear();
+    studio.speed(1);
+    expect(studio.audio.stop).toHaveBeenCalledExactlyOnceWith();
+    expect(studio.audio.reschedule).toHaveBeenCalledOnce();
+  });
 
   it("keeps sounding notes when loop bounds change while the loop is off", async () => {
     const studio = create(

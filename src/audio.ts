@@ -41,6 +41,9 @@ interface Voice {
   file: string;
   /** Context time of the attack. */
   start: number;
+  /** The scheduled notes this voice plays, and the set that records them. */
+  ids: readonly string[];
+  pass: Set<string>;
 }
 class PianoMemoryError extends Error {}
 /** Audio and MIDI timestamps share performance.timeOrigin. Frames never advance time. */
@@ -302,6 +305,19 @@ export class ReferenceAudio {
     if (oldest) this.fade(oldest, now);
     return oldest !== undefined;
   }
+  /**
+   * Cancel scheduled voices that have not started, so the next schedule()
+   * plays their notes at a new speed. Sounding notes ring on instead of being
+   * struck again.
+   */
+  reschedule() {
+    const now = this.now();
+    for (const voice of this.voices) {
+      if (voice.start <= now || !voice.ids.length) continue;
+      for (const id of voice.ids) voice.pass.delete(id);
+      this.fade(voice, now);
+    }
+  }
   stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) this.playbackFiles.clear();
     const now = this.now();
@@ -321,7 +337,14 @@ export class ReferenceAudio {
       this.error = "The piano sound could not reset. Please try Play again.";
     }
   }
-  tone(pitch: number, velocity: number, when: number, duration: number) {
+  tone(
+    pitch: number,
+    velocity: number,
+    when: number,
+    duration: number,
+    ids: readonly string[] = [],
+    pass = this.scheduled,
+  ) {
     const context = this.context;
     if (
       !context ||
@@ -369,7 +392,14 @@ export class ReferenceAudio {
         gain.gain.setTargetAtTime(0, releaseAt, releaseTime);
       source.connect(gain).connect(this.output?.input ?? context.destination);
       this.roomUsed = true;
-      const voice = { source, gain, file: region.file, start: when };
+      const voice = {
+        source,
+        gain,
+        file: region.file,
+        start: when,
+        ids,
+        pass,
+      };
       this.voices.add(voice);
       source.onended = () => this.disconnect(voice);
       source.start(when, region.offset);
@@ -406,7 +436,7 @@ export class ReferenceAudio {
     const now = this.now(),
       position = transport.at(now),
       lookahead = 0.12 * transport.speed;
-    const attacks = new Map<string, Note>();
+    const attacks = new Map<string, Note & { ids: string[] }>();
     for (const n of notes) {
       if (
         this.scheduled.has(n.id) ||
@@ -423,10 +453,11 @@ export class ReferenceAudio {
       const key = `${n.pitch}:${n.start}`,
         previous = attacks.get(key);
       // Duplicate tracks at the same onset need one sound, with the longest pedal tail.
-      if (!previous) attacks.set(key, { ...n });
+      if (!previous) attacks.set(key, { ...n, ids: [n.id] });
       else {
         previous.soundEnd = Math.max(previous.soundEnd, n.soundEnd);
         previous.velocity = Math.max(previous.velocity, n.velocity);
+        previous.ids.push(n.id);
       }
     }
     for (const n of attacks.values()) {
@@ -434,7 +465,8 @@ export class ReferenceAudio {
         end =
           (Math.min(n.soundEnd, transport.loop?.[1] ?? Infinity) - position) /
           transport.speed;
-      if (end > 0) this.tone(n.pitch, n.velocity, now + start, end - start);
+      if (end > 0)
+        this.tone(n.pitch, n.velocity, now + start, end - start, n.ids);
     }
   }
 }
