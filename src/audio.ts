@@ -334,6 +334,16 @@ export class ReferenceAudio {
     return oldest !== undefined;
   }
   /**
+   * Voices stolen for an attack that has not come yet. Each still holds its
+   * nodes until then, so they have their own cap: otherwise every attack in
+   * one lookahead window of a dense file could steal, and allocate, again.
+   */
+  private pendingSteals(now: number) {
+    let count = 0;
+    for (const voice of this.fading) if (voice.fadeAt > now) count++;
+    return count;
+  }
+  /**
    * Voices that still play now: active ones, and ones stolen for a later
    * attack, which sound until that attack.
    */
@@ -404,8 +414,13 @@ export class ReferenceAudio {
     if (!buffer) return true;
     // The cap includes future scheduled voices and previews: no entry point can
     // bypass it. A dense pedalled passage replaces a sounding voice rather than
-    // going silent; only voices that are all waiting refuse a note.
-    if (this.voices.size >= MAX_REFERENCE_VOICES && !this.steal(when))
+    // going silent. A note is refused, to be tried on a later tick, only while
+    // every voice is waiting or too many steals are still ahead.
+    if (
+      this.voices.size >= MAX_REFERENCE_VOICES &&
+      (this.pendingSteals(context.currentTime) >= MAX_REFERENCE_VOICES ||
+        !this.steal(when))
+    )
       return false;
     let source: AudioBufferSourceNode | undefined, gain: GainNode | undefined;
     try {

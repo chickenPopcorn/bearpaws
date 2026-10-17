@@ -361,6 +361,22 @@ describe("bounded reference audio", () => {
     expect(gain(0).setTargetAtTime).toHaveBeenLastCalledWith(0, 0.5, 0.008);
     expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(0.55);
   });
+  it("bounds allocation when a dense file has more attacks in one lookahead than voices", () => {
+    const { audio, transport, context, nodes } = fixture();
+    const notes = Array.from({ length: 1000 }, (_, i) => ({
+      ...note(i, 21 + (i % 88), 2),
+      start: i * 0.0001,
+    }));
+    audio.schedule(notes, transport, true);
+    // The cap, plus at most as many voices stolen for attacks still ahead.
+    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    // Once those attacks pass, the refused notes are tried again.
+    context.currentTime = 0.02;
+    audio.schedule(notes, transport, true);
+    expect(nodes.length).toBeGreaterThan(2 * MAX_REFERENCE_VOICES);
+    expect(nodes.length).toBeLessThanOrEqual(4 * MAX_REFERENCE_VOICES);
+  });
   it("lets a stop before the attack cancel a voice stolen for that attack", () => {
     const { audio, context, nodes } = fixture();
     const gain = (index: number) =>
