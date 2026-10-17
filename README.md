@@ -118,7 +118,17 @@ Once audio is unlocked, AudioContext time is the musical clock; MIDI event times
 
 See [docs/verification.md](docs/verification.md) for checks run, limitations, and the local hardware acceptance procedure.
 
-The production output is the static `dist/` directory. The GitHub checks workflow uploads that directory and the hosting manifest as a `cadence-static` artifact after a successful CI build. `.openai/hosting.json` declares it for ChatGPT Sites. Sites registration was attempted but failed with `Project owner is not linked to an account`; no project ID or deployed URL was returned. **Deployment is pending**, with a prepared static archive. After account linkage is repaired, create an owner-private Site, persist its returned project ID, synchronize the exact source commit, package `.openai/hosting.json` plus `dist/`, and deploy that saved version privately.
+The production output is the static `dist/` directory. GitHub Pages deployment is
+prepared for **https://piano.pollos.us/**: the Pages workflow validates and deploys
+pushes to `main`, and Cloudflare supplies the subdomain’s DNS record. See
+[the GitHub Pages setup](docs/github-pages.md) for the one-time repository settings,
+exact DNS record, HTTPS and verification steps. **Deployment is pending**; these
+changes do not enable Pages or update DNS on their own.
+
+The separate checks workflow still uploads `dist/` and `.openai/hosting.json` as a
+`cadence-static` artifact. That manifest remains available for ChatGPT Sites;
+the earlier Sites registration attempt returned `Project owner is not linked to
+an account`, with no deployed URL.
 
 Local Chrome verification confirmed automatic connection to the available USB MIDI
 input after refresh, fullscreen autoplay, score seeking and the saved paw preference.
