@@ -512,13 +512,17 @@ function App() {
           </svg>
         </button>
       </header>
+      {/* Connection changes are announced even while the panel is folded. */}
+      <p className="sr-only" role="status">
+        {studio.midi.message}
+      </p>
       {deviceOpen && (
         <section className="connection" aria-label="Piano connection">
           <div>
             <strong>
               {connected ? "Your piano is ready" : "Make room for music"}
             </strong>
-            <p role="status">{studio.midi.message}</p>
+            <p>{studio.midi.message}</p>
           </div>
           <div className="device-actions">
             {studio.midi.devices.length > 0 && (
@@ -744,7 +748,12 @@ function App() {
               )}
               {s.mode === "wait" && (
                 <p className="sr-only" aria-live="polite">
-                  {describeWaitTarget(studio.song, p.gate, studio.input.down)}
+                  {describeWaitTarget(
+                    studio.song,
+                    p.gate,
+                    studio.input.down,
+                    p.hit,
+                  )}
                 </p>
               )}
               <SheetTimeline
