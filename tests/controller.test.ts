@@ -307,6 +307,77 @@ describe("practice studio integration", () => {
     },
   );
 
+  it.each(["speed", "seek", "inactive bounds", "loop wrap"] as const)(
+    "retains prepared passage recordings through %s during playback",
+    async (change) => {
+      const studio = create(
+        song([
+          [60, 0.5],
+          [63, 1.5],
+        ]),
+      );
+      studio.mode("listen");
+      if (change === "loop wrap") {
+        studio.bounds(0, 2);
+        studio.loop(true);
+      }
+      await studio.play();
+      vi.mocked(studio.audio.stop).mockClear();
+      if (change === "speed") studio.speed(0.75);
+      else if (change === "seek") studio.seek(1);
+      else if (change === "inactive bounds") studio.bounds(0, 3);
+      else advance(studio, 2.1);
+      expect(studio.transport.playing).toBe(true);
+      expect(studio.audio.stop).toHaveBeenCalled();
+      expect(
+        vi
+          .mocked(studio.audio.stop)
+          .mock.calls.every(([release]) => release === false),
+      ).toBe(true);
+    },
+  );
+
+  it.each(["disable", "expand", "enable"] as const)(
+    "loads the new passage scope before resuming when loop is changed: %s",
+    async (change) => {
+      const studio = create(
+        song([
+          [60, 0.5],
+          [63, 2.5],
+        ]),
+      );
+      studio.mode("listen");
+      studio.bounds(0, 1.5);
+      if (change !== "enable") studio.loop(true);
+      await studio.play();
+      advance(studio, 0.25);
+      vi.mocked(studio.audio.prepare).mockClear();
+      vi.mocked(studio.audio.setPlaybackNotes).mockClear();
+      let finish!: () => void;
+      env.prepareWait = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      if (change === "disable") studio.loop(false);
+      else if (change === "expand") studio.bounds(0, 3);
+      else studio.loop(true);
+      expect(studio.transport.playing).toBe(false);
+      const position = change === "disable" ? 0.25 : 0;
+      expect(studio.position).toBeCloseTo(position);
+      await vi.waitFor(() =>
+        expect(studio.audio.prepare).toHaveBeenCalledOnce(),
+      );
+      const prepared = change === "enable" ? [studio.notes[0]] : studio.notes;
+      expect(studio.audio.prepare).toHaveBeenCalledWith(prepared);
+      advance(studio, 1);
+      expect(studio.position).toBeCloseTo(position);
+      expect(studio.audio.setPlaybackNotes).not.toHaveBeenCalled();
+      finish();
+      await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
+      expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith(prepared);
+      expect(studio.position).toBeCloseTo(position);
+    },
+  );
+
   it("keeps every built-in piece and restores the selected one after library loading", async () => {
     const builtIns = builtInSongs();
     env.values.set("settings", { selected: builtIns[1].id });

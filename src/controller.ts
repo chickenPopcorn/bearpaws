@@ -232,7 +232,7 @@ export class Studio {
     if (this.transport.playing) this.tick(now);
     this.transport.setSpeed(speed, now);
     this.settings.speed = speed;
-    this.audio.stop();
+    this.audio.stop(!this.transport.playing);
     this.persist();
     this.emit();
   }
@@ -243,7 +243,7 @@ export class Studio {
   }
   seek(position: number) {
     this.playGeneration++;
-    this.audio.stop();
+    this.audio.stop(!this.transport.playing);
     this.scoringEpoch = this.audio.now();
     if (this.loopEnabled)
       position = Math.min(
@@ -324,11 +324,17 @@ export class Studio {
     else this.transport.loop = null;
   }
   loop(enabled: boolean) {
+    // The new scope may need recordings that the previous loop did not load.
+    const resume = this.transport.playing;
+    if (resume) this.pause();
     this.loopEnabled = enabled;
     this.syncLoop();
     this.seek(enabled ? this.loopStart : this.position);
+    if (resume) void this.play();
   }
   bounds(start: number, end: number) {
+    const resume = this.loopEnabled && this.transport.playing;
+    if (resume) this.pause();
     this.playGeneration++;
     this.loopStart = Math.max(0, Math.min(this.song.duration - 0.2, start));
     this.loopEnd = Math.max(
@@ -336,10 +342,11 @@ export class Studio {
       Math.min(this.song.duration, end),
     );
     this.syncLoop();
-    this.audio.stop();
+    this.audio.stop(!this.transport.playing);
     if (this.loopEnabled) this.seek(this.loopStart);
     this.save();
     this.emit();
+    if (resume) void this.play();
   }
   tick(now = this.audio.now()) {
     const playing = this.transport.playing,
@@ -350,7 +357,7 @@ export class Studio {
         this.settings.mode === "wait" ? this.practice.gate?.start : undefined,
       );
       if (cycle !== this.transport.cycle) {
-        this.audio.stop();
+        this.audio.stop(false);
         this.scoringEpoch =
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();

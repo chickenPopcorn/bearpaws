@@ -25,6 +25,7 @@ export class ReferenceAudio {
   private pins = new Map<string, number>();
   private preparations = 0;
   private preparationGeneration = 0;
+  private playbackBlocked = false;
   private playbackFiles = new Set<string>();
   scheduled = new Set<string>();
   cycle = -1;
@@ -51,7 +52,9 @@ export class ReferenceAudio {
         output.connect(this.context.destination);
         this.output = output;
       }
+      this.playbackBlocked = false;
     } catch (error) {
+      this.playbackBlocked = true;
       this.error = "The piano sound could not load. Please try again.";
       throw error;
     }
@@ -214,7 +217,7 @@ export class ReferenceAudio {
     if (
       !context ||
       context.state !== "running" ||
-      this.error ||
+      this.playbackBlocked ||
       velocity <= 0 ||
       this.voices.size >= MAX_REFERENCE_VOICES
     )
@@ -263,6 +266,7 @@ export class ReferenceAudio {
           : Math.min(sampleEnd, releaseAt + releaseTime * 7 + 0.02),
       );
     } catch {
+      this.playbackBlocked = true;
       for (const voice of this.voices)
         if (voice.source === source) this.voices.delete(voice);
       try {

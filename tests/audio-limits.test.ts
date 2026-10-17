@@ -434,6 +434,47 @@ describe("piano sample loading", () => {
     expect(cachedBytes(audio)).toBeLessThanOrEqual(MAX_PIANO_CACHE_BYTES);
   });
 
+  it("retains future recordings after voice cancellation and keeps playing after an unrelated memory rejection", async () => {
+    const { audio, context, transport } = fixture(false);
+    const bytes = 200 * 1024 * 1024;
+    const future = fileFor(63),
+      requested = fileFor(66);
+    audio.samples.set(fileFor(60), sizedBuffer(bytes));
+    audio.samples.set(future, sizedBuffer(bytes));
+    instrumentMetadata.files = {
+      [requested]: { duration: bytes / (sampleRate * 8), channels: 2 },
+    };
+    await audio.unlock();
+    audio.setPlaybackNotes([sound(60), sound(63)]);
+    audio.stop(false);
+    await expect(audio.prepare([sound(66)])).rejects.toThrow(
+      /too many piano samples/,
+    );
+    expect(audio.samples.has(future)).toBe(true);
+    expect(audio.error).toMatch(/too many piano samples/);
+    audio.schedule([{ ...note(1, 63), velocity: 0.8 }], transport, true);
+    expect(context.createBufferSource).toHaveBeenCalledOnce();
+    expect(audio.voices.size).toBe(1);
+  });
+
+  it("keeps cached playback available after an unrelated sample download fails", async () => {
+    const { audio, context, transport } = fixture(false);
+    audio.samples.set(fileFor(63), buffer());
+    audio.setPlaybackNotes([sound(63)]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("offline");
+      }),
+    );
+    await audio.unlock();
+    await expect(audio.prepare([sound(60)])).rejects.toThrow("offline");
+    expect(audio.error).toMatch(/piano samples could not load/);
+    audio.schedule([{ ...note(1, 63), velocity: 0.8 }], transport, true);
+    expect(context.createBufferSource).toHaveBeenCalledOnce();
+    expect(audio.voices.size).toBe(1);
+  });
+
   it("counts concurrent preparations toward the memory limit without evicting their samples", async () => {
     const { audio, context } = fixture(false);
     const bytes = 200 * 1024 * 1024;
