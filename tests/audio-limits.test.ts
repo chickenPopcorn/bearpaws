@@ -364,7 +364,7 @@ describe("bounded reference audio", () => {
     expect(audio.tone(100, 0.8, 0.5, 1)).toBe(false);
     expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
     transport.setSpeed(0.5, 0.4);
-    audio.reschedule();
+    audio.reschedule(transport);
     for (let i = 0; i < 40; i++)
       expect(gain(i).cancelAndHoldAtTime).not.toHaveBeenCalled();
     context.currentTime = 0.5;
@@ -457,26 +457,64 @@ describe("bounded reference audio", () => {
     expect(context.createBufferSource).toHaveBeenCalledTimes(200);
     expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
   });
-  it("moves only waiting voices to a new speed, so sounding notes are not struck again", () => {
+  it("moves waiting voices to a new speed, and a sounding note's release, without striking it again", () => {
     const { audio, transport, context, nodes } = fixture();
     const notes = [note(1, 60, 2), { ...note(2, 64, 2), start: 0.1 }];
     audio.schedule(notes, transport, true);
     audio.tone(67, 0.8, 0.3, 0.4);
     expect(nodes).toHaveLength(3);
+    const gain = (index: number) =>
+      context.createGain.mock.results[index].value.gain;
+    const releaseTime = gain(0).setTargetAtTime.mock.calls[0][2];
     context.currentTime = 0.05;
     transport.setSpeed(0.5, 0.05);
-    audio.reschedule();
+    audio.reschedule(transport);
     expect(audio.scheduled).toEqual(new Set(["1"]));
-    const fades = context.createGain.mock.results.map(
-      (result) => result.value.gain.cancelAndHoldAtTime.mock.calls,
+    // The sounding note holds, then releases where its note-off now falls:
+    // 1.95 s of song remain at half speed. The preview has no note to move.
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(0.05);
+    expect(gain(0).setTargetAtTime).toHaveBeenLastCalledWith(
+      0,
+      expect.closeTo(3.95),
+      releaseTime,
     );
-    // The sounding note and the preview, which has no note to replay, remain.
-    expect(fades).toEqual([[], [[0.05]], []]);
+    expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(
+      3.95 + releaseTime * 7 + 0.02,
+    );
+    expect(gain(1).cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(0.05);
+    expect(gain(2).cancelAndHoldAtTime).not.toHaveBeenCalled();
     audio.schedule(notes, transport, true);
     expect(nodes).toHaveLength(4);
     // 0.05 of the song remains before the note, played at half speed.
     expect(nodes[3].start.mock.calls[0][0]).toBeCloseTo(0.15);
-    expect(nodes[0].stop).toHaveBeenCalledOnce();
+  });
+  it("keeps a just-struck note's full level when its release moves", () => {
+    const { audio, transport, context } = fixture();
+    audio.schedule([note(1, 60, 2)], transport, true);
+    context.currentTime = 0.001;
+    transport.setSpeed(0.5, 0.001);
+    audio.reschedule(transport);
+    const gain = context.createGain.mock.results[0].value.gain;
+    // Held after the 3 ms attack ramp, not partway up it.
+    expect(gain.cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(0.003);
+  });
+  it("caps active and fading voices together across rapid stops", () => {
+    const { audio, nodes } = fixture();
+    const fill = (when: number) => {
+      for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+        audio.tone(36 + (i % 60), 0.8, when, 10);
+    };
+    fill(0);
+    audio.stop();
+    fill(0);
+    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    // A second stop inside the 50 ms fade leaves 128 sources still fading.
+    audio.stop();
+    expect(audio.tone(60, 0.8, 0, 1)).toBe(false);
+    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    for (const osc of nodes.slice(0, MAX_REFERENCE_VOICES)) osc.onended!();
+    fill(0);
+    expect(nodes).toHaveLength(3 * MAX_REFERENCE_VOICES);
   });
   describe("across loop passes", () => {
     // The loop [0.5, 1.5] at 1x wraps when the clock reaches 1 s.
@@ -541,7 +579,7 @@ describe("bounded reference audio", () => {
       tick(0.9);
       context.currentTime = 0.94;
       transport.setSpeed(0.5, 0.94);
-      audio.reschedule();
+      audio.reschedule(transport);
       tick(0.94);
       tick(0.96);
       // 0.06 of the loop remains before the wrap, played at half speed.

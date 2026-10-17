@@ -24,6 +24,8 @@ const FADE_SECONDS = 0.008;
 const FADE_STOP_SECONDS = 0.05;
 /** A note at the voice cap may replace a voice once it starts within this time. */
 const DUE_SECONDS = 0.001;
+/** Length of each voice's attack ramp. */
+const ATTACK_SECONDS = 0.003;
 const MEMORY_MESSAGE =
   "This passage needs too many piano samples. Try one hand or a shorter loop.";
 /** The recordings that play these notes. */
@@ -48,6 +50,15 @@ interface Voice {
   end: number;
   /** The room input this voice feeds, until a stop takes it out of the room. */
   room?: AudioNode;
+  /**
+   * For a scheduled note: where in the song its release begins, and when
+   * (in context time) and how fast it is damped. A speed change moves the
+   * release; undamped treble voices ring to the end of their sample.
+   */
+  songEnd: number;
+  releaseAt: number;
+  releaseTime: number | null;
+  sampleEnd: number;
   /** The scheduled notes this voice plays, and the set that records them. */
   ids: readonly string[];
   pass: Set<string>;
@@ -336,13 +347,44 @@ export class ReferenceAudio {
    * plays their notes at a new speed. Sounding notes ring on instead of being
    * struck again.
    */
-  reschedule() {
-    const now = this.now();
+  reschedule(transport: Transport) {
+    const now = this.now(),
+      position = transport.at(now);
     for (const voice of this.voices) {
-      if (voice.start <= now || !voice.ids.length) continue;
-      for (const id of voice.ids) voice.pass.delete(id);
-      this.fade(voice, now);
+      if (voice.start <= now)
+        this.retime(
+          voice,
+          now,
+          now + (voice.songEnd - position) / transport.speed,
+        );
+      else if (voice.ids.length) {
+        for (const id of voice.ids) voice.pass.delete(id);
+        this.fade(voice, now);
+      }
     }
+  }
+  /** Move a sounding voice's release, and its cleanup, to a new time. */
+  private retime(voice: Voice, now: number, releaseAt: number) {
+    // Previews have no song position, undamped voices no release, and a voice
+    // already released (such as one from the last loop pass) keeps its decay.
+    if (
+      !Number.isFinite(voice.songEnd) ||
+      voice.releaseTime === null ||
+      voice.releaseAt <= now
+    )
+      return;
+    // Hold after the attack ramp, so a just-struck note keeps its full level.
+    const hold = Math.max(now, voice.start + ATTACK_SECONDS);
+    voice.releaseAt = Math.max(hold, releaseAt);
+    voice.end = Math.min(
+      voice.sampleEnd,
+      voice.releaseAt + voice.releaseTime * 7 + 0.02,
+    );
+    try {
+      voice.gain.gain.cancelAndHoldAtTime(hold);
+      voice.gain.gain.setTargetAtTime(0, voice.releaseAt, voice.releaseTime);
+      voice.source.stop(voice.end);
+    } catch {}
   }
   stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) this.playbackFiles.clear();
@@ -380,6 +422,7 @@ export class ReferenceAudio {
     duration: number,
     ids: readonly string[] = [],
     pass = this.scheduled,
+    songEnd = Infinity,
   ) {
     const context = this.context;
     if (
@@ -398,14 +441,14 @@ export class ReferenceAudio {
     // sounding voice rather than going silent, but only once the new note is
     // due: stealing ahead would cut the old voice before its replacement
     // sounds, and leave a deferred fade for stops and speed changes to chase.
-    // Fading voices hold their nodes until they end, so they are capped too.
-    // A refused note is tried again on a later tick, at most a tick late.
+    // Fading voices hold their nodes until they end, so they count toward a
+    // total cap too, including after a stop. A refused note is tried again on
+    // a later tick, at most a tick late.
     const now = context.currentTime;
     if (
-      this.voices.size >= MAX_REFERENCE_VOICES &&
-      (when > now + DUE_SECONDS ||
-        this.fading.size >= MAX_REFERENCE_VOICES ||
-        !this.steal(now))
+      this.voices.size + this.fading.size >= 2 * MAX_REFERENCE_VOICES ||
+      (this.voices.size >= MAX_REFERENCE_VOICES &&
+        (when > now + DUE_SECONDS || !this.steal(now)))
     )
       return false;
     let source: AudioBufferSourceNode | undefined, gain: GainNode | undefined;
@@ -427,7 +470,7 @@ export class ReferenceAudio {
         Math.min(0.32, 0.24 * 2 ** ((60 - pitch) / 48)),
       );
       gain.gain.setValueAtTime(0, when);
-      gain.gain.linearRampToValueAtTime(level, when + 0.003);
+      gain.gain.linearRampToValueAtTime(level, when + ATTACK_SECONDS);
       // The recording supplies the piano's natural decay. Only damp it after
       // key/pedal release, instead of fading away throughout the held note.
       gain.gain.setValueAtTime(level, releaseAt);
@@ -453,6 +496,10 @@ export class ReferenceAudio {
         start: when,
         end,
         room,
+        songEnd,
+        releaseAt,
+        releaseTime: region.releaseSeconds >= 100 ? null : releaseTime,
+        sampleEnd,
         ids,
         pass,
       };
@@ -549,7 +596,15 @@ export class ReferenceAudio {
       // play it once a voice is free.
       if (
         end <= 0 ||
-        this.tone(n.pitch, n.velocity, now + start, end - start, n.ids, pass)
+        this.tone(
+          n.pitch,
+          n.velocity,
+          now + start,
+          end - start,
+          n.ids,
+          pass,
+          Math.min(n.soundEnd, to),
+        )
       )
         for (const id of n.ids) pass.add(id);
     }
