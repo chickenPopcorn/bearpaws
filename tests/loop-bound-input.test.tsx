@@ -41,27 +41,56 @@ async function render() {
   input.focus();
   return input;
 }
+function setValue(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+}
+/** Typing reports an inputType; the stepper and arrow keys send a plain input event. */
 async function type(input: HTMLInputElement, value: string) {
   await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!.call(input, value);
+    setValue(input, value);
+    input.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType: "insertText" }),
+    );
+  });
+}
+async function step(input: HTMLInputElement, value: string) {
+  await act(async () => {
+    setValue(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+async function enter(input: HTMLInputElement) {
+  await act(async () => {
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+  });
+}
 
-it("holds a partial number instead of clamping it mid-typing", async () => {
+it("holds typed digits, even valid prefixes, until blur", async () => {
   const input = await render();
   await type(input, "1");
-  expect(onCommit).not.toHaveBeenCalled();
   expect(input.value).toBe("1");
   await type(input, "12");
-  expect(onCommit).toHaveBeenCalledExactlyOnceWith(12);
   expect(input.value).toBe("12");
+  await type(input, "7");
+  await type(input, "7.5");
+  expect(onCommit).not.toHaveBeenCalled();
+  await act(async () => input.blur());
+  expect(onCommit).toHaveBeenCalledExactlyOnceWith(7.5);
+  expect(input.value).toBe("7.5");
+});
+
+it("applies a stepped value at once", async () => {
+  const input = await render();
+  await step(input, "5.3");
+  expect(onCommit).toHaveBeenCalledExactlyOnceWith(5.3);
   await act(async () => input.blur());
   expect(onCommit).toHaveBeenCalledOnce();
-  expect(input.value).toBe("12");
+  expect(input.value).toBe("5.3");
 });
 
 it("applies an out-of-range draft on blur or Enter and shows the clamped value", async () => {
@@ -74,11 +103,7 @@ it("applies an out-of-range draft on blur or Enter and shows the clamped value",
 
   input.focus();
   await type(input, "40");
-  await act(async () => {
-    input.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-    );
-  });
+  await enter(input);
   expect(onCommit).toHaveBeenLastCalledWith(40);
   expect(input.value).toBe("30");
 });
