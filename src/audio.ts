@@ -51,6 +51,8 @@ export class ReferenceAudio {
   private preparationGeneration = 0;
   private playbackBlocked = false;
   private playbackFiles = new Set<string>();
+  /** Whether the room has received sound since it was last rebuilt. */
+  private roomUsed = false;
   scheduled = new Set<string>();
   private cycle = -1;
   error = "";
@@ -72,6 +74,7 @@ export class ReferenceAudio {
       await this.context.resume();
       if (!this.output) {
         this.output = createPianoSoundBus(this.context, this.sound);
+        this.roomUsed = false;
       }
       this.playbackBlocked = false;
     } catch (error) {
@@ -276,8 +279,13 @@ export class ReferenceAudio {
       this.disconnect(voice);
     }
     this.scheduled.clear();
+    // Rebuilding the room flushes its tail. Skip it when there is no tail,
+    // such as while dragging the playhead with nothing playing.
     try {
-      if (resetRoom) this.output?.reset();
+      if (resetRoom && this.roomUsed) {
+        this.output?.reset();
+        this.roomUsed = false;
+      }
     } catch {
       this.output?.dispose();
       this.output = null;
@@ -324,6 +332,7 @@ export class ReferenceAudio {
       if (region.releaseSeconds < 100)
         gain.gain.setTargetAtTime(0, releaseAt, releaseTime);
       source.connect(gain).connect(this.output?.input ?? context.destination);
+      this.roomUsed = true;
       const voice = { source, gain, file: region.file };
       this.voices.add(voice);
       source.onended = () => this.disconnect(voice);
