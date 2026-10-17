@@ -210,7 +210,7 @@ select {
 .library-songs {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   max-height: min(40vh, 440px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -288,8 +288,9 @@ select {
   border: none;
   text-align: left;
   background: transparent;
-  padding: 12px 10px;
-  line-height: 1.5;
+  padding: 6px 10px;
+  font-size: 15px;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 .song[aria-pressed="true"] {
@@ -298,9 +299,9 @@ select {
 }
 .song small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
-  padding-top: 4px;
+  padding-top: 1px;
 }
 .import {
   margin-top: 13px;
@@ -1187,8 +1188,12 @@ footer {
   .chip {
     display: none;
   }
+  /* A narrower library and one hand card per row keep tablets readable. */
   .body {
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .finger-guide {
+    grid-template-columns: 1fr;
   }
   .lower-grid {
     grid-template-columns: 1fr;
@@ -1273,12 +1278,12 @@ footer {
     display: none;
   }
   .song {
-    font-size: 11px;
-    padding: 7px 9px;
+    font-size: 13px;
+    padding: 6px 9px;
     max-width: 180px;
   }
   .song small {
-    font-size: 8px;
+    font-size: 10px;
   }
   .import {
     margin: 0;

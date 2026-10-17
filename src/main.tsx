@@ -17,6 +17,7 @@ import { SongLibrary } from "./SongLibrary";
 import { PianoSoundControls } from "./PianoSoundControls";
 import { SheetTimeline } from "./SheetTimeline";
 import { LoopBoundInput } from "./LoopBoundInput";
+import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { isBuiltInSong } from "./lessons";
@@ -507,7 +508,7 @@ function App() {
             viewBox="0 0 12 12"
             aria-hidden="true"
           >
-            <path d="m2.5 4.5 3.5 3.5 3.5-3.5" />
+            <path d="m2.5 7.5 3.5-3.5 3.5 3.5" />
           </svg>
         </button>
       </header>
@@ -740,6 +741,11 @@ function App() {
                 <div className="piano-notice" role="status">
                   {stageNotice}
                 </div>
+              )}
+              {s.mode === "wait" && (
+                <p className="sr-only" aria-live="polite">
+                  {describeWaitTarget(studio.song, p.gate, studio.input.down)}
+                </p>
               )}
               <SheetTimeline
                 song={studio.song}
