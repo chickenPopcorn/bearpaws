@@ -18,6 +18,7 @@ import { FingerGuide } from "./FingerGuide";
 import { SongLibrary } from "./SongLibrary";
 import { PianoSoundControls } from "./PianoSoundControls";
 import { SheetTimeline } from "./SheetTimeline";
+import { LoopBoundInput } from "./LoopBoundInput";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { isBuiltInSong } from "./lessons";
@@ -724,16 +725,12 @@ function App() {
               <div className="loop-fields">
                 <label>
                   From{" "}
-                  <input
-                    type="number"
-                    aria-label="Loop start seconds"
-                    min="0"
+                  <LoopBoundInput
+                    label="Loop start seconds"
+                    value={studio.loopStart}
+                    min={0}
                     max={studio.loopEnd - 0.2}
-                    step=".1"
-                    value={Number(studio.loopStart.toFixed(2))}
-                    onChange={(e) =>
-                      studio.bounds(Number(e.target.value), studio.loopEnd)
-                    }
+                    onCommit={(start) => studio.bounds(start, studio.loopEnd)}
                   />
                   <span>s</span>
                 </label>
@@ -745,16 +742,12 @@ function App() {
                 </button>
                 <label>
                   To{" "}
-                  <input
-                    type="number"
-                    aria-label="Loop end seconds"
+                  <LoopBoundInput
+                    label="Loop end seconds"
+                    value={studio.loopEnd}
                     min={studio.loopStart + 0.2}
                     max={studio.song.duration}
-                    step=".1"
-                    value={Number(studio.loopEnd.toFixed(2))}
-                    onChange={(e) =>
-                      studio.bounds(studio.loopStart, Number(e.target.value))
-                    }
+                    onCommit={(end) => studio.bounds(studio.loopStart, end)}
                   />
                   <span>s</span>
                 </label>
