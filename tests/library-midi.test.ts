@@ -15,7 +15,7 @@ const exportedTick = (song: Song, seconds: number) =>
   );
 
 describe("downloadable beginner MIDI collection", () => {
-  const songs = builtInSongs();
+  const songs = builtInSongs().filter((song) => song.lesson);
 
   it.each(songs.map((song) => [song.title, song] as const))(
     "exports %s with matching pitches, timing, hands and finger annotations",
@@ -193,5 +193,16 @@ describe("downloadable beginner MIDI collection", () => {
       expect(Buffer.from(entry.content, "base64")).toEqual(
         readFileSync(`public/midi/${entry.name}`),
       );
+  });
+});
+
+describe("downloadable original piano MIDI", () => {
+  it("preserves the full An Jing source bytes in its separate download", () => {
+    const original = readFileSync("src/assets/an-jing.mid");
+    const download = readFileSync("public/midi/bearpaws-an-jing-v1.mid");
+    expect(download.equals(original)).toBe(true);
+    expect(parseMidi(new Uint8Array(download)).tracks.length).toBeGreaterThan(
+      0,
+    );
   });
 });

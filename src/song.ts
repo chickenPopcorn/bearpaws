@@ -44,6 +44,12 @@ export interface Song {
   beatsPerBar?: number;
   leadInBeats?: number;
   warnings: string[];
+  source?: {
+    composer: string;
+    description: string;
+    url: string;
+    credit: string;
+  };
   lesson?: {
     composer: string;
     description: string;

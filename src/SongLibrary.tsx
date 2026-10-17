@@ -6,7 +6,9 @@ import type { Song } from "./song";
 const searchText = (text: string) =>
   text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const songMatches = (song: Song, term: string) =>
-  searchText(`${song.title} ${song.lesson?.composer ?? ""}`).includes(term);
+  searchText(
+    `${song.title} ${song.lesson?.composer ?? song.source?.composer ?? ""}`,
+  ).includes(term);
 
 export function SongLibrary({
   songs,
@@ -95,9 +97,11 @@ export function SongLibrary({
                     <small>
                       {song.lesson
                         ? `${song.lesson.level} · ${song.lesson.bpm} BPM · Fingering`
-                        : isBuiltInSong(song.id)
-                          ? "Original exercise · Both hands"
-                          : "Imported MIDI · On this browser"}
+                        : song.source
+                          ? "Full piano · No finger numbers"
+                          : isBuiltInSong(song.id)
+                            ? "Original exercise · Both hands"
+                            : "Imported MIDI · On this browser"}
                     </small>
                   </button>
                 ))}
