@@ -3,7 +3,8 @@ import { useState } from "react";
 /**
  * Seconds for one end of the loop. Complete values (typed or stepped) apply at
  * once; partial ones, such as the "1" of "12", wait for blur or Enter, so the
- * loop's clamping never rewrites a number that is still being typed.
+ * loop's clamping never rewrites a number that is still being typed. Key it by
+ * song, so a song change discards an unfinished draft instead of applying it.
  */
 export function LoopBoundInput({
   label,
