@@ -19,16 +19,15 @@ permissions:
   issues: read
   statuses: write
 
-concurrency:
-  group: codex-review-gate-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_request_number }}
-  cancel-in-progress: true
-
 jobs:
   publish-gate:
     if: >-
       github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request &&
        github.event.comment.user.id == 199175422)
+    concurrency:
+      group: codex-review-gate-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_request_number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     steps:
       # Never check out a PR head: this workflow has permission to publish statuses.
