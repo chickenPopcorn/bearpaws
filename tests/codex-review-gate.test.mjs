@@ -713,4 +713,65 @@ describe("Codex review merge gate", () => {
       }),
     );
   });
+
+  it("evaluates a completed webhook when REST still returns Running in the same second", async () => {
+    const stale = withTimes(running(), START, START);
+    const current = withTimes(completed());
+    // Both API representations can share updated_at's second-level precision.
+    stale.updated_at = current.updated_at;
+    const { run, context } = setup(
+      [stale],
+      [{ event: "base_ref_changed", created_at: REQUEST }],
+    );
+    context.payload.action = "edited";
+    context.payload.comment = current;
+    context.payload.changes = { body: { from: stale.body } };
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+  });
+
+  it("uses a newly created trusted summary absent from the REST response", async () => {
+    const { run, context } = setup();
+    context.payload.action = "created";
+    context.payload.comment = summary();
+    await expect(run()).resolves.toMatchObject({ state: "success" });
+  });
+
+  it("does not reuse REST's old clean result after the webhook reports Running", async () => {
+    const current = withTimes(running(), START, START);
+    const { run, context, publish } = setup([summary()]);
+    context.payload.action = "edited";
+    context.payload.comment = current;
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    expect(savedCheckpoint(publish)).toMatchObject({
+      rc: Date.parse(START),
+      rs: Date.parse(START),
+    });
+  });
+
+  it("ignores an untrusted current payload even if it claims a newer clean completion", async () => {
+    const { run, context } = setup([withTimes(running(), START, START)]);
+    context.payload.comment = {
+      ...withTimes(completed()),
+      user: { id: 123, login: "attacker", type: "User" },
+    };
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
+
+  it("does not let an older delayed webhook roll back newer REST failure metadata", async () => {
+    const failed = completed();
+    failed.code_review.has_unresolved_findings = true;
+    const listed = withTimes(failed);
+    const oldPayload = summary();
+    const { run, context } = setup([listed]);
+    context.payload.comment = oldPayload;
+    await expect(run()).resolves.toMatchObject({ state: "failure" });
+  });
+
+  it("does not resurrect a deleted summary from either its payload or stale REST copy", async () => {
+    const removed = summary();
+    const { run, context } = setup([removed]);
+    context.payload.action = "deleted";
+    context.payload.comment = removed;
+    await expect(run()).resolves.toMatchObject({ state: "pending" });
+  });
 });

@@ -177,8 +177,24 @@ function isTrustedSummary(comment) {
   );
 }
 
-function latestSummary(comments) {
-  return comments.filter(isTrustedSummary).sort((a, b) => {
+function latestSummary(comments, context) {
+  const byId = new Map(
+    comments.filter(isTrustedSummary).map((comment) => [comment.id, comment]),
+  );
+  const current = context.payload.comment;
+  if (context.payload.action === "deleted") byId.delete(current?.id);
+  else if (current && isTrustedSummary(current)) {
+    const listed = byId.get(current.id);
+    // REST may lag the signed webhook, including same-second edits. Prefer
+    // that event's current body on a tie, but never roll back a newer REST copy.
+    if (
+      !listed ||
+      (Date.parse(current.updated_at) || 0) >=
+        (Date.parse(listed.updated_at) || 0)
+    )
+      byId.set(current.id, current);
+  }
+  return [...byId.values()].sort((a, b) => {
     const updated =
       (Date.parse(b.updated_at) || 0) - (Date.parse(a.updated_at) || 0);
     return updated || b.id - a.id;
@@ -220,6 +236,7 @@ function evaluateSummary(summary, sha, checkpoint) {
       const started = checkpoint[isCode ? "rc" : "rs"];
       // Completion after a retarget is insufficient: an older run can finish
       // later while reviewing the old diff. Require a fresh acknowledged start.
+      // The connector exposes recorded Running times, not run creation or trigger IDs.
       return (
         !barrier || (started > barrier && reviewTime(summary, kind) >= started)
       );
@@ -280,7 +297,7 @@ export async function runCodexReviewGate({ github, context, core }) {
         per_page: 100,
       }),
     ]);
-    summary = latestSummary(comments);
+    summary = latestSummary(comments, context);
     checkpoint = readCheckpoint(statuses, number);
     requestBarriers(checkpoint, comments, events, context);
     acknowledgeStarts(checkpoint, summary, initialSha, context);
