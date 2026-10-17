@@ -15,7 +15,7 @@ Open the printed local URL, normally `http://localhost:5173`. Desktop Chrome or 
 
 ```sh
 npm test               # Deterministic engine, MIDI lifecycle, controller, storage, audio/Canvas checks
-python3 -m unittest discover -s tests -p 'test_*.py' # Offline soundbank importer checks
+python3 -m unittest discover -s tests -p 'test_*.py' # Offline importer and ZIP checks
 npm run test:watch     # Watch tests
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173

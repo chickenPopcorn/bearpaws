@@ -143,12 +143,8 @@ try {
       "Melody credits, starting positions, and per-note fingering are in catalog.json.\n" +
       "Dancing Raindrops is the personal-practice transcription supplied by the user.\n",
   );
-  // Python's standard library keeps ZIP generation free of extra npm dependencies.
-  execFileSync("python3", [
-    "-c",
-    "import json,pathlib,sys,zipfile\np=pathlib.Path(sys.argv[1])\nfiles=['README.txt','catalog.json']+[s['filename'] for s in json.loads((p/'catalog.json').read_text())]\nwith zipfile.ZipFile(p/'cadence-starter-library.zip','w',zipfile.ZIP_DEFLATED) as z:\n for name in files: z.write(p/name,name)\n",
-    directory,
-  ]);
+  // Python's standard library packages fixed entry metadata for reproducible ZIPs.
+  execFileSync("python3", ["scripts/create-library-zip.py", directory]);
   console.log(
     `Exported ${songs.length} MIDI files and cadence-starter-library.zip`,
   );

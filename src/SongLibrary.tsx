@@ -4,7 +4,7 @@ import { collections, collectionForSong } from "./collections";
 import type { Song } from "./song";
 
 const searchText = (text: string) =>
-  text.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+  text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const songMatches = (song: Song, term: string) =>
   searchText(`${song.title} ${song.lesson?.composer ?? ""}`).includes(term);
 

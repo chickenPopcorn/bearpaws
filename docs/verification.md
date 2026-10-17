@@ -4,8 +4,8 @@ Updated October 17, 2026 for the BearPaws library and practice controls.
 
 ## Automated checks
 
-- `npm test`: 414 tests across 23 suites passed.
-- `python3 -m unittest discover -s tests -p 'test_*.py'`: 4 offline importer tests passed.
+- `npm test`: 415 tests across 23 suites passed.
+- `python3 -m unittest discover -s tests -p 'test_*.py'`: 6 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
 - `npm audit --audit-level=moderate`: no known vulnerabilities reported after updating the test runner.
@@ -26,6 +26,8 @@ displayed signatures, keyboard seeking and the waterfall beat grid.
 The library checks cover collection search and selection, native keyboard
 activation, score-slider shortcuts, loop preference persistence, all 15 MIDI
 exports and catalog entries, and exact ZIP contents with CRC verification.
+ZIP bytes remain identical when source timestamps, permissions or file creation
+order change, and search casing remains consistent across browser locales.
 Exported pieces use a full-bar count-in to retain musical bar alignment.
 
 The sample bank contains 240 lossless FLACs, about 358 MiB compressed. Checks

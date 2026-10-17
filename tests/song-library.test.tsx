@@ -108,6 +108,30 @@ describe("song library", () => {
     },
   );
 
+  it("matches uppercase searches even when the browser defaults to Turkish casing", async () => {
+    const nativeLocaleLowerCase = String.prototype.toLocaleLowerCase;
+    const localeLowerCase = vi
+      .spyOn(String.prototype, "toLocaleLowerCase")
+      .mockImplementation(function (
+        this: string,
+        locales?: Parameters<typeof nativeLocaleLowerCase>[0],
+      ) {
+        return nativeLocaleLowerCase.call(this, locales ?? "tr");
+      });
+    try {
+      const jingle = song(
+        "jingle-bells",
+        "Jingle Bells",
+        "James Lord Pierpont",
+      );
+      await render({ songs: [jingle], selected: jingle.id });
+      await type("JINGLE");
+      expect(titles()).toEqual(["Jingle Bells"]);
+    } finally {
+      localeLowerCase.mockRestore();
+    }
+  });
+
   it("hides collapsed collection contents and opens all collections when searching", async () => {
     await render();
     for (const group of ["classes", "songs", "pops"]) {
