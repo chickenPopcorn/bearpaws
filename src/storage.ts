@@ -32,10 +32,11 @@ export const defaults: Settings = {
   selected: "cadence-ode-to-joy-v1",
   ambience: DEFAULT_PIANO_SOUND.ambience,
 };
+const storageKey = (key: string) => `cadence:${key}`;
 export function read<T>(key: string, fallback: T): T {
   try {
     return (
-      JSON.parse(localStorage.getItem(`cadence:${key}`) || "null") ?? fallback
+      JSON.parse(localStorage.getItem(storageKey(key)) || "null") ?? fallback
     );
   } catch {
     return fallback;
@@ -43,11 +44,15 @@ export function read<T>(key: string, fallback: T): T {
 }
 export function write(key: string, value: unknown) {
   try {
-    localStorage.setItem(`cadence:${key}`, JSON.stringify(value));
+    localStorage.setItem(storageKey(key), JSON.stringify(value));
     return true;
   } catch {
     return false;
   }
+}
+/** Throws when browser storage is blocked. */
+export function removeProgress(id: string) {
+  localStorage.removeItem(storageKey(`progress:${id}`));
 }
 export function settings(): Settings {
   const saved = read<Partial<Settings>>("settings", {}),
