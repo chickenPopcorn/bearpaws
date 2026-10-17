@@ -327,6 +327,41 @@ describe("bounded reference audio", () => {
     expect(nodes[0].disconnect).toHaveBeenCalledOnce();
     expect(audio.voices.size).toBe(0);
   });
+  it("replaces the oldest sounding voice at the cap, and refuses only while every voice is waiting to start", () => {
+    const { audio, context, nodes } = fixture();
+    const gain = (index: number) =>
+      context.createGain.mock.results[index].value.gain;
+    // A pedalled passage: one long note every 10 ms.
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      audio.tone(36 + (i % 60), 0.8, i / 100, 10);
+    context.currentTime = 0.5;
+    audio.tone(100, 0.8, 0.5, 1);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenCalledWith(0.5);
+    expect(gain(0).setTargetAtTime).toHaveBeenLastCalledWith(0, 0.5, 0.008);
+    expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(0.55);
+    expect(gain(1).cancelAndHoldAtTime).not.toHaveBeenCalled();
+    // Fifty voices started before 0.5 s. The others, and each new voice, wait.
+    for (let i = 0; i < 100; i++) audio.tone(100, 0.8, 0.5, 1);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 50);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      expect(gain(i).cancelAndHoldAtTime).toHaveBeenCalledTimes(i < 50 ? 1 : 0);
+  });
+  it("keeps a dense pedalled passage sounding past the voice cap", () => {
+    const { audio, transport, context } = fixture();
+    const notes = Array.from({ length: 200 }, (_, i) => ({
+      ...note(i, 36 + (i % 60), 10),
+      start: i / 100,
+    }));
+    for (let tick = 0; tick <= 100; tick++) {
+      context.currentTime = tick * 0.02;
+      audio.schedule(notes, transport, true);
+    }
+    expect(context.createBufferSource).toHaveBeenCalledTimes(200);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+  });
   it("applies the same cap to direct previews and future-scheduled voices, then reuses freed slots", () => {
     const { audio, context, nodes } = fixture();
     for (let i = 0; i < 5000; i++) audio.tone(i % 128, 0.8, 100, 10);

@@ -294,6 +294,14 @@ export class ReferenceAudio {
       this.disconnect(voice);
     }
   }
+  /** Fade the oldest sounding voice to make room for a new one. */
+  private steal(now: number) {
+    let oldest: Voice | undefined;
+    for (const voice of this.voices)
+      if (voice.start < (oldest?.start ?? now)) oldest = voice;
+    if (oldest) this.fade(oldest, now);
+    return oldest !== undefined;
+  }
   stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) this.playbackFiles.clear();
     const now = this.now();
@@ -315,19 +323,25 @@ export class ReferenceAudio {
   }
   tone(pitch: number, velocity: number, when: number, duration: number) {
     const context = this.context;
-    // Includes future scheduled voices and previews: no entry point can bypass the cap.
     if (
       !context ||
       context.state !== "running" ||
       this.playbackBlocked ||
-      velocity <= 0 ||
-      this.voices.size >= MAX_REFERENCE_VOICES
+      velocity <= 0
     )
       return;
     const region = selectPianoRegion(pitch, velocity);
     if (!region) return;
     const buffer = this.samples.get(region.file);
     if (!buffer) return;
+    // The cap includes future scheduled voices and previews: no entry point can
+    // bypass it. A dense pedalled passage replaces its oldest sounding voice
+    // rather than going silent; only voices that are all waiting refuse a note.
+    if (
+      this.voices.size >= MAX_REFERENCE_VOICES &&
+      !this.steal(context.currentTime)
+    )
+      return;
     let source: AudioBufferSourceNode | undefined, gain: GainNode | undefined;
     try {
       source = context.createBufferSource();
