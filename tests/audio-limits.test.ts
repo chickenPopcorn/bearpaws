@@ -155,15 +155,18 @@ describe("bounded reference audio", () => {
     await audio.unlock();
     await audio.unlock();
     expect(context.resume).toHaveBeenCalledTimes(2);
-    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(2);
+    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(3);
     expect(context.createConvolver).toHaveBeenCalledOnce();
     expect(context.createBuffer).toHaveBeenCalledOnce();
-    const output = context.createDynamicsCompressor.mock.results[0].value;
+    const [output, , room] = context.createDynamicsCompressor.mock.results.map(
+      (result) => result.value,
+    );
     const master = context.createGain.mock.results[2].value;
     expect(master.connect).toHaveBeenCalledWith(context.destination);
     audio.tone(60, 0.8, 0, 1);
     const gain = context.createGain.mock.results[3].value;
     expect(gain.connect).toHaveBeenCalledWith(output);
+    expect(gain.connect).toHaveBeenCalledWith(room);
   });
 
   it("can retry after the browser rejects an audio unlock", async () => {
@@ -291,6 +294,305 @@ describe("bounded reference audio", () => {
     expect(audio.scheduled.size).toBe(0);
     for (const osc of nodes) expect(osc.stop).toHaveBeenCalledTimes(2);
   });
+  it("fades sounding and waiting voices on an explicit stop and disconnects each when it ends", () => {
+    const { audio, context, nodes } = fixture();
+    audio.tone(60, 0.8, 0, 2);
+    audio.tone(64, 0.8, 1.02, 2);
+    context.currentTime = 1;
+    audio.stop();
+    expect(audio.voices.size).toBe(0);
+    expect(audio.scheduled.size).toBe(0);
+    nodes.forEach((osc, index) => {
+      const gain = context.createGain.mock.results[index].value;
+      // Silent before its attack, so a fade cannot start a waiting voice loud.
+      expect(gain.gain.value).toBe(0);
+      expect(gain.gain.cancelAndHoldAtTime).toHaveBeenCalledWith(1);
+      expect(gain.gain.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, 0.008);
+      expect(osc.stop).toHaveBeenCalledTimes(2);
+      expect(osc.stop.mock.lastCall![0]).toBeCloseTo(1.05);
+      expect(osc.disconnect).not.toHaveBeenCalled();
+      osc.onended!();
+      expect(osc.disconnect).toHaveBeenCalledOnce();
+      expect(gain.disconnect).toHaveBeenCalledOnce();
+    });
+  });
+  it("stops a voice outright when the browser cannot fade it", () => {
+    const { audio, context, nodes } = fixture();
+    audio.tone(60, 0.8, 0, 2);
+    context.createGain.mock.results[0].value.gain.cancelAndHoldAtTime.mockImplementation(
+      () => {
+        throw new TypeError("Unsupported");
+      },
+    );
+    context.currentTime = 1;
+    expect(() => audio.stop()).not.toThrow();
+    expect(nodes[0].stop).toHaveBeenLastCalledWith();
+    expect(nodes[0].disconnect).toHaveBeenCalledOnce();
+    expect(audio.voices.size).toBe(0);
+  });
+  it("replaces the oldest sounding voice at the cap, and refuses only while every voice is waiting to start", () => {
+    const { audio, context, nodes } = fixture();
+    const gain = (index: number) =>
+      context.createGain.mock.results[index].value.gain;
+    // A pedalled passage: one long note every 10 ms.
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      audio.tone(36 + (i % 60), 0.8, i / 100, 10);
+    context.currentTime = 0.5;
+    audio.tone(100, 0.8, 0.5, 1);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenCalledWith(0.5);
+    expect(gain(0).setTargetAtTime).toHaveBeenLastCalledWith(0, 0.5, 0.008);
+    expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(0.55);
+    expect(gain(1).cancelAndHoldAtTime).not.toHaveBeenCalled();
+    // Fifty voices started before 0.5 s. The others, and each new voice, wait.
+    for (let i = 0; i < 100; i++) audio.tone(100, 0.8, 0.5, 1);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 50);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      expect(gain(i).cancelAndHoldAtTime).toHaveBeenCalledTimes(i < 50 ? 1 : 0);
+  });
+  it("replaces a voice at the cap only once the new note is due, so no fade is left pending", () => {
+    const { audio, transport, context, nodes } = fixture();
+    const gain = (index: number) =>
+      context.createGain.mock.results[index].value.gain;
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      audio.tone(36 + (i % 60), 0.8, i / 100, 10);
+    context.currentTime = 0.4;
+    // Ahead of its attack the note waits, and no sounding voice is cut early,
+    // so a speed change before then has no deferred fade to move.
+    expect(audio.tone(100, 0.8, 0.5, 1)).toBe(false);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
+    transport.setSpeed(0.5, 0.4);
+    audio.reschedule(transport);
+    for (let i = 0; i < 40; i++)
+      expect(gain(i).cancelAndHoldAtTime).not.toHaveBeenCalled();
+    context.currentTime = 0.5;
+    expect(audio.tone(100, 0.8, 0.5, 1)).toBe(true);
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(0.5);
+  });
+  it("bounds allocation when a dense file has more attacks than voices, until fades end", () => {
+    const { audio, transport, context, nodes } = fixture();
+    const notes = Array.from({ length: 1000 }, (_, i) => ({
+      ...note(i, 21 + (i % 88), 2),
+      start: i * 0.0001,
+    }));
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
+    // The rest are due by the next tick: each replaces a voice, which fades.
+    context.currentTime = 0.02;
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    // Faded voices hold their nodes until they end, so later ticks wait.
+    context.currentTime = 0.2;
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    for (const osc of nodes.slice(0, MAX_REFERENCE_VOICES)) osc.onended!();
+    context.currentTime = 0.22;
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(3 * MAX_REFERENCE_VOICES);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+  });
+  it("retries a note the voice cap refused once a voice is free", () => {
+    const { audio, transport, context, nodes } = fixture();
+    const notes = Array.from({ length: MAX_REFERENCE_VOICES + 1 }, (_, i) => ({
+      ...note(i, 30 + i),
+      start: 0.05,
+    }));
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
+    expect(audio.scheduled.has(String(MAX_REFERENCE_VOICES))).toBe(false);
+    nodes[0].onended!();
+    context.currentTime = 0.02;
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    expect(nodes.at(-1)!.start.mock.calls[0][0]).toBeCloseTo(0.05);
+    expect(audio.scheduled.has(String(MAX_REFERENCE_VOICES))).toBe(true);
+  });
+  it("takes voices fading after a stop out of the fresh room, keeping their compressed dry path", async () => {
+    const { audio, context } = fixture();
+    await audio.unlock();
+    const [compressor, , room] =
+      context.createDynamicsCompressor.mock.results.map(
+        (result) => result.value,
+      );
+    audio.tone(60, 0.8, 0, 2);
+    const voice = context.createGain.mock.results[3].value;
+    expect(voice.connect.mock.calls).toEqual([[compressor], [room]]);
+    context.currentTime = 1;
+    audio.stop();
+    expect(context.createConvolver).toHaveBeenCalledTimes(2);
+    expect(voice.disconnect.mock.calls).toEqual([[room]]);
+    expect(voice.connect).toHaveBeenCalledTimes(2);
+    // A second stop while it still fades must not disconnect it again: Web
+    // Audio throws for a connection that no longer exists.
+    audio.tone(62, 0.8, 1, 2);
+    audio.stop();
+    expect(voice.disconnect.mock.calls).toEqual([[room]]);
+    expect(audio.error).toBe("");
+    audio.tone(64, 0.8, 1, 2);
+    const next = context.createGain.mock.results[5].value;
+    expect(next.connect.mock.calls).toEqual([[compressor], [room]]);
+  });
+  it("keeps a dense pedalled passage sounding past the voice cap", () => {
+    const { audio, transport, context, nodes } = fixture();
+    const notes = Array.from({ length: 200 }, (_, i) => ({
+      ...note(i, 36 + (i % 60), 10),
+      start: i / 100,
+    }));
+    const ended = new Set<(typeof nodes)[number]>();
+    for (let tick = 0; tick <= 100; tick++) {
+      context.currentTime = tick * 0.02;
+      // As the browser does, end each source once its stop time has passed.
+      for (const osc of nodes)
+        if (
+          !ended.has(osc) &&
+          osc.stop.mock.lastCall![0] <= context.currentTime
+        ) {
+          ended.add(osc);
+          osc.onended!();
+        }
+      audio.schedule(notes, transport, true);
+    }
+    expect(context.createBufferSource).toHaveBeenCalledTimes(200);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+  });
+  it("moves waiting voices to a new speed, and a sounding note's release, without striking it again", () => {
+    const { audio, transport, context, nodes } = fixture();
+    const notes = [note(1, 60, 2), { ...note(2, 64, 2), start: 0.1 }];
+    audio.schedule(notes, transport, true);
+    audio.tone(67, 0.8, 0.3, 0.4);
+    expect(nodes).toHaveLength(3);
+    const gain = (index: number) =>
+      context.createGain.mock.results[index].value.gain;
+    const releaseTime = gain(0).setTargetAtTime.mock.calls[0][2];
+    context.currentTime = 0.05;
+    transport.setSpeed(0.5, 0.05);
+    audio.reschedule(transport);
+    expect(audio.scheduled).toEqual(new Set(["1"]));
+    // The sounding note holds, then releases where its note-off now falls:
+    // 1.95 s of song remain at half speed. The preview has no note to move.
+    expect(gain(0).cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(0.05);
+    expect(gain(0).setTargetAtTime).toHaveBeenLastCalledWith(
+      0,
+      expect.closeTo(3.95),
+      releaseTime,
+    );
+    expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(
+      3.95 + releaseTime * 7 + 0.02,
+    );
+    expect(gain(1).cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(0.05);
+    expect(gain(2).cancelAndHoldAtTime).not.toHaveBeenCalled();
+    audio.schedule(notes, transport, true);
+    expect(nodes).toHaveLength(4);
+    // 0.05 of the song remains before the note, played at half speed.
+    expect(nodes[3].start.mock.calls[0][0]).toBeCloseTo(0.15);
+  });
+  it("keeps a just-struck note's full level when its release moves", () => {
+    const { audio, transport, context } = fixture();
+    audio.schedule([note(1, 60, 2)], transport, true);
+    context.currentTime = 0.001;
+    transport.setSpeed(0.5, 0.001);
+    audio.reschedule(transport);
+    const gain = context.createGain.mock.results[0].value.gain;
+    // Held after the 3 ms attack ramp, not partway up it.
+    expect(gain.cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(0.003);
+  });
+  it("caps active and fading voices together across rapid stops", () => {
+    const { audio, nodes } = fixture();
+    const fill = (when: number) => {
+      for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+        audio.tone(36 + (i % 60), 0.8, when, 10);
+    };
+    fill(0);
+    audio.stop();
+    fill(0);
+    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    // A second stop inside the 50 ms fade leaves 128 sources still fading.
+    audio.stop();
+    expect(audio.tone(60, 0.8, 0, 1)).toBe(false);
+    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    for (const osc of nodes.slice(0, MAX_REFERENCE_VOICES)) osc.onended!();
+    fill(0);
+    expect(nodes).toHaveLength(3 * MAX_REFERENCE_VOICES);
+  });
+  describe("across loop passes", () => {
+    // The loop [0.5, 1.5] at 1x wraps when the clock reaches 1 s.
+    const loopNotes = [
+      { ...note(1, 60, 2), start: 0.2 }, // Sounds into the loop from before it.
+      { ...note(2, 64, 0.9), start: 0.5 },
+      { ...note(3, 67, 1.4), start: 0.55 },
+      { ...note(4, 71, 1.5), start: 1.45 },
+    ];
+    function loopFixture() {
+      const result = fixture();
+      const transport = new Transport(2);
+      transport.loop = [0.5, 1.5];
+      transport.seek(0.5, 0);
+      transport.play(0);
+      /** One controller tick: observe the wrap, then schedule. */
+      const tick = (now: number) => {
+        result.context.currentTime = now;
+        transport.update(now);
+        result.audio.schedule(loopNotes, transport, true);
+      };
+      return { ...result, transport, tick };
+    }
+    const starts = (nodes: ReturnType<typeof fixture>["nodes"]) =>
+      nodes.map((osc) => osc.start.mock.calls[0][0]);
+
+    it("schedules the first notes of the next pass on time, before the wrap, once", () => {
+      const { nodes, tick } = loopFixture();
+      tick(0);
+      expect(starts(nodes)).toEqual([0, 0, expect.closeTo(0.05)]);
+      tick(0.9);
+      // Note 4 ends this pass. Notes 1 and 2 start the next one at the wrap.
+      expect(starts(nodes).slice(3)).toEqual([
+        expect.closeTo(0.95),
+        expect.closeTo(1),
+        expect.closeTo(1),
+      ]);
+      tick(1.02);
+      expect(starts(nodes).slice(6)).toEqual([expect.closeTo(1.05)]);
+      tick(1.04);
+      expect(nodes).toHaveLength(7);
+    });
+
+    it("schedules the current pass afresh after a stall longer than a loop", () => {
+      const { nodes, tick } = loopFixture();
+      tick(0);
+      tick(0.9);
+      expect(nodes).toHaveLength(6);
+      // The clock skips the passes that began at 1 s and 2 s.
+      tick(3.3);
+      // Position 0.8: notes 1, 2 and 3 are sounding and are struck now.
+      expect(starts(nodes).slice(6)).toEqual([
+        expect.closeTo(3.3),
+        expect.closeTo(3.3),
+        expect.closeTo(3.3),
+      ]);
+    });
+
+    it("moves next-pass voices to a new speed before the wrap", () => {
+      const { audio, transport, context, nodes, tick } = loopFixture();
+      tick(0);
+      tick(0.9);
+      context.currentTime = 0.94;
+      transport.setSpeed(0.5, 0.94);
+      audio.reschedule(transport);
+      tick(0.94);
+      tick(0.96);
+      // 0.06 of the loop remains before the wrap, played at half speed.
+      expect(starts(nodes).slice(6)).toEqual([
+        expect.closeTo(0.96),
+        expect.closeTo(1.06),
+        expect.closeTo(1.06),
+      ]);
+      // After the wrap only note 3 is new.
+      tick(1.07);
+      expect(starts(nodes).slice(9)).toEqual([expect.closeTo(1.16)]);
+    });
+  });
   it("applies the same cap to direct previews and future-scheduled voices, then reuses freed slots", () => {
     const { audio, context, nodes } = fixture();
     for (let i = 0; i < 5000; i++) audio.tone(i % 128, 0.8, 100, 10);
@@ -327,6 +629,38 @@ describe("piano sample loading", () => {
   const response = () => ({
     ok: true,
     arrayBuffer: async () => new ArrayBuffer(8),
+  });
+
+  it("does not let a fading voice's recording block a new passage", async () => {
+    const { audio, context, nodes } = fixture(false);
+    const bytes = 200 * 1024 * 1024;
+    const fading = fileFor(60),
+      first = fileFor(63),
+      second = fileFor(66);
+    audio.samples.set(fading, sizedBuffer(bytes));
+    instrumentMetadata.files = {
+      [first]: { duration: bytes / (sampleRate * 8), channels: 2 },
+      [second]: { duration: bytes / (sampleRate * 8), channels: 2 },
+    };
+    context.decodeAudioData
+      .mockResolvedValueOnce(sizedBuffer(bytes))
+      .mockResolvedValueOnce(sizedBuffer(bytes));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response()),
+    );
+    await audio.unlock();
+    audio.tone(60, 0.8, 0, 2);
+    context.currentTime = 1;
+    // The voice fades for 50 ms. Both new recordings fit once it has gone.
+    audio.stop();
+    await audio.prepare([sound(63), sound(66)]);
+    expect(audio.samples.has(first)).toBe(true);
+    expect(audio.samples.has(second)).toBe(true);
+    expect(audio.samples.has(fading)).toBe(false);
+    // Under memory pressure the fading voice ends at once.
+    expect(nodes[0].stop).toHaveBeenLastCalledWith();
+    expect(nodes[0].disconnect).toHaveBeenCalledOnce();
   });
 
   it("loads only requested recordings, shares concurrent work, and reuses decoded samples", async () => {

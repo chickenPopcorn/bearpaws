@@ -143,7 +143,7 @@ describe("synthetic room impulse", () => {
 });
 
 describe("shared reference sound bus", () => {
-  it("reuses the room processor across automatic loop boundaries and cycle changes", async () => {
+  it("lets voices ring and reuses the room processor across automatic loop wraps", async () => {
     const { context, audioContext } = contextFixture();
     const audio = new ReferenceAudio();
     audio.context = audioContext;
@@ -165,16 +165,22 @@ describe("shared reference sound bus", () => {
         channel: 0,
       },
     ];
+    const sources = () =>
+      context.createBufferSource.mock.results.map((result) => result.value);
     for (let iteration = 0; iteration < 20; iteration++) {
       context.currentTime = iteration;
+      // The browser ends each source at its scheduled stop time.
+      for (const source of sources())
+        if (source.stop.mock.lastCall![0] <= iteration) source.onended?.();
       transport.update(iteration);
-      // Studio stops the previous cycle before the next scheduling pass.
-      audio.stop(false, false);
       audio.schedule(notes, transport, true);
       expect(audio.scheduled.has("loop-note")).toBe(true);
-      expect(audio.voices.size).toBe(1);
     }
     expect(context.createBufferSource).toHaveBeenCalledTimes(20);
+    // A wrap leaves the last pass's release ringing instead of cutting it.
+    for (const source of sources()) expect(source.stop).toHaveBeenCalledOnce();
+    expect(audio.voices.size).toBeGreaterThan(1);
+    expect(audio.voices.size).toBeLessThan(5);
     expect(context.createConvolver).toHaveBeenCalledOnce();
     expect(context.createBuffer).toHaveBeenCalledOnce();
     // Explicit pause/seek still removes the previous passage's room tail.
@@ -185,15 +191,20 @@ describe("shared reference sound bus", () => {
   it("protects the mixed room/dry output, with gentler natural compression", () => {
     const { context, audioContext } = contextFixture();
     const bus = createPianoSoundBus(audioContext, DEFAULT_PIANO_SOUND);
-    const [compressor, safety] =
+    const [compressor, safety, room] =
       context.createDynamicsCompressor.mock.results.map((v) => v.value);
     const [dry, wet, master] = context.createGain.mock.results.map(
       (v) => v.value,
     );
     const convolver = context.createConvolver.mock.results[0].value;
     expect(bus.input).toBe(compressor);
+    expect(bus.roomInput).toBe(room);
     expect(compressor.connect).toHaveBeenCalledWith(dry);
-    expect(compressor.connect).toHaveBeenCalledWith(convolver);
+    expect(compressor.connect).not.toHaveBeenCalledWith(convolver);
+    // The room has its own compressor with the same settings as the dry path.
+    expect(room.connect).toHaveBeenCalledWith(convolver);
+    for (const key of ["threshold", "knee", "ratio", "attack", "release"])
+      expect(room[key].value).toBe(compressor[key].value);
     expect(dry.connect).toHaveBeenCalledWith(safety);
     expect(convolver.connect).toHaveBeenCalledWith(wet);
     expect(wet.connect).toHaveBeenCalledWith(safety);
@@ -241,7 +252,7 @@ describe("shared reference sound bus", () => {
     expect(source.stop.mock.calls).toEqual(previousStop);
     expect(audio.voices.size).toBe(1);
     expect(audio.scheduled.has("held-note")).toBe(true);
-    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(2);
+    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(3);
     expect(context.createConvolver).toHaveBeenCalledOnce();
     expect(context.createBuffer).toHaveBeenCalledOnce();
   });
@@ -258,7 +269,7 @@ describe("shared reference sound bus", () => {
     expect(first.disconnect).toHaveBeenCalledOnce();
     expect(next.buffer).toBe(first.buffer);
     expect(context.createBuffer).toHaveBeenCalledOnce();
-    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(2);
+    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(3);
     // The three bus gains, plus the one note's own gain.
     expect(context.createGain).toHaveBeenCalledTimes(4);
   });
@@ -291,7 +302,7 @@ describe("shared reference sound bus", () => {
     expect(audio.error).toContain("could not reset");
     await audio.unlock();
     expect(audio.error).toBe("");
-    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(4);
+    expect(context.createDynamicsCompressor).toHaveBeenCalledTimes(6);
   });
 
   it("disconnects a partially built bus before an unlock retry", async () => {

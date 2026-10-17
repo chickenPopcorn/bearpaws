@@ -291,7 +291,9 @@ export class Studio {
     if (this.transport.playing) this.tick(now);
     this.transport.setSpeed(speed, now);
     this.settings.speed = speed;
-    this.audio.stop(!this.transport.playing);
+    // Sounding notes ring on; only notes that have not started change speed.
+    if (this.transport.playing) this.audio.reschedule(this.transport);
+    else this.audio.stop();
     this.persist();
     this.emit();
   }
@@ -443,8 +445,6 @@ export class Studio {
     if (playing) {
       this.position = this.transport.update(now, this.waitGate);
       if (cycle !== this.transport.cycle) {
-        // Replace note scheduling without rebuilding the room on each pass.
-        this.audio.stop(false, false);
         this.passEpoch =
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();

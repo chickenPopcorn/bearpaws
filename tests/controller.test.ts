@@ -30,6 +30,7 @@ vi.mock("../src/audio", () => ({
     setPlaybackNotes = vi.fn();
     setSound = vi.fn();
     stop = vi.fn();
+    reschedule = vi.fn();
     schedule = vi.fn();
     tone = vi.fn();
   },
@@ -434,6 +435,28 @@ describe("practice studio integration", () => {
     },
   );
 
+  it("moves only waiting reference notes to a new speed during playback", async () => {
+    const studio = create(
+      song([
+        [60, 0],
+        [64, 2],
+      ]),
+    );
+    studio.mode("listen");
+    await studio.play();
+    advance(studio, 0.2);
+    vi.mocked(studio.audio.stop).mockClear();
+    studio.speed(0.5);
+    expect(studio.audio.reschedule).toHaveBeenCalledOnce();
+    expect(studio.audio.stop).not.toHaveBeenCalled();
+    expect(studio.transport.playing).toBe(true);
+    studio.pause();
+    vi.mocked(studio.audio.stop).mockClear();
+    studio.speed(1);
+    expect(studio.audio.stop).toHaveBeenCalledExactlyOnceWith();
+    expect(studio.audio.reschedule).toHaveBeenCalledOnce();
+  });
+
   it("keeps sounding notes when loop bounds change while the loop is off", async () => {
     const studio = create(
       song([
@@ -472,12 +495,14 @@ describe("practice studio integration", () => {
       else if (change === "seek") studio.seek(1);
       else advance(studio, 2.1);
       expect(studio.transport.playing).toBe(true);
-      expect(studio.audio.stop).toHaveBeenCalled();
+      if (change === "seek")
+        expect(studio.audio.stop).toHaveBeenCalledWith(false);
       expect(
         vi
           .mocked(studio.audio.stop)
           .mock.calls.every(([release]) => release === false),
       ).toBe(true);
+      expect(studio.audio.setPlaybackNotes).not.toHaveBeenCalledWith([]);
     },
   );
 
@@ -1245,8 +1270,11 @@ describe("practice studio integration", () => {
     studio.mode("listen");
     await studio.play();
     vi.mocked(studio.audio.stop).mockClear();
+    vi.mocked(studio.audio.schedule).mockClear();
     advance(studio, fixture.duration + 0.25);
-    expect(studio.audio.stop).toHaveBeenCalledExactlyOnceWith(false, false);
+    // Voices of the last pass end by the loop end, so the wrap lets them ring.
+    expect(studio.audio.stop).not.toHaveBeenCalled();
+    expect(studio.audio.schedule).toHaveBeenCalledOnce();
     expect(studio.transport.playing).toBe(true);
     expect(studio.position).toBeCloseTo(0.25);
   });
