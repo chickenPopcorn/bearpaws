@@ -229,15 +229,24 @@ select {
 .library-section-toggle {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
   padding: 8px 3px;
   border: 0;
   background: transparent;
+  color: #282635;
   text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.5;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.library-section-icon {
+  flex: 0 0 auto;
+  font-size: 17px;
+  line-height: 1;
+}
+.library-section-title {
+  min-width: 0;
 }
 .library-section-toggle svg {
   width: 12px;
@@ -255,7 +264,7 @@ select {
 .library-section-count {
   margin-left: auto;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
 }
 .library-section .import {
@@ -1248,7 +1257,7 @@ footer {
     margin: 0 2px 6px;
   }
   .library-section-toggle {
-    font-size: 13px;
+    font-size: 15px;
   }
   .library-songs {
     flex-basis: 100%;
