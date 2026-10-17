@@ -396,20 +396,14 @@ describe("Codex review merge gate", () => {
     },
   );
 
-  it("publishes pending without reading reviews for a PR targeting another branch", async () => {
+  it("does not overwrite a shared head's status for a PR targeting another branch", async () => {
     const { run, get, github, pullRequest, publish } = setup([summary()]);
     get.mockResolvedValue({
       data: { ...pullRequest, base: { ref: "release" } },
     });
-    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    await expect(run()).resolves.toEqual({ skipped: true });
     expect(github.paginate).not.toHaveBeenCalled();
-    expect(publish).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        context: "Codex review gate",
-        state: "pending",
-        sha: HEAD,
-      }),
-    );
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it("cannot pass if the base changes away from main during verification", async () => {
@@ -417,7 +411,11 @@ describe("Codex review merge gate", () => {
     get.mockResolvedValueOnce({ data: pullRequest }).mockResolvedValueOnce({
       data: { ...pullRequest, base: { ref: "release" } },
     });
-    await expect(run()).resolves.toMatchObject({ state: "pending" });
+    await expect(run()).resolves.toEqual({ skipped: true });
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({ context: "Codex review checkpoint" }),
+    );
     expect(publish).not.toHaveBeenCalledWith(
       expect.objectContaining({
         context: "Codex review gate",
@@ -774,4 +772,34 @@ describe("Codex review merge gate", () => {
     context.payload.comment = removed;
     await expect(run()).resolves.toMatchObject({ state: "pending" });
   });
+
+  it.each([
+    "```\n@codex review\n```",
+    "```text\n@codex security review\n```",
+    "~~~markdown\n@codex review\n~~~",
+    "````\n```\n@codex review\n````",
+    "  ~~~\n@codex review\n  ~~~~",
+    "```\n~~~\n@codex review\n```",
+    "```\n@codex review",
+    "    @codex review",
+    "\t@codex security review",
+    " \t@codex review",
+  ])("ignores a literal review command example: %j", async (body) => {
+    await expect(
+      setup([summary(), command(body)]).run(),
+    ).resolves.toMatchObject({ state: "success" });
+  });
+
+  it.each(["```", "~~~~"])(
+    "recognizes a real request after a %s fenced example closes",
+    async (fence) => {
+      const body = `${fence}text\n@codex security review\n${fence}\n   @codex review`;
+      const { run, publish } = setup([summary(), command(body)]);
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+      expect(savedCheckpoint(publish)).toMatchObject({
+        c: Date.parse(REQUEST),
+        s: Date.parse(REQUEST),
+      });
+    },
+  );
 });

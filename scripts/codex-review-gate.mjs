@@ -30,6 +30,32 @@ function timestamp(value) {
   return Date.parse(value) || Number.MAX_SAFE_INTEGER;
 }
 
+function* reviewCommands(body) {
+  let fence;
+  for (const line of String(body ?? "").split(/\r?\n/)) {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (
+        marker &&
+        marker[1][0] === fence[0] &&
+        marker[1].length >= fence.length &&
+        /^[ \t]*$/.test(marker[2])
+      )
+        fence = undefined;
+      continue;
+    }
+    if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
+      fence = marker[1];
+      continue;
+    }
+    // Four-space or tab indentation denotes a literal code example.
+    const command = line.match(
+      /^ {0,3}@codex[ \t]+(security[ \t]+)?review(?:[ \t]|$)/i,
+    );
+    if (command) yield command;
+  }
+}
+
 function requestBarriers(checkpoint, comments, events, context) {
   for (const event of events)
     if (event.event === "base_ref_changed")
@@ -47,10 +73,7 @@ function requestBarriers(checkpoint, comments, events, context) {
   if (comment && previous) candidates.push({ ...comment, body: previous });
   for (const comment of candidates.filter(Boolean)) {
     if (!REQUEST_ASSOCIATIONS.has(comment.author_association)) continue;
-    const commands = String(comment.body ?? "").matchAll(
-      /^\s*@codex\s+(security\s+)?review(?:\s|$)/gim,
-    );
-    for (const command of commands) {
+    for (const command of reviewCommands(comment.body)) {
       const at = timestamp(comment.updated_at ?? comment.created_at);
       // Repository policy runs Security Review alongside a requested Code Review.
       if (!command[1]) checkpoint.c = Math.max(checkpoint.c, at);
@@ -272,12 +295,12 @@ export async function runCodexReviewGate({ github, context, core }) {
     core.info(`${STATUS_CONTEXT}: ${result.state} (${pullRequest.head.sha})`);
     return { ...result, sha: pullRequest.head.sha, pullRequestNumber: number };
   };
-  if (pullRequest.base?.ref !== "main")
-    return publish({
-      state: "pending",
-      description:
-        "This pull request does not target main; Codex gate cannot pass.",
-    });
+  if (pullRequest.base?.ref !== "main") {
+    // Commit statuses are shared by all PRs on this SHA. An unrelated non-main
+    // PR must not overwrite the gate belonging to a PR that targets main.
+    core.info(`Skipping pull request #${number}: it does not target main.`);
+    return { skipped: true };
+  }
   // Clear any earlier green status before further reads: a retry, deletion, or
   // API outage must not leave an old completion usable while we verify it.
   await publish({
@@ -328,12 +351,10 @@ export async function runCodexReviewGate({ github, context, core }) {
     core.info(`Skipping closed pull request #${number}.`);
     return { skipped: true };
   }
-  if (pullRequest.base?.ref !== "main")
-    return publish({
-      state: "pending",
-      description:
-        "This pull request no longer targets main; Codex gate cannot pass.",
-    });
+  if (pullRequest.base?.ref !== "main") {
+    core.info(`Skipping pull request #${number}: it no longer targets main.`);
+    return { skipped: true };
+  }
   if (pullRequest.head.sha !== initialSha)
     return publish({
       state: "pending",
