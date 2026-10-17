@@ -276,6 +276,34 @@ describe("sheet timeline SVG progress", () => {
     expect(f.stem).toBe(g.stem);
   });
 
+  it("draws a silent 3/4 bar as a whole rest and keeps dotted-half notes dotted", () => {
+    const piece = builtInSongs().find(
+      (candidate) => candidate.id === "pawpal-five-oclock-v1",
+    )!;
+    const markup = render(piece);
+    const signature = markup.match(
+      /<g class="sheet-time-signature"[^>]*>(.*?)<\/g>/,
+    )![1];
+    expect(
+      [...signature.matchAll(/<text\b[^>]*>([^<]*)<\/text>/g)].map(
+        (match) => match[1],
+      ),
+    ).toEqual([String.fromCodePoint(0xe083), String.fromCodePoint(0xe084)]);
+    // Bar 2 of the right hand is a printed whole rest, without a dot.
+    const rests = [
+      ...markup.matchAll(
+        /<g class="sheet-rest"[^>]*aria-label="3-beat rest">(.*?)<\/g>/g,
+      ),
+    ].map((match) => match[1]);
+    expect(rests.length).toBeGreaterThan(0);
+    for (const rest of rests) {
+      expect(rest).toContain('y="-10"');
+      expect(rest).not.toContain("<circle");
+    }
+    const first = piece.notes.find((note) => note.track === 1)!;
+    expect(noteLayout(markup, first.id).label).toBe("D4 · 2");
+  });
+
   it("puts Dancing Raindrops' G3 label above E3 without changing their notes or fingers", () => {
     const piece = builtInSongs().find(
       (candidate) => candidate.id === "cadence-dancing-raindrops-v1",

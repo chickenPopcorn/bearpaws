@@ -2,6 +2,7 @@ import { tempoConverter, type Finger, type Note, type Song } from "./song";
 import { starterPieces, type StarterPiece } from "./starterPieces";
 import { popsPieces } from "./popsPieces";
 import { midiPieces, midiSongs } from "./midiPieces";
+import { classPieces, classSong } from "./classPieces";
 
 const rightFingers: Record<number, Finger> = {
   60: 1,
@@ -20,6 +21,7 @@ const leftFingers: Record<number, Finger> = {
 const builtInIds = new Set([
   "cadence-ode-to-joy-v1",
   "cadence-dancing-raindrops-v1",
+  ...classPieces.map((piece) => piece.id),
   ...starterPieces.map((piece) => piece.id),
   ...popsPieces.map((piece) => piece.id),
   ...midiPieces.map((piece) => piece.id),
@@ -234,6 +236,7 @@ export function builtInSongs(): Song[] {
   return [
     makeLesson(odeToJoy),
     dancingRaindrops(),
+    ...classPieces.map(classSong),
     ...starterPieces.map(makeLesson),
     ...popsPieces.map(makeLesson),
     ...midiSongs(),

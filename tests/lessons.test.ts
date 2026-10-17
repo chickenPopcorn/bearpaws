@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import { builtInSongs, isBuiltInSong } from "../src/lessons";
 import { starterPieces } from "../src/starterPieces";
 import { popsPieces } from "../src/popsPieces";
+import { classPieces, classPositions } from "../src/classPieces";
 import { collectionForSong } from "../src/collections";
-import { parseSong, tempoConverter } from "../src/song";
+import { parseSong, tempoConverter, type Song } from "../src/song";
 import { buildScore, scoreTimeAtX, scoreViewport } from "../src/notation";
 
 describe("bundled beginner music", () => {
@@ -14,8 +15,8 @@ describe("bundled beginner music", () => {
       ["cadence-ode-to-joy-v1", "Ode to Joy"],
       ["cadence-dancing-raindrops-v1", "Dancing Raindrops"],
     ]);
-    expect(songs).toHaveLength(16);
-    expect(songs.filter((song) => song.lesson)).toHaveLength(15);
+    expect(songs).toHaveLength(27);
+    expect(songs.filter((song) => song.lesson)).toHaveLength(26);
     expect(new Set(songs.map((song) => song.id)).size).toBe(songs.length);
     for (const title of [
       "Hot Cross Buns",
@@ -73,18 +74,40 @@ describe("bundled beginner music", () => {
       [65, 4],
       [67, 5],
     ]);
-    const left = new Map([
-      [48, 5],
-      [50, 4],
-      [52, 3],
-      [53, 2],
-      [55, 1],
+    // C position, and Middle C position with both thumbs sharing middle C.
+    const leftPositions = new Map([
+      [
+        "C3 (5) to G3 (1)",
+        new Map([
+          [48, 5],
+          [50, 4],
+          [52, 3],
+          [53, 2],
+          [55, 1],
+        ]),
+      ],
+      [
+        "F3 (5) to C4 (1)",
+        new Map([
+          [53, 5],
+          [55, 4],
+          [57, 3],
+          [59, 2],
+          [60, 1],
+        ]),
+      ],
     ]);
     for (const song of builtInSongs().filter((song) => song.lesson)) {
-      expect(song.lesson!.handPositions.left).toContain("C3 (5) to G3 (1)");
+      const range = [...leftPositions.keys()].find((range) =>
+        song.lesson!.handPositions.left.endsWith(range),
+      );
+      expect(range).toBeDefined();
+      const left = leftPositions.get(range!)!;
       expect(song.lesson!.handPositions.right.length).toBeGreaterThan(10);
-      const fixedC =
-        song.lesson!.handPositions.right === "C position · C4 (1) to G4 (5)";
+      const fixedC = [
+        "C position · C4 (1) to G4 (5)",
+        "Middle C position · C4 (1) to G4 (5)",
+      ].includes(song.lesson!.handPositions.right);
       for (const note of song.notes) {
         const hand = song.tracks.find((track) => track.id === note.track)!.hand;
         expect(hand).toBe(note.track === 0 ? "left" : "right");
@@ -126,7 +149,20 @@ describe("bundled beginner music", () => {
       songs
         .filter((song) => collectionForSong(song.id).id === "classes")
         .map((song) => song.title),
-    ).toEqual(["Dancing Raindrops"]);
+    ).toEqual([
+      "Dancing Raindrops",
+      "Five O'Clock",
+      "Tell Us, Please!",
+      "Sleep Tight, Mozart Mouse",
+      "Something for You",
+      "Bridal Chorus",
+      "Mozart Mouse's Special Music",
+      "Camptown Races",
+      "Hush, Little Baby",
+      "The Wheels on the Bus",
+      "Old MacDonald Had a Farm",
+      "Aura Lee",
+    ]);
     expect(
       songs.filter((song) => collectionForSong(song.id).id === "songs"),
     ).toHaveLength(13);
@@ -254,7 +290,9 @@ describe("bundled beginner music", () => {
     for (const song of songs.filter((candidate) => candidate.lesson)) {
       const beat = tempoConverter(song.ppq, song.tempos)(song.ppq);
       expect(beat).toBeCloseTo(60 / song.lesson!.bpm, 9);
-      expect(song.notes[0].start).toBeCloseTo(beat, 9);
+      // The Wheels on the Bus opens with a printed half rest after the lead-in.
+      const openingRest = song.id === "pawpal-wheels-on-the-bus-v1" ? 2 : 0;
+      expect(song.notes[0].start).toBeCloseTo((1 + openingRest) * beat, 9);
       for (const [index, note] of song.notes.entries()) {
         expect(Number.isFinite(note.start)).toBe(true);
         expect(note.start).toBeGreaterThanOrEqual(0);
@@ -365,6 +403,275 @@ describe("bundled beginner music", () => {
     );
     for (let index = 0; index < 4; index++) {
       expect(phrase[index].end).toBeCloseTo(phrase[index + 1].start, 9);
+    }
+  });
+});
+
+const pitchNames = [
+  "C",
+  "C#",
+  "D",
+  "D#",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "A#",
+  "B",
+];
+const pitchName = (pitch: number) =>
+  `${pitchNames[pitch % 12]}${Math.floor(pitch / 12) - 1}`;
+
+/**
+ * One hand's printed bars, such as "r2 C4 C4 | C4:4": rN is an N-beat rest,
+ * ":N" a note of N beats (quarter notes have no suffix), "+" a chord and
+ * "." a staccato dot.
+ */
+function printedBars(song: Song, hand: "left" | "right") {
+  const beat = 60 / song.lesson!.bpm;
+  const barLength = song.beatsPerBar!;
+  const chords = new Map<number, Song["notes"]>();
+  for (const note of song.notes.filter((note) => note.fingerHand === hand)) {
+    const at = Math.round(note.start / beat - 1);
+    chords.set(at, [...(chords.get(at) ?? []), note]);
+  }
+  const barCount = Math.round(song.notes.at(-1)!.start / beat) / barLength;
+  return Array.from({ length: Math.ceil(barCount) }, (_, bar) => {
+    const tokens: string[] = [];
+    let cursor = bar * barLength;
+    for (const [at, notes] of [...chords].sort((a, b) => a[0] - b[0])) {
+      if (at < cursor || at >= (bar + 1) * barLength) continue;
+      if (at > cursor) tokens.push(`r${at - cursor}`);
+      const beats = notes[0].notatedBeats!;
+      tokens.push(
+        notes.map((note) => pitchName(note.pitch)).join("+") +
+          (beats === 1 ? "" : `:${beats}`) +
+          (notes[0].staccato ? "." : ""),
+      );
+      cursor = at + beats;
+    }
+    if (cursor < (bar + 1) * barLength)
+      tokens.push(`r${(bar + 1) * barLength - cursor}`);
+    return tokens.join(" ");
+  }).join(" | ");
+}
+
+describe("George Bear’s Classes book pieces", () => {
+  const classSongs = () =>
+    builtInSongs().filter(
+      (song) => collectionForSong(song.id).id === "classes",
+    );
+
+  it("registers each piece once, with full bars and its printed hand position", () => {
+    expect(new Set(classPieces.map((piece) => piece.id)).size).toBe(11);
+    const songs = classSongs();
+    expect(songs.map((song) => song.id)).toEqual([
+      "cadence-dancing-raindrops-v1",
+      ...classPieces.map((piece) => piece.id),
+    ]);
+    for (const piece of classPieces) {
+      expect(piece.id).toMatch(/^pawpal-[a-z-]+-v1$/);
+      expect(isBuiltInSong(piece.id)).toBe(true);
+      for (const bar of piece.bars)
+        for (const steps of [bar.left, bar.right])
+          if (steps)
+            expect(steps.reduce((beats, step) => beats + step[1], 0)).toBe(
+              piece.beatsPerBar,
+            );
+      const song = songs.find((song) => song.id === piece.id)!;
+      const position = classPositions[piece.position];
+      expect(song.title).toBe(piece.title);
+      expect(song.beatsPerBar).toBe(piece.beatsPerBar);
+      expect(song.leadInBeats).toBe(1);
+      expect(song.lesson).toEqual({
+        composer: piece.composer,
+        description: piece.description,
+        level: position.level,
+        bpm: piece.bpm,
+        handPositions: position.handPositions,
+      });
+      expect(song.lesson!.composer).toContain("piano book");
+      const score = buildScore(song);
+      expect(score.measureCount).toBe(piece.bars.length);
+      expect(score.meter.measureAt(0).numerator).toBe(piece.beatsPerBar);
+      for (const note of song.notes) {
+        expect(note.finger).toBe(
+          position.fingers[note.fingerHand!][note.pitch],
+        );
+        expect(note.track).toBe(note.fingerHand === "left" ? 0 : 1);
+      }
+    }
+  });
+
+  it("transcribes every bar of each student part, with rests, chords and staccato", () => {
+    const sleepVerse = {
+      right: "r3 | C4:3 | r1 C4 D4 | E4:3 | r3 | D4:3 | r1 E4 D4 | C4:3",
+      left: "G3:3 | r3 | G3 r2 | r3 | G3:3 | r3 | G3 r2 | r3",
+    };
+    const fanfare = {
+      right: "C4+G4 C4+G4 C4+G4 C4+G4 | C4+G4:2 C4+G4:2 | r4 | r4",
+      left: "r4 | r4 | C3+G3 C3+G3 C3+G3 C3+G3 | C3+G3:2 C3+G3:2",
+    };
+    const farm = {
+      right: "G4 G4 G4 D4 | E4 E4 D4:2 | r4",
+      left: "r4 | r4 | B3 B3 A3 A3",
+    };
+    const blackbird = "G3 C4 B3 C4 | r1 A3 r2 | C4 B3 A3 B3 | C4:4";
+    const expected: Record<string, { right: string; left: string }> = {
+      "pawpal-five-oclock-v1": {
+        right: "D4:3 | r3 | D4:3 | r3 | D4:3 | D4:3 | D4:3 | r3",
+        left: "B3:3 | G3:3 | B3:3 | G3:3 | B3 A3 G3 | B3 A3 G3 | B3 A3 B3 | C4:3",
+      },
+      "pawpal-tell-us-please-v1": {
+        right:
+          "C4:2 F4:2 | C4. C4. F4:2 | D4:2 G4:2 | D4. D4. G4:2 | r4 | r4 | r4 | r4",
+        left: "r4 | r4 | r4 | r4 | G3:2 D3:2 | G3. G3. D3:2 | G3. F3. E3. D3. | C3:4",
+      },
+      "pawpal-sleep-tight-mozart-mouse-v1": {
+        right: [sleepVerse.right, sleepVerse.right, "r3 | r3 | r3 | r3"].join(
+          " | ",
+        ),
+        left: [
+          sleepVerse.left,
+          sleepVerse.left,
+          "G3+C4:3 | G3+C4:3 | G3+C4:2 G3+C4 | G3+C4:3",
+        ].join(" | "),
+      },
+      "pawpal-something-for-you-v1": {
+        right:
+          "r4 | r4 | G4 G4 C4 C4 | F4 F4 F4:2 | r4 | r4 | G4 C4 D4 E4 | F4 F4 F4:2",
+        left: "F3 F3 C4 C4 | A3 A3 C4:2 | r4 | r4 | F3 F3 C4 C4 | A3 A3 C4:2 | r4 | r4",
+      },
+      "pawpal-bridal-chorus-v1": {
+        right:
+          "r2 C4 C4 | C4:4 | r2 D4 r1 | r4 | r2 C4 F4 | F4:2 E4 D4 | C4:2 r2 | D4:4 | " +
+          "r2 C4 C4 | C4:4 | r2 D4 r1 | r4 | r2 C4 E4 | G4:2 E4 C4 | r2 D4 E4 | C4:4",
+        left:
+          "G3:2 r2 | r4 | G3:2 r1 B3 | C4:4 | G3:2 r2 | r4 | r2 B3 C4 | r4 | " +
+          "G3:2 r2 | r4 | G3:2 r1 B3 | C4:4 | G3:2 r2 | r4 | A3:2 r2 | r4",
+      },
+      "pawpal-mozart-mouses-special-music-v1": {
+        right: [
+          fanfare.right,
+          "D4 D4 D4 F4 | G4:2 F4:2 | G4 G4 F4 D4 | G4 G4 G4:2",
+          fanfare.right,
+          "D4 F4 G4:2 | D4 F4 G4:2 | G4 G4 F4 D4 | C4+G4 C4+G4 C4+G4:2",
+        ].join(" | "),
+        left: [
+          fanfare.left,
+          "G3:4 | G3:4 | G3:4 | G3:4",
+          fanfare.left,
+          "G3:4 | G3:4 | G3:4 | C3+G3 C3+G3 C3+G3:2",
+        ].join(" | "),
+      },
+      "pawpal-camptown-races-v1": {
+        right:
+          "C4 C4 r1 C4 | D4 C4 r2 | r4 | r4 | C4 C4 r1 C4 | D4 C4 r2 | r4 | r4",
+        left: "r2 A3 r1 | r2 A3:2 | A3 G3:3 | A3 G3:3 | r2 A3 r1 | r2 A3:2 | G3:2 A3 G3 | F3:4",
+      },
+      "pawpal-hush-little-baby-v1": {
+        right:
+          "r2 E4 E4 | E4:2 F4:2 | E4:2 D4 D4 | D4:4 | r2 D4 D4 | D4:2 D4 E4 | D4:2 C4:2 | C4:4 | " +
+          "r2 E4:2 | E4:2 F4:2 | E4:2 D4:2 | D4:4 | r2 D4 D4 | D4:2 D4 E4 | D4:2 C4:2 | C4:4",
+        left:
+          "G3:2 r2 | r4 | r4 | r4 | G3 G3 r2 | r4 | r4 | r4 | " +
+          "G3:2 r2 | r4 | r4 | r4 | G3 G3 r2 | r4 | r4 | r4",
+      },
+      "pawpal-wheels-on-the-bus-v1": {
+        right:
+          "r4 | C4:2 C4 C4 | C4:2 E4:2 | G4:2 E4:2 | C4:4 | D4:2 D4:2 | D4:4 | G4:2 E4:2 | C4:2 r2 | " +
+          "r4 | r4 | r4 | r4 | D4:2 F4:2 | E4:2 D4:2 | C4:4 | r4",
+        left:
+          "r2 G3:2 | r4 | r4 | r4 | r4 | r4 | r4 | r4 | r2 G3:2 | " +
+          "C3:2 C3 C3 | C3:2 E3:2 | G3:2 E3:2 | C3:4 | r4 | r4 | r4 | C3:2 C3:2",
+      },
+      "pawpal-old-macdonald-v1": {
+        right: [
+          farm.right,
+          "r3 D4",
+          farm.right,
+          "r3 D4",
+          "G4 G4 G4 D4 | G4 G4 G4:2 | G4 G4 r2 | G4 G4 r2",
+          farm.right,
+          "r4",
+        ].join(" | "),
+        left: [
+          farm.left,
+          "G3:3 r1",
+          farm.left,
+          "G3:3 r1",
+          "r4 | r4 | r2 G3 G3 | r2 G3 G3",
+          farm.left,
+          "G3:4",
+        ].join(" | "),
+      },
+      "pawpal-aura-lee-v1": {
+        right:
+          "r4 | D4 r1 D4:2 | r4 | r4 | r4 | D4 r1 D4:2 | r4 | r4 | " +
+          "E4 E4 E4:2 | E4 E4 E4:2 | E4 D4 C4 D4 | E4:4 | E4 E4 F4 E4 | D4 r1 D4 D4 | r4 | r4",
+        left: [
+          blackbird,
+          blackbird,
+          "r4 | r4 | r4 | r4 | r4 | r1 A3 r2 | C4 B3 A3 B3 | C4:4",
+        ].join(" | "),
+      },
+    };
+    const songs = classSongs().slice(1);
+    expect(songs.map((song) => song.id)).toEqual(Object.keys(expected));
+    for (const song of songs) {
+      expect(printedBars(song, "right")).toBe(expected[song.id].right);
+      expect(printedBars(song, "left")).toBe(expected[song.id].left);
+    }
+  });
+
+  it("follows the printed meters, dynamics, repeat and articulation", () => {
+    const songs = new Map(classSongs().map((song) => [song.id, song]));
+    for (const id of [
+      "pawpal-five-oclock-v1",
+      "pawpal-sleep-tight-mozart-mouse-v1",
+    ])
+      expect(songs.get(id)!.beatsPerBar).toBe(3);
+
+    // The repeated lullaby verse is loud the first time and soft the second.
+    const sleep = songs.get("pawpal-sleep-tight-mozart-mouse-v1")!;
+    const sleepBeat = 60 / sleep.lesson!.bpm;
+    const verse = (from: number, to: number) =>
+      new Set(
+        sleep.notes
+          .filter(
+            (note) =>
+              note.start >= (1 + from) * sleepBeat - 1e-9 &&
+              note.start < (1 + to) * sleepBeat - 1e-9,
+          )
+          .map((note) => note.velocity),
+      );
+    expect(verse(0, 24)).toEqual(new Set([0.75]));
+    expect(verse(24, 60)).toEqual(new Set([0.45]));
+
+    // Mozart Mouse's fanfare returns louder at bar 9.
+    const mozart = songs.get("pawpal-mozart-mouses-special-music-v1")!;
+    const mozartBeat = 60 / mozart.lesson!.bpm;
+    for (const note of mozart.notes)
+      expect(note.velocity).toBe(
+        note.start < (1 + 32) * mozartBeat - 1e-9 ? 0.6 : 0.75,
+      );
+
+    // Only Tell Us, Please! has staccato dots, on every quarter note; they
+    // sound for under half a beat, and other notes keep a short release gap.
+    for (const song of songs.values()) {
+      if (song.id === "cadence-dancing-raindrops-v1") continue;
+      const beat = 60 / song.lesson!.bpm;
+      for (const note of song.notes) {
+        expect(note.staccato ?? false).toBe(
+          song.id === "pawpal-tell-us-please-v1" && note.notatedBeats === 1,
+        );
+        expect(note.end - note.start).toBeCloseTo(
+          note.staccato ? 0.45 * beat : note.notatedBeats! * beat - 0.055,
+          9,
+        );
+      }
     }
   });
 });

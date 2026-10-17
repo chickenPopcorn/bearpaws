@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseMidi } from "midi-file";
 import { builtInSongs } from "../src/lessons";
+import { classPieces } from "../src/classPieces";
 import { buildScore } from "../src/notation";
 import { parseSong, type Song } from "../src/song";
 
@@ -162,6 +163,41 @@ describe("downloadable beginner MIDI collection", () => {
         })),
       })),
     );
+  });
+
+  it("downloads each George Bear’s Classes piece in its printed meter after one silent bar", () => {
+    const catalog = JSON.parse(
+      readFileSync("public/midi/catalog.json", "utf8"),
+    ) as { id: string; beatsPerBar: number; countInBeats: number }[];
+    for (const piece of classPieces) {
+      const midi = parseMidi(
+        new Uint8Array(readFileSync(`public/midi/${piece.id}.mid`)),
+      );
+      for (const track of midi.tracks)
+        expect(
+          track.find((event) => event.type === "timeSignature"),
+        ).toMatchObject({ numerator: piece.beatsPerBar, denominator: 4 });
+      expect(catalog.find((entry) => entry.id === piece.id)).toMatchObject({
+        beatsPerBar: piece.beatsPerBar,
+        countInBeats: piece.beatsPerBar,
+      });
+      // The first printed bar starts after the silent bar; The Wheels on the
+      // Bus opens with a half rest before its first note.
+      const firstAttack = Math.min(
+        ...midi.tracks.map((track) => {
+          let tick = 0;
+          for (const event of track) {
+            tick += event.deltaTime;
+            if (event.type === "noteOn") return tick;
+          }
+          return Infinity;
+        }),
+      );
+      const openingRest = piece.id === "pawpal-wheels-on-the-bus-v1" ? 2 : 0;
+      expect(firstAttack).toBe(
+        (piece.beatsPerBar + openingRest) * midi.header.ticksPerBeat!,
+      );
+    }
   });
 
   it("includes exactly the current MIDI files, catalog and readme in a valid ZIP", () => {

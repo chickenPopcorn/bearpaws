@@ -192,8 +192,19 @@ const timeSignatureDigits = (value: number) =>
     String.fromCodePoint(0xe080 + Number(digit)),
   );
 
-function Rest({ x, y, beats }: { x: number; y: number; beats: number }) {
-  const rhythm = rhythmForBeats(beats);
+function Rest({
+  x,
+  y,
+  beats,
+  wholeBar,
+}: {
+  x: number;
+  y: number;
+  beats: number;
+  wholeBar: boolean;
+}) {
+  // A silent bar takes a whole rest in every meter, such as a full 3/4 bar.
+  const rhythm = rhythmForBeats(wholeBar ? 4 : beats);
   return (
     <g
       className="sheet-rest"
@@ -311,7 +322,13 @@ export function SheetTimeline({
   const layout = useMemo(() => {
     const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
     const drawn: DrawNote[] = [];
-    const rests: { x: number; y: number; beats: number; key: string }[] = [];
+    const rests: {
+      x: number;
+      y: number;
+      beats: number;
+      wholeBar: boolean;
+      key: string;
+    }[] = [];
     let condensed = false;
     for (let measure = viewport.first; measure < viewport.last; measure++) {
       const barLength = score.meter.measureAt(measure).length;
@@ -411,6 +428,7 @@ export function SheetTimeline({
                   : noteX(measure, start),
               y: hand === "right" ? 84 : 192,
               beats,
+              wholeBar: beats === barLength,
               key: `${measure}-${hand}-${start}`,
             });
           }

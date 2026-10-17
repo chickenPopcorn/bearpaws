@@ -24,7 +24,7 @@ Escape, focus restoration, tab trapping and audio-before-fullscreen ordering.
 Imported 3/4, 6/8 and changing meters are verified through parsing, score layout,
 displayed signatures, keyboard seeking and the waterfall beat grid.
 The library checks cover collection search and selection, native keyboard
-activation, score-slider shortcuts, loop preference persistence, all 15 MIDI
+activation, score-slider shortcuts, loop preference persistence, all 26 MIDI
 exports and catalog entries, and exact ZIP contents with CRC verification.
 ZIP bytes remain identical when source timestamps, permissions or file creation
 order change, and search casing remains consistent across browser locales.
@@ -33,7 +33,7 @@ The full An Jing arrangement preserves all 1,369 source notes and original
 timing/velocities, with suggested hands split at middle C. Tests cover saved
 selection, separate-hand practice, all score notes, and seeking across the
 99-measure arrangement. A real export in a temporary workspace verifies the
-original MIDI download and byte-identical regeneration of the 15-song starter
+original MIDI download and byte-identical regeneration of the 26-song starter
 pack; full arrangements remain outside that pack.
 
 The sample bank contains 240 lossless FLACs, about 358 MiB compressed. Checks
