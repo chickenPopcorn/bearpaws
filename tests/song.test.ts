@@ -56,7 +56,7 @@ describe("imported MIDI meter", () => {
       );
       expect(song.timeSignatures).toEqual([signature]);
       const score = buildScore(song);
-      expect(score.beatsPerBar).toBe(3);
+      expect(score.meter.measureAt(0).beatsPerBar).toBe(3);
       expect(score.measureCount).toBe(2);
       expect(score.measures.get(0)).toHaveLength(count / 2);
       expect(score.measures.get(1)?.[0]).toMatchObject({ beat: 3, offset: 0 });
