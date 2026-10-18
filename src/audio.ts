@@ -6,6 +6,7 @@ import {
   normalizePianoSound,
   type PianoSoundBus,
   type PianoSoundSettings,
+  type PianoVoice,
 } from "./pianoSound";
 import {
   pianoInstrument,
@@ -89,8 +90,8 @@ interface Voice {
   /** The scheduled notes this voice plays, and the set that records them. */
   ids: readonly string[];
   pass: Set<string>;
-  /** A release, noise or resonance voice, which gives way to notes. */
-  optional: boolean;
+  /** The release, noise or resonance voice it plays, which gives way to notes. */
+  layer: PianoVoice | null;
 }
 /** What a new voice plays, and when it is damped. */
 interface VoiceRequest {
@@ -107,7 +108,7 @@ interface VoiceRequest {
   ids: readonly string[];
   pass: Set<string>;
   songEnd: number;
-  optional: boolean;
+  layer: PianoVoice | null;
 }
 class PianoMemoryError extends Error {}
 /** Audio and MIDI timestamps share performance.timeOrigin. Frames never advance time. */
@@ -132,6 +133,8 @@ export class ReferenceAudio {
     notes: readonly Note[];
     pedals: readonly PedalSpan[];
     events: PianoVoiceEvent[];
+    /** Each note's resonance, for a note struck where a pass begins. */
+    resonance: Map<string, PianoVoiceEvent[]>;
   };
   /** Whether the room has received sound since it was last rebuilt. */
   private roomUsed = false;
@@ -153,6 +156,11 @@ export class ReferenceAudio {
   setSound(settings: Partial<PianoSoundSettings>) {
     this.sound = normalizePianoSound({ ...this.sound, ...settings });
     this.output?.setSound(this.sound);
+    // A voice turned off stops, including sources waiting to start. Notes
+    // and the other voices play on.
+    const now = this.now();
+    for (const voice of this.voices)
+      if (voice.layer && !this.sound.voices[voice.layer]) this.fade(voice, now);
   }
   async unlock() {
     this.context ??= new AudioContext();
@@ -282,10 +290,14 @@ export class ReferenceAudio {
   /** The optional voices a song passage triggers, cached for each tick. */
   private voiceEvents(notes: readonly Note[], pedals: readonly PedalSpan[]) {
     const cache = this.voiceEventCache;
-    if (cache?.notes === notes && cache.pedals === pedals) return cache.events;
-    const events = pianoVoiceEvents(notes, pedals);
-    this.voiceEventCache = { notes, pedals, events };
-    return events;
+    if (cache?.notes === notes && cache.pedals === pedals) return cache;
+    const events = pianoVoiceEvents(notes, pedals),
+      resonance = new Map<string, PianoVoiceEvent[]>();
+    for (const event of events)
+      if (event.region.voice === "resonance")
+        for (const id of event.notes)
+          resonance.set(id, [...(resonance.get(id) ?? []), event]);
+    return (this.voiceEventCache = { notes, pedals, events, resonance });
   }
   /** The recordings of the enabled optional voices these notes trigger. */
   private voiceFiles(
@@ -468,8 +480,7 @@ export class ReferenceAudio {
   private steal(now: number, optional: boolean) {
     let oldest: Voice | undefined;
     for (const voice of this.voices)
-      if (voice.optional && voice.start < (oldest?.start ?? now))
-        oldest = voice;
+      if (voice.layer && voice.start < (oldest?.start ?? now)) oldest = voice;
     if (!oldest && !optional)
       for (const voice of this.voices)
         if (voice.start < (oldest?.start ?? now)) oldest = voice;
@@ -492,7 +503,7 @@ export class ReferenceAudio {
     const due = when <= now + DUE_SECONDS;
     if (optional) {
       let count = 0;
-      for (const voice of this.voices) if (voice.optional) count++;
+      for (const voice of this.voices) if (voice.layer) count++;
       if (count >= MAX_OPTIONAL_VOICES && !(due && this.steal(now, true)))
         return false;
     }
@@ -604,7 +615,7 @@ export class ReferenceAudio {
       ids,
       pass,
       songEnd,
-      optional: false,
+      layer: null,
     });
   }
   /**
@@ -614,6 +625,7 @@ export class ReferenceAudio {
   private optionalVoice(
     event: PianoVoiceEvent,
     when: number,
+    at: number,
     speed: number,
     songEnd: number,
     pass: Set<string>,
@@ -639,7 +651,7 @@ export class ReferenceAudio {
       when,
       attack: Math.max(ATTACK_SECONDS, region.attackSeconds),
       releaseAt: damped
-        ? when + Math.max(0.04, (songEnd - event.time) / speed)
+        ? when + Math.max(0.04, (songEnd - at) / speed)
         : Infinity,
       releaseTime: !damped
         ? null
@@ -649,7 +661,7 @@ export class ReferenceAudio {
       ids: event.ids,
       pass,
       songEnd,
-      optional: true,
+      layer: region.voice,
     });
   }
   /** Returns false only when the voice cap refused a note. */
@@ -660,8 +672,9 @@ export class ReferenceAudio {
     const buffer = this.samples.get(request.file);
     if (!buffer) return true;
     // A refused note is tried again on a later tick, at most a tick late.
-    if (!this.admit(request.when, context.currentTime, request.optional))
-      return request.optional;
+    const optional = request.layer !== null;
+    if (!this.admit(request.when, context.currentTime, optional))
+      return optional;
     const { when, attack, level, releaseAt, releaseTime, rate, offset } =
       request;
     let source: AudioBufferSourceNode | undefined, gain: GainNode | undefined;
@@ -707,7 +720,7 @@ export class ReferenceAudio {
         sampleEnd,
         ids: request.ids,
         pass: request.pass,
-        optional: request.optional,
+        layer: request.layer,
       };
       this.voices.add(voice);
       source.onended = () => this.disconnect(voice);
@@ -819,6 +832,26 @@ export class ReferenceAudio {
         previous.ids.push(n.id);
       }
     }
+    const { events, resonance } = this.voiceEvents(notes, pedals);
+    /** Play an optional voice from song time `at`. */
+    const sound = (event: PianoVoiceEvent, at: number) => {
+      // Held voices end with the pass. A lift's noise is cut only by a
+      // press within it.
+      this.optionalVoice(
+        event,
+        now + (at - position) / transport.speed,
+        at,
+        transport.speed,
+        event.songEnd <= to
+          ? event.songEnd
+          : liftTriggered(event.region)
+            ? Infinity
+            : to,
+        pass,
+      );
+      for (const id of event.ids) pass.add(id);
+    };
+    const carried: string[] = [];
     for (const n of attacks.values()) {
       const start = (Math.max(n.start, head) - position) / transport.speed,
         end = (Math.min(n.soundEnd, to) - position) / transport.speed;
@@ -842,36 +875,35 @@ export class ReferenceAudio {
           pass.add(id);
           struck.set(id, now + start);
         }
+        if (n.start < head) carried.push(...n.ids);
       }
     }
     // Then the optional voices, after the notes they belong to have a voice.
-    const events = this.voiceEvents(notes, pedals),
+    // A note struck where the pass begins brings its resonance with it.
+    if (this.sound.voices.resonance)
+      for (const id of carried)
+        for (const event of resonance.get(id) ?? [])
+          if (!pass.has(event.ids[0])) sound(event, head);
+    const first = Math.max(earliest, from),
       limit = position + LOOKAHEAD_SECONDS * transport.speed;
     for (
-      let i = firstIndexAtOrAfter(events, "time", Math.max(earliest, from));
+      let i = firstIndexAtOrAfter(events, "time", first);
       i < events.length && events[i].time <= limit;
       i++
     ) {
       const event = events[i],
         lift = liftTriggered(event.region);
-      // A key or pedal that comes up as the pass ends still sounds in it.
+      // A key or pedal that comes up as the pass ends still sounds in it;
+      // one that comes up as it begins belongs to what came before.
       if (
         event.time > to ||
         (event.time === to && !lift) ||
+        (event.time === first && lift) ||
         !this.sound.voices[event.region.voice] ||
         pass.has(event.ids[0])
       )
         continue;
-      // Held voices end with the pass. A lift's noise is cut only by a
-      // press within it.
-      this.optionalVoice(
-        event,
-        now + (event.time - position) / transport.speed,
-        transport.speed,
-        event.songEnd <= to ? event.songEnd : lift ? Infinity : to,
-        pass,
-      );
-      for (const id of event.ids) pass.add(id);
+      sound(event, event.time);
     }
   }
 }

@@ -172,10 +172,11 @@ export function pianoVoiceEvents(
     list.push(span);
     byChannel.set(span.channel, list);
   }
+  /** A pedal still down where the file ends is down at its last instant too. */
   const pedalDown = (channel: number, time: number) => {
     const list = byChannel.get(channel) ?? [];
     const span = list[lastIndexAtOrBefore(list, "start", time)];
-    return !!span && time < span.end;
+    return !!span && (time < span.end || (!!span.open && time === span.end));
   };
   const events = new Map<string, PianoVoiceEvent>();
   const trigger = (
@@ -216,7 +217,8 @@ export function pianoVoiceEvents(
   for (const note of notes) {
     if (note.velocity <= 0) continue;
     trigger("keyNoise", note, note.end, Infinity);
-    if (note.soundEnd <= note.end) trigger("release", note, note.end, Infinity);
+    if (note.soundEnd <= note.end && !pedalDown(note.channel, note.end))
+      trigger("release", note, note.end, Infinity);
     if (pedalDown(note.channel, note.start))
       trigger("resonance", note, note.start, note.soundEnd);
   }

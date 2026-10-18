@@ -36,7 +36,8 @@ values. The adaptations are:
 
 - **Sampled release** (CC20, `harmL`, `harmS`, `harmV3`): string harmonics at
   key-up, only when the sustain pedal is up (`hicc64=32`). The app treats the
-  pedal as up when a note's sound ends with its key. Each recording plays to
+  pedal as up when a note's sound ends with its key and no pedal is still down
+  where the file ends. Each recording plays to
   its end, less `rt_decay` for each second the note sounded before its key-up,
   in real time, so speed changes count.
 - **Hammer noise** (CC21, `rel1` to `rel88`): the key's release noise at every
@@ -52,9 +53,13 @@ values. The adaptations are:
 - **Pseudo pedal resonance** (CC23): a note struck with the pedal down
   (`locc64=22`) adds one or two softest-layer recordings of neighbouring
   strings, retuned to the struck key, with a 50 ms attack. They are damped
-  with the note, rather than by the preset's CC64 release curve.
+  with the note, rather than by the preset's CC64 release curve. A note that
+  playback or a loop pass starts partway through is struck again with its
+  resonance.
 
-Half pedalling is not modelled: the pedal is either down or up. Optional voices
+Half pedalling is not modelled: the pedal is either down or up. A key or pedal
+that comes up exactly as a loop pass ends still sounds in that pass; one that
+comes up exactly as playback or a pass begins belongs to the music before it. Optional voices
 take at most half of the 64 voices, never take a voice from a note, and give up
 their own first when a note needs one. Their recordings load with a passage's
 notes, and only those that fit within the decoded-sample memory limit load.

@@ -247,6 +247,16 @@ describe("optional voice triggers", () => {
     ).toEqual([]);
   });
 
+  it("sounds no release harmonics for a key that comes up as a file ends with the pedal down", () => {
+    const events = pianoVoiceEvents(
+      [note("last", 60, 0.5, 1)],
+      [{ channel: 0, start: 0.2, end: 1, open: true }],
+    );
+    expect(
+      summary(events.filter((event) => event.time === 1 && event.notes.length)),
+    ).toEqual([["keyNoise", 1, ["last~keyNoise~0"]]]);
+  });
+
   it("triggers one voice for duplicate tracks, from the louder note", () => {
     const events = pianoVoiceEvents(
       [

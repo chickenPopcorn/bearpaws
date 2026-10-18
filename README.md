@@ -102,8 +102,9 @@ clear the room tail as well as scheduled notes.
 Playback uses all sixteen recorded layers. The room is a small synthetic
 convolution ambience. Under **Recorded details**, turn the preset's optional
 release harmonics, key release noise, pedal noise and pedal resonance on or
-off; these are remembered in this browser. Turning one on during playback
-restarts playback at the same place so that its recordings can load. These
+off; these are remembered in this browser. Turning one off stops it at once.
+Turning one on during playback restarts playback at the same place so that its
+recordings can load. These
 voices follow the imported MIDI's sustain pedal (CC64); built-in lessons have
 no pedal, so they use only release harmonics and key noise. See the
 [adaptation notes](public/audio/accurate-salamander/LICENSE.md) for how each

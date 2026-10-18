@@ -1180,7 +1180,7 @@ describe("optional piano voices", () => {
       }
     };
     const optional = () =>
-      [...setup.audio.voices].filter((voice) => voice.optional).length;
+      [...setup.audio.voices].filter((voice) => voice.layer).length;
     return { ...setup, played, gain, run, optional };
   }
   const passage = (): [Note[], PedalSpan[]] => [
@@ -1357,14 +1357,14 @@ describe("optional piano voices", () => {
     context.currentTime = 0.02;
     const notes = [
       { ...note(1, 60, 0.95), end: 0.95 },
+      // Its key comes up as playback starts: that belongs before it.
       { ...note(2, 62, 1.5), start: 0.5, end: 1 },
     ];
     audio.schedule(notes, transport, true, [{ channel: 0, start: 1, end: 2 }]);
     expect(played()).toEqual([
-      // Its key is still down, so its note sounds from here.
+      // The pedal holds it, so its note sounds from here.
       [fileFor(62, 0.5), 0.02],
-      // The key that came up at 1 s, and the pedal pressed then, a tick late.
-      ["rel42.flac", 0],
+      // The pedal pressed as playback starts, a tick late.
       ["pedalD1.flac", 0],
     ]);
   });
@@ -1401,6 +1401,62 @@ describe("optional piano voices", () => {
     // The pedal's lift noise plays out rather than being cut as it starts.
     const lift = played().findIndex(([file]) => file === "pedalU1.flac");
     expect(gain(lift).setTargetAtTime).not.toHaveBeenCalled();
+  });
+
+  it("leaves a key that comes up as a loop pass begins to the passage before it", () => {
+    const { audio, context, played } = withVoices();
+    const transport = new Transport(4);
+    transport.loop = [1, 2];
+    transport.seek(1, 0);
+    transport.play(0);
+    const notes = [
+      { ...note(1, 60, 1), start: 0.5, end: 1 },
+      { ...note(2, 62, 2), start: 1.2, end: 2 },
+    ];
+    for (let tick = 0; tick * 0.02 <= 1.95; tick++) {
+      context.currentTime = tick * 0.02;
+      transport.update(context.currentTime);
+      audio.schedule(notes, transport, true, []);
+    }
+    expect(
+      played().filter(([file]) => (file as string).startsWith("rel")),
+    ).toEqual([
+      ["rel42.flac", 1],
+      ["rel42.flac", 2],
+    ]);
+  });
+
+  it("brings a pedalled note's resonance when it is struck where playback starts", () => {
+    const { audio, transport, played, gain } = withVoices();
+    transport.seek(1, 0);
+    const notes = [{ ...note(1, 64, 3), start: 0.5, end: 2.5 }];
+    audio.schedule(notes, transport, true, [{ channel: 0, start: 0, end: 3 }]);
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5);
+    expect(played()).toEqual([
+      [fileFor(64, 0.5), 0],
+      ...resonance.map((region) => [region.file, 0]),
+    ]);
+    for (let i = 0; i < resonance.length; i++) {
+      expect(gain(1 + i).linearRampToValueAtTime.mock.calls[0][1]).toBe(0.05);
+      // Damped with its note, 2 s of song from here.
+      expect(gain(1 + i).setTargetAtTime.mock.calls[0][1]).toBe(2);
+    }
+  });
+
+  it("stops a voice turned off, including sources waiting to start, but no note", () => {
+    const { audio, context, gain, played, run } = withVoices();
+    run(...passage(), 0.4);
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
+    // The second note and its resonance wait to start at 0.5 s.
+    expect(played()).toHaveLength(5 + resonance);
+    audio.setSound({
+      voices: { ...DEFAULT_PIANO_SOUND.voices, resonance: false },
+    });
+    for (let i = 0; i < 5; i++)
+      expect(gain(i).cancelAndHoldAtTime).not.toHaveBeenCalled();
+    for (let i = 0; i < resonance; i++)
+      expect(gain(5 + i).cancelAndHoldAtTime).toHaveBeenCalledWith(0.4);
+    expect(context.createBufferSource).toHaveBeenCalledTimes(5 + resonance);
   });
 
   it("decays release harmonics by the time the key was really held, across speed changes", () => {
