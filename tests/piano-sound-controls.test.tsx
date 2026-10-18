@@ -3,24 +3,37 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { PianoSoundControls } from "../src/PianoSoundControls";
+import { DEFAULT_PIANO_SOUND, type PianoVoices } from "../src/pianoSound";
 
 let root: Root, container: HTMLDivElement;
 const onChange = vi.fn();
+const onVoiceChange = vi.fn();
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   onChange.mockClear();
+  onVoiceChange.mockClear();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
 });
-async function render(ambience = 0.22) {
+async function render(
+  ambience = 0.22,
+  voices: PianoVoices = DEFAULT_PIANO_SOUND.voices,
+) {
   await act(async () =>
-    root.render(<PianoSoundControls ambience={ambience} onChange={onChange} />),
+    root.render(
+      <PianoSoundControls
+        ambience={ambience}
+        onChange={onChange}
+        voices={voices}
+        onVoiceChange={onVoiceChange}
+      />,
+    ),
   );
 }
 it("offers Natural piano in a labelled native popover without a profile selector", async () => {
@@ -54,6 +67,24 @@ it("updates the room amount", async () => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   expect(onChange).toHaveBeenLastCalledWith(0.47);
+});
+it("turns each recorded detail on and off", async () => {
+  await render(0.22, { ...DEFAULT_PIANO_SOUND.voices, pedalNoise: false });
+  const boxes = [
+    ...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+  ];
+  expect(
+    boxes.map((box) => [box.parentElement!.textContent!.trim(), box.checked]),
+  ).toEqual([
+    ["Release harmonics", true],
+    ["Key release noise", true],
+    ["Pedal noise", false],
+    ["Pedal resonance", true],
+  ]);
+  await act(async () => boxes[3].click());
+  expect(onVoiceChange).toHaveBeenLastCalledWith("resonance", false);
+  await act(async () => boxes[2].click());
+  expect(onVoiceChange).toHaveBeenLastCalledWith("pedalNoise", true);
 });
 it("leaves Escape available to the native popover and fullscreen handler", async () => {
   await render();

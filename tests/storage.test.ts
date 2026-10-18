@@ -102,6 +102,21 @@ it.each([
   write("settings", saved);
   expect(settings()).toMatchObject(expected);
 });
+it("keeps optional piano voices on unless one was turned off", () => {
+  expect(settings().pianoVoices).toEqual({
+    release: true,
+    keyNoise: true,
+    pedalNoise: true,
+    resonance: true,
+  });
+  write("settings", { pianoVoices: { resonance: false, keyNoise: 1 } });
+  expect(settings().pianoVoices).toEqual({
+    release: true,
+    keyNoise: true,
+    pedalNoise: true,
+    resonance: false,
+  });
+});
 it.each([undefined, { loop: null }, { loop: [1, 4] }])(
   "defaults new and legacy progress to looping on: %j",
   (saved) => {

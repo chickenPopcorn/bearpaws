@@ -1,21 +1,50 @@
+/**
+ * Recorded details the Accurate-Salamander preset leaves off by default:
+ * string harmonics as a damper falls (sampled release), the key's release
+ * noise, the pedal's own noise, and pseudo pedal resonance.
+ */
+export const PIANO_VOICES = [
+  "release",
+  "keyNoise",
+  "pedalNoise",
+  "resonance",
+] as const;
+export type PianoVoice = (typeof PIANO_VOICES)[number];
+export type PianoVoices = Record<PianoVoice, boolean>;
+
 export interface PianoSoundSettings {
   ambience: number;
+  voices: PianoVoices;
 }
 
 export const DEFAULT_PIANO_SOUND: Readonly<PianoSoundSettings> = {
   ambience: 0.22,
+  voices: { release: true, keyNoise: true, pedalNoise: true, resonance: true },
 };
 
 export function normalizePianoSound(value: unknown): PianoSoundSettings {
   const settings = (
     value && typeof value === "object" ? value : {}
   ) as Partial<PianoSoundSettings>;
+  const voices = (
+    settings.voices && typeof settings.voices === "object"
+      ? settings.voices
+      : {}
+  ) as Partial<PianoVoices>;
   return {
     ambience:
       typeof settings.ambience === "number" &&
       Number.isFinite(settings.ambience)
         ? Math.max(0, Math.min(1, settings.ambience))
         : DEFAULT_PIANO_SOUND.ambience,
+    voices: Object.fromEntries(
+      PIANO_VOICES.map((voice) => [
+        voice,
+        typeof voices[voice] === "boolean"
+          ? voices[voice]
+          : DEFAULT_PIANO_SOUND.voices[voice],
+      ]),
+    ) as PianoVoices,
   };
 }
 

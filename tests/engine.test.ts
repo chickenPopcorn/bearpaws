@@ -258,6 +258,97 @@ describe("MIDI import and the musical timeline", () => {
     );
     expect(song.notes[0]).toMatchObject({ start: 0, end: 0.5, soundEnd: 1 });
     expect(song.duration).toBeGreaterThanOrEqual(1);
+    expect(song.pedals).toEqual([{ channel: 0, start: 0, end: 1 }]);
+  });
+
+  it("plays through pedal actions after the last note on its channels", () => {
+    const pedal = (deltaTime: number, channel: number, value: number) => ({
+      deltaTime,
+      type: "controller" as const,
+      channel,
+      controllerType: 64,
+      value,
+    });
+    const song = (lift: number | null, channel: number) =>
+      parseSong(
+        midi([
+          [
+            {
+              deltaTime: 0,
+              type: "noteOn",
+              channel: 0,
+              noteNumber: 60,
+              velocity: 100,
+            },
+            {
+              deltaTime: 480,
+              type: "noteOff",
+              channel: 0,
+              noteNumber: 60,
+              velocity: 0,
+            },
+            pedal(960, channel, 127),
+            ...(lift === null ? [] : [pedal(lift, channel, 0)]),
+            { deltaTime: 1920, type: "endOfTrack" as const },
+          ],
+        ]),
+        "Trailing pedal",
+        "trailing-pedal",
+      );
+    // Pressed at 1.5 s and lifted at 2.5 s, well after the note ends.
+    expect(song(960, 0).duration).toBe(3);
+    // Still down where the file ends at 3.5 s: the press is the action.
+    expect(song(null, 0).duration).toBe(2);
+    // A channel with no notes makes no pedal noise to wait for.
+    expect(song(960, 1).duration).toBe(1);
+  });
+
+  it("records each channel's sustain-pedal presses in time order", () => {
+    const pedal = (deltaTime: number, channel: number, value: number) => ({
+      deltaTime,
+      type: "controller" as const,
+      channel,
+      controllerType: 64,
+      value,
+    });
+    const song = parseSong(
+      midi([
+        [
+          {
+            deltaTime: 0,
+            type: "noteOn",
+            channel: 0,
+            noteNumber: 60,
+            velocity: 100,
+          },
+          // Half way or more is down; a repeated press changes nothing.
+          pedal(240, 0, 64),
+          pedal(120, 0, 127),
+          pedal(120, 0, 63),
+          // A press and lift at the same instant sustain nothing, but are kept.
+          pedal(0, 1, 127),
+          pedal(0, 1, 0),
+          pedal(240, 1, 100),
+          {
+            deltaTime: 240,
+            type: "noteOff",
+            channel: 0,
+            noteNumber: 60,
+            velocity: 0,
+          },
+          // Still down when the file ends.
+          { deltaTime: 480, type: "endOfTrack" },
+        ],
+      ]),
+      "Pedals",
+      "pedals",
+    );
+    expect(song.pedals).toEqual([
+      { channel: 0, start: 0.25, end: 0.5 },
+      { channel: 1, start: 0.5, end: 0.5 },
+      // Still down at the end of the file: no lift.
+      { channel: 1, start: 0.75, end: 1.5, open: true },
+    ]);
   });
 
   it("recovers unclosed notes at the track boundary and reports orphan releases", () => {

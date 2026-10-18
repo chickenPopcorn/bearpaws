@@ -61,6 +61,12 @@ vi.mock("../src/storage", () => ({
     names: true,
     selected: "cadence-ode-to-joy-v1",
     ambience: 0.22,
+    pianoVoices: {
+      release: true,
+      keyNoise: true,
+      pedalNoise: true,
+      resonance: true,
+    },
     ...((env.values.get("settings") as object) ?? {}),
   }),
   write: (key: string, value: unknown) => {
@@ -141,11 +147,39 @@ afterEach(() => {
 });
 
 describe("practice studio integration", () => {
+  it("restarts a passage still loading without a voice turned off", async () => {
+    const studio = create(
+      song([
+        [60, 0],
+        [64, 2],
+      ]),
+    );
+    studio.mode("listen");
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const playing = studio.play();
+    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
+    const [, signal] = vi.mocked(studio.audio.prepare).mock.calls[0];
+    studio.pianoVoice("resonance", false);
+    // The loading voice's recordings are no longer waited for.
+    expect(signal!.aborted).toBe(true);
+    await vi.waitFor(() =>
+      expect(studio.audio.prepare).toHaveBeenCalledTimes(2),
+    );
+    finish();
+    await playing;
+    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
+    expect(studio.position).toBe(0);
+  });
+
   it("restores sound preferences before audio starts and preserves them across songs", () => {
     env.values.set("settings", { ambience: 0.43 });
     const studio = create();
     expect(studio.audio.setSound).toHaveBeenCalledWith({
       ambience: 0.43,
+      voices: studio.settings.pianoVoices,
     });
     studio.sound(0.31);
     studio.load(builtInSongs()[1]);
@@ -155,7 +189,39 @@ describe("practice studio integration", () => {
     const restored = create();
     expect(restored.audio.setSound).toHaveBeenCalledWith({
       ambience: 0.31,
+      voices: restored.settings.pianoVoices,
     });
+  });
+
+  it("turns optional piano voices off live, and replays from here to load one turned on", async () => {
+    const studio = create(
+      song([
+        [60, 0],
+        [64, 2],
+      ]),
+    );
+    studio.mode("listen");
+    await studio.play();
+    advance(studio, 0.2);
+    const position = studio.position;
+    vi.mocked(studio.audio.prepare).mockClear();
+    studio.pianoVoice("resonance", false);
+    const off = {
+      release: true,
+      keyNoise: true,
+      pedalNoise: true,
+      resonance: false,
+    };
+    expect(studio.audio.setSound).toHaveBeenLastCalledWith({ voices: off });
+    expect(env.values.get("settings")).toMatchObject({ pianoVoices: off });
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    studio.pianoVoice("resonance", true);
+    expect(studio.transport.playing).toBe(false);
+    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
+    expect(studio.audio.prepare).toHaveBeenCalledOnce();
+    expect(studio.position).toBeCloseTo(position);
+    expect(studio.settings.pianoVoices.resonance).toBe(true);
   });
 
   it("changes sound live without interrupting playback or resetting practice", async () => {
@@ -539,13 +605,14 @@ describe("practice studio integration", () => {
       expect(studio.audio.prepare).toHaveBeenCalledWith(
         prepared,
         expect.any(AbortSignal),
+        [],
       );
       advance(studio, 1);
       expect(studio.position).toBeCloseTo(position);
       expect(studio.audio.setPlaybackNotes).not.toHaveBeenCalled();
       finish();
       await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
-      expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith(prepared);
+      expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith(prepared, []);
       expect(studio.position).toBeCloseTo(position);
     },
   );
@@ -590,6 +657,7 @@ describe("practice studio integration", () => {
     expect(studio.transport.loop).toEqual([0, 3]);
     expect(studio.audio.setPlaybackNotes).toHaveBeenCalledExactlyOnceWith(
       studio.notes,
+      [],
     );
   });
 
@@ -644,8 +712,12 @@ describe("practice studio integration", () => {
     expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
       studio.notes,
       expect.any(AbortSignal),
+      [],
     );
-    expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith(studio.notes);
+    expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith(
+      studio.notes,
+      [],
+    );
     expect(studio.position).toBe(1);
   });
 
@@ -665,7 +737,7 @@ describe("practice studio integration", () => {
       );
       await studio.play();
       expect(studio.audio.prepare).not.toHaveBeenCalled();
-      expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith([]);
+      expect(studio.audio.setPlaybackNotes).toHaveBeenCalledWith([], []);
       expect(studio.transport.playing).toBe(true);
       advance(studio, 0.5);
       midi(studio, [0x90, 60, 100]);
@@ -683,9 +755,11 @@ describe("practice studio integration", () => {
     await studio.play();
     expect(studio.audio.prepare).not.toHaveBeenCalled();
     await studio.preview();
+    // A preview plays no release, noise or resonance voices.
     expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
       [studio.notes[0]],
       expect.any(AbortSignal),
+      undefined,
     );
   });
 
@@ -710,6 +784,7 @@ describe("practice studio integration", () => {
       expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
         studio.notes,
         expect.any(AbortSignal),
+        [],
       ),
     );
     advance(studio, 1);
@@ -719,6 +794,7 @@ describe("practice studio integration", () => {
     expect(studio.position).toBe(0.25);
     expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith(
       studio.notes,
+      [],
     );
   });
 
@@ -741,12 +817,12 @@ describe("practice studio integration", () => {
     const preparation = vi.mocked(studio.audio.prepare).mock.results[0].value;
     studio.reference(false);
     await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
-    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([]);
+    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([], []);
     finish();
     await preparation;
     await Promise.resolve();
     expect(studio.settings.reference).toBe(false);
-    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([]);
+    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([], []);
     expect(studio.audio.prepare).toHaveBeenCalledOnce();
   });
 

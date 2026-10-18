@@ -17,6 +17,14 @@ export interface Note {
   notatedBeats?: number;
   staccato?: boolean;
 }
+/** A sustain-pedal press on one MIDI channel: down at `start`, up at `end`. */
+export interface PedalSpan {
+  channel: number;
+  start: number;
+  end: number;
+  /** The file ends with the pedal down: `end` is the file's end, not a lift. */
+  open?: true;
+}
 export interface Track {
   id: number;
   name: string;
@@ -41,6 +49,11 @@ export interface Song {
   tempos: Tempo[];
   ppq: number;
   timeSignatures?: TimeSignature[];
+  /**
+   * Sustain-pedal presses (CC64 at or above 64), in time order. Missing for
+   * songs without pedal data, including songs saved before it was recorded.
+   */
+  pedals?: PedalSpan[];
   /** Legacy lesson bar length, in quarter-note beats. */
   beatsPerBar?: number;
   leadInBeats?: number;
@@ -301,7 +314,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     };
   });
   // Controllers are channel-wide in SMF, even when a different track owns them.
-  const intervals = new Map<number, { start: number; end: number }[]>(),
+  const intervals = new Map<number, Omit<PedalSpan, "channel">[]>(),
     down = new Map<number, number>();
   const controls = events
     .flat()
@@ -324,7 +337,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
   }
   for (const [channel, start] of down) {
     const list = intervals.get(channel) || [];
-    list.push({ start, end: time(lastTick) });
+    list.push({ start, end: time(lastTick), open: true });
     intervals.set(channel, list);
   }
   for (const n of notes) {
@@ -337,15 +350,33 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
   notes.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
   const playable = tracks.filter((t) => t.count);
   if (playable.length === 1) playable[0].hand = "right";
+  const pedals = [...intervals]
+    .flatMap(([channel, list]) =>
+      // A press and lift at one instant sustain nothing, but they are
+      // still pedal actions, with their own noise.
+      list.map((span) => ({ channel, ...span })),
+    )
+    .sort((a, b) => a.start - b.start || a.channel - b.channel);
+  // Playback reaches the last pedal action that sounds, on a channel with
+  // notes. A file's end is not an action.
+  const channels = new Set(notes.map((n) => n.channel));
+  const lastAction = pedals.reduce(
+    (last, span) =>
+      channels.has(span.channel)
+        ? Math.max(last, span.open ? span.start : span.end)
+        : last,
+    -Infinity,
+  );
   return {
     id,
     title,
     notes,
     tracks,
-    duration: Math.max(...notes.map((n) => n.soundEnd)) + 0.5,
+    duration: Math.max(lastAction, ...notes.map((n) => n.soundEnd)) + 0.5,
     tempos,
     ppq,
     timeSignatures: timeSignatures.sort((a, b) => a.tick - b.tick),
+    pedals,
     warnings: [...new Set(warnings)],
   };
 }

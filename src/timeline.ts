@@ -16,6 +16,22 @@ export function lastIndexAtOrBefore<K extends string>(
   return low - 1;
 }
 
+/** The first index whose `key` is at least `value`, or the length. */
+export function firstIndexAtOrAfter<K extends string>(
+  items: readonly Record<K, number>[],
+  key: K,
+  value: number,
+) {
+  let low = 0,
+    high = items.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (items[middle][key] < value) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
 /** The MIDI tempo map in quarter-note beats, in both directions. */
 export function createBeatClock(ppq: number, changes: Tempo[]) {
   const resolution = ppq > 0 ? ppq : 480;

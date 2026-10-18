@@ -479,6 +479,29 @@ h1 {
   margin: 8px 0 0;
   line-height: 1.5;
 }
+.piano-sound-voices {
+  display: grid;
+  gap: 4px;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+.piano-sound-voices legend {
+  margin-bottom: 4px;
+  padding: 0;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.piano-sound-voices label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+.piano-sound-panel .piano-sound-voices input {
+  width: auto;
+  margin: 0;
+}
 .piano-sound > button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;

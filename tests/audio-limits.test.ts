@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  MAX_OPTIONAL_VOICES,
   MAX_PIANO_CACHE_BYTES,
   MAX_REFERENCE_VOICES,
   ReferenceAudio,
@@ -8,10 +9,18 @@ import {
   PIANO_REGIONS,
   pianoInstrument,
   pianoLevel,
+  pianoPlaybackRate,
   selectPianoRegion,
 } from "../src/piano";
+import {
+  PIANO_VOICE_GROUPS,
+  pianoVoiceEvents,
+  pianoVoiceFiles,
+  pianoVoiceRegions,
+} from "../src/pianoVoices";
+import { DEFAULT_PIANO_SOUND } from "../src/pianoSound";
 import { Transport } from "../src/engine";
-import type { Note } from "../src/song";
+import type { Note, PedalSpan } from "../src/song";
 const sampleRate = 48000;
 const instrumentMetadata: {
   files?: Record<string, { duration: number; channels: number }>;
@@ -1141,5 +1150,579 @@ describe("piano sample loading", () => {
     expect(audio.loading).toBe(false);
     audio.tone(63, 0.8, 0, 1);
     expect(context.createBufferSource).toHaveBeenCalledOnce();
+  });
+});
+
+describe("optional piano voices", () => {
+  /** A fixture with every release, noise and resonance recording loaded. */
+  function withVoices() {
+    const setup = fixture();
+    for (const group of Object.values(PIANO_VOICE_GROUPS))
+      for (const region of group.regions)
+        if (!setup.audio.samples.has(region.file))
+          setup.audio.samples.set(region.file, buffer(2));
+    const files = new Map(
+      [...setup.audio.samples].map(([file, sample]) => [sample, file]),
+    );
+    /** Each started voice's recording and start time, in the order started. */
+    const played = () =>
+      setup.nodes.map((node) => [
+        files.get(node.buffer!),
+        Math.round(node.start.mock.calls[0][0] * 1000) / 1000 || 0,
+      ]);
+    const gain = (index: number) =>
+      setup.context.createGain.mock.results[index].value.gain;
+    /** Tick the scheduler every 20 ms, as the practice clock does. */
+    const run = (notes: Note[], pedals: PedalSpan[], until: number) => {
+      for (let tick = 0; tick * 0.02 <= until; tick++) {
+        setup.context.currentTime = tick * 0.02;
+        setup.audio.schedule(notes, setup.transport, true, pedals);
+      }
+    };
+    const optional = () =>
+      [...setup.audio.voices].filter((voice) => voice.layer).length;
+    return { ...setup, played, gain, run, optional };
+  }
+  const passage = (): [Note[], PedalSpan[]] => [
+    [
+      // Released with the pedal up.
+      note(1, 60, 0.4),
+      // Struck with the pedal down, which holds it to 2 s.
+      { ...note(2, 64, 2), start: 0.5, end: 0.9 },
+    ],
+    [{ channel: 0, start: 0.45, end: 2 }],
+  ];
+
+  it("plays release, key and pedal noise, and resonance where the song triggers them", () => {
+    const { audio, played, gain, nodes, run } = withVoices();
+    run(...passage(), 2.2);
+    const release = pianoVoiceRegions("release", 60, 0.5)[0];
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5);
+    expect(played()).toEqual([
+      [fileFor(60, 0.5), 0],
+      ["rel40.flac", 0.4],
+      [release.file, 0.4],
+      ["pedalD1.flac", 0.45],
+      [fileFor(64, 0.5), 0.5],
+      ...resonance.map((region) => [region.file, 0.5]),
+      // The pedal holds the second key-up: key noise without harmonics.
+      ["rel44.flac", 0.9],
+      ["pedalU1.flac", 2],
+    ]);
+    expect(audio.error).toBe("");
+    // Harmonics fade by rt_decay for the 0.4 s the key was held, and play
+    // their recording out.
+    expect(gain(2).linearRampToValueAtTime).toHaveBeenCalledWith(
+      expect.closeTo(
+        pianoLevel(
+          { gainDb: release.gainDb - release.decayDbPerSecond * 0.4 },
+          0.5,
+        ),
+        12,
+      ),
+      expect.closeTo(0.403),
+    );
+    expect(gain(2).setTargetAtTime).not.toHaveBeenCalled();
+    expect(nodes[2].stop.mock.calls[0][0]).toBeCloseTo(
+      0.4 + 2 / pianoPlaybackRate(release, 60),
+    );
+    // Pedal noise is cut 0.1 s after the pedal lifts (off_time).
+    expect(gain(3).setTargetAtTime).toHaveBeenCalledWith(
+      0,
+      expect.closeTo(2),
+      expect.closeTo(0.1 / 7),
+    );
+    // Resonance swells in over 50 ms and is damped with its note.
+    const [, noteRelease, noteTimeConstant] =
+      gain(4).setTargetAtTime.mock.calls[0];
+    for (let i = 0; i < resonance.length; i++) {
+      expect(gain(5 + i).linearRampToValueAtTime.mock.calls[0][1]).toBeCloseTo(
+        0.55,
+      );
+      expect(gain(5 + i).setTargetAtTime).toHaveBeenCalledWith(
+        0,
+        expect.closeTo(noteRelease),
+        noteTimeConstant,
+      );
+    }
+  });
+
+  it("leaves out the voices that are turned off", () => {
+    const all = withVoices();
+    all.audio.setSound({
+      voices: {
+        release: false,
+        keyNoise: false,
+        pedalNoise: false,
+        resonance: false,
+      },
+    });
+    all.run(...passage(), 2.2);
+    expect(all.played()).toEqual([
+      [fileFor(60, 0.5), 0],
+      [fileFor(64, 0.5), 0.5],
+    ]);
+    const some = withVoices();
+    some.audio.setSound({
+      voices: { ...DEFAULT_PIANO_SOUND.voices, resonance: false },
+    });
+    some.run(...passage(), 2.2);
+    expect(some.played().map(([file]) => file)).toEqual([
+      fileFor(60, 0.5),
+      "rel40.flac",
+      pianoVoiceRegions("release", 60, 0.5)[0].file,
+      "pedalD1.flac",
+      fileFor(64, 0.5),
+      "rel44.flac",
+      "pedalU1.flac",
+    ]);
+  });
+
+  /** A pedalled chord, struck at `start`, of `count` keys from C1 up. */
+  const chord = (count: number, start: number): [Note[], PedalSpan[]] => [
+    Array.from({ length: count }, (_, i) => ({
+      ...note(i, 24 + i, 3),
+      start,
+      end: 2,
+    })),
+    [{ channel: 0, start, end: 3 }],
+  ];
+  const resonanceFor = (notes: Note[]) =>
+    notes.flatMap((n) => pianoVoiceRegions("resonance", n.pitch, n.velocity))
+      .length;
+
+  it.each([24, 48])(
+    "gives a %s-note pedalled chord's resonance only the voices notes leave, at most half",
+    (count) => {
+      const { audio, nodes, optional, run } = withVoices();
+      const [notes, pedals] = chord(count, 0.05);
+      const resonance = resonanceFor(notes);
+      expect(resonance).toBeGreaterThan(MAX_OPTIONAL_VOICES);
+      run(notes, pedals, 0);
+      const expected = Math.min(
+        MAX_OPTIONAL_VOICES,
+        MAX_REFERENCE_VOICES - count,
+      );
+      expect(optional()).toBe(expected);
+      expect(audio.voices.size).toBe(count + expected);
+      // Refused resonance is left out, not struck late once the chord sounds.
+      run(notes, pedals, 0.1);
+      expect(nodes).toHaveLength(count + expected);
+      for (const n of notes)
+        for (let i = 0; i < resonanceFor([n]); i++)
+          expect(audio.scheduled.has(`${n.id}~resonance~${i}`)).toBe(true);
+    },
+  );
+
+  it("lets a note at the cap take an optional voice before any note's", () => {
+    const { audio, transport, context, nodes, gain, optional } = withVoices();
+    // Older notes first, then a pedalled chord whose resonance fills the cap.
+    for (let i = 0; i < 40; i++) audio.tone(36 + i, 0.8, i / 1000, 10);
+    context.currentTime = 0.1;
+    const [notes, pedals] = chord(12, 0.1);
+    audio.schedule(notes, transport, true, pedals);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    expect(optional()).toBe(MAX_REFERENCE_VOICES - 52);
+    context.currentTime = 0.5;
+    // C7 has no resonance of its own.
+    const late = { ...note(99, 96, 3), start: 0.5, end: 2 };
+    audio.schedule([...notes, late], transport, true, pedals);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    expect(optional()).toBe(MAX_REFERENCE_VOICES - 53);
+    const faded = nodes
+      .map((_, index) => index)
+      .filter((index) => gain(index).cancelAndHoldAtTime.mock.calls.length);
+    // The oldest optional voice, not the older notes.
+    expect(faded).toEqual([52]);
+  });
+
+  it("lets a due note cancel an optional voice waiting to start before it takes a note's", () => {
+    const { audio, transport, context, nodes, gain } = withVoices();
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
+    const older = MAX_REFERENCE_VOICES - 1 - resonance;
+    for (let i = 0; i < older; i++) audio.tone(36 + i, 0.8, i / 1000, 10);
+    context.currentTime = 0.05;
+    // A pedalled note and its resonance wait to start at 0.1 s.
+    audio.schedule(
+      [{ ...note(1, 64, 3), start: 0.1, end: 2 }],
+      transport,
+      true,
+      [{ channel: 0, start: 0.1, end: 3 }],
+    );
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    // An on-screen preview, due now.
+    expect(audio.tone(100, 0.8, 0.05, 1)).toBe(true);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    const faded = nodes
+      .map((_, index) => index)
+      .filter((index) => gain(index).cancelAndHoldAtTime.mock.calls.length);
+    // One of the waiting resonance voices, after the older notes and the
+    // pedalled note at index `older`.
+    expect(faded).toHaveLength(1);
+    expect(faded[0]).toBeGreaterThan(older);
+  });
+
+  it("never takes a note's voice for an optional voice", () => {
+    const { audio, transport, context, nodes, gain } = withVoices();
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      audio.tone(36 + (i % 60), 0.8, i / 100, 10);
+    context.currentTime = 1;
+    // Its key comes up now, with the pedal up: harmonics and key noise.
+    const released = { ...note(99, 60, 1), end: 1 };
+    audio.schedule([released], transport, true);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
+    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      expect(gain(i).cancelAndHoldAtTime).not.toHaveBeenCalled();
+    expect(audio.scheduled).toEqual(new Set(["99~keyNoise~0", "99~release~0"]));
+  });
+
+  it("plays a voice due where playback starts after the first tick, but none from before it", () => {
+    const { audio, transport, context, played } = withVoices();
+    transport.seek(1, 0);
+    context.currentTime = 0.02;
+    const notes = [
+      { ...note(1, 60, 0.95), end: 0.95 },
+      // Its key comes up as playback starts: that belongs before it.
+      { ...note(2, 62, 1.5), start: 0.5, end: 1 },
+    ];
+    audio.schedule(notes, transport, true, [{ channel: 0, start: 1, end: 2 }]);
+    expect(played()).toEqual([
+      // The pedal holds it, so its note sounds from here.
+      [fileFor(62, 0.5), 0.02],
+      // The pedal pressed as playback starts, a tick late.
+      ["pedalD1.flac", 0],
+    ]);
+  });
+
+  it("sounds a key or pedal lift at the end of a loop pass, every pass", () => {
+    const { audio, context, played, gain } = withVoices();
+    const transport = new Transport(4);
+    transport.loop = [0, 1];
+    transport.play(0);
+    const notes = [{ ...note(1, 60, 1), end: 1 }];
+    const pedals = [
+      { channel: 0, start: 0.2, end: 1 },
+      // Pressed again after the loop ends.
+      { channel: 0, start: 1.05, end: 2 },
+    ];
+    for (let tick = 0; tick * 0.02 <= 1.95; tick++) {
+      context.currentTime = tick * 0.02;
+      transport.update(context.currentTime);
+      audio.schedule(notes, transport, true, pedals);
+    }
+    const release = pianoVoiceRegions("release", 60, 0.5)[0].file;
+    const lifts = played().filter(([file]) =>
+      ["rel40.flac", release, "pedalU1.flac", "pedalU2.flac"].includes(
+        file as string,
+      ),
+    );
+    expect(lifts.map(([, time]) => time)).toEqual([1, 1, 1, 2, 2, 2]);
+    expect(
+      played().filter(([file]) => (file as string).startsWith("pedalD")),
+    ).toEqual([
+      ["pedalD1.flac", 0.2],
+      ["pedalD1.flac", 1.2],
+    ]);
+    // The pedal's lift noise is not cut as it starts, but by the next pass's
+    // press, 0.2 s into it.
+    const lift = played().findIndex(([file]) => file === "pedalU1.flac");
+    expect(gain(lift).setTargetAtTime).toHaveBeenCalledExactlyOnceWith(
+      0,
+      expect.closeTo(1.2),
+      expect.closeTo(0.1 / 7),
+    );
+  });
+
+  it("still plays a lift a full lookahead late after a stall", () => {
+    const { audio, transport, context, played } = withVoices();
+    // The first tick comes 1.12 s after playback starts at 0.
+    context.currentTime = 1.12;
+    const late = transport.at(1.12) - 0.12 * transport.speed;
+    audio.schedule([{ ...note(1, 60, late), end: late }], transport, true, []);
+    expect(played().map(([file]) => file)).toEqual([
+      "rel40.flac",
+      pianoVoiceRegions("release", 60, 0.5)[0].file,
+    ]);
+  });
+
+  it("leaves a key that comes up as a loop pass begins to the passage before it", () => {
+    const { audio, context, played } = withVoices();
+    const transport = new Transport(4);
+    transport.loop = [1, 2];
+    transport.seek(1, 0);
+    transport.play(0);
+    const notes = [
+      { ...note(1, 60, 1), start: 0.5, end: 1 },
+      { ...note(2, 62, 2), start: 1.2, end: 2 },
+    ];
+    for (let tick = 0; tick * 0.02 <= 1.95; tick++) {
+      context.currentTime = tick * 0.02;
+      transport.update(context.currentTime);
+      audio.schedule(notes, transport, true, []);
+    }
+    expect(
+      played().filter(([file]) => (file as string).startsWith("rel")),
+    ).toEqual([
+      ["rel42.flac", 1],
+      ["rel42.flac", 2],
+    ]);
+  });
+
+  it("brings a pedalled note's resonance when it is struck where playback starts", () => {
+    const { audio, transport, played, gain } = withVoices();
+    transport.seek(1, 0);
+    const notes = [{ ...note(1, 64, 3), start: 0.5, end: 2.5 }];
+    audio.schedule(notes, transport, true, [{ channel: 0, start: 0, end: 3 }]);
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5);
+    expect(played()).toEqual([
+      [fileFor(64, 0.5), 0],
+      ...resonance.map((region) => [region.file, 0]),
+    ]);
+    for (let i = 0; i < resonance.length; i++) {
+      expect(gain(1 + i).linearRampToValueAtTime.mock.calls[0][1]).toBe(0.05);
+      // Damped with its note, 2 s of song from here.
+      expect(gain(1 + i).setTargetAtTime.mock.calls[0][1]).toBe(2);
+    }
+  });
+
+  it("damps resonance after its attack ramp when its note ends sooner", () => {
+    const { audio, transport, gain } = withVoices();
+    // Playback starts 20 ms before the pedal lifts and damps the note.
+    transport.seek(2.98, 0);
+    const notes = [{ ...note(1, 64, 3), start: 0.5, end: 2.5 }];
+    audio.schedule(notes, transport, true, [{ channel: 0, start: 0, end: 3 }]);
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
+    expect(resonance).toBeGreaterThan(0);
+    for (let i = 0; i < resonance; i++) {
+      const envelope = gain(1 + i);
+      const [, rampEnd] = envelope.linearRampToValueAtTime.mock.calls[0];
+      expect(rampEnd).toBeCloseTo(0.05);
+      expect(envelope.setTargetAtTime.mock.calls[0][1]).toBeGreaterThanOrEqual(
+        rampEnd,
+      );
+    }
+  });
+
+  it("stops a voice turned off, including sources waiting to start, but no note", () => {
+    const { audio, context, gain, played, run } = withVoices();
+    run(...passage(), 0.4);
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
+    // The second note and its resonance wait to start at 0.5 s.
+    expect(played()).toHaveLength(5 + resonance);
+    audio.setSound({
+      voices: { ...DEFAULT_PIANO_SOUND.voices, resonance: false },
+    });
+    for (let i = 0; i < 5; i++)
+      expect(gain(i).cancelAndHoldAtTime).not.toHaveBeenCalled();
+    for (let i = 0; i < resonance; i++)
+      expect(gain(5 + i).cancelAndHoldAtTime).toHaveBeenCalledWith(0.4);
+    expect(context.createBufferSource).toHaveBeenCalledTimes(5 + resonance);
+  });
+
+  it("decays release harmonics by the time the key was really held, across speed changes", () => {
+    const { audio, transport, context, gain, played, run } = withVoices();
+    // Held for 1 s of song: 0.5 s at 1x, then 0.5 s of song at half speed.
+    const notes = [{ ...note(1, 60, 1), end: 1 }];
+    run(notes, [], 0.5);
+    transport.setSpeed(0.5, 0.5);
+    audio.reschedule(transport);
+    for (let tick = 26; tick * 0.02 <= 1.6; tick++) {
+      context.currentTime = tick * 0.02;
+      audio.schedule(notes, transport, true, []);
+    }
+    const region = pianoVoiceRegions("release", 60, 0.5)[0];
+    const index = played().findIndex(([file]) => file === region.file);
+    expect(played()[index][1]).toBeCloseTo(1.5);
+    // 1.5 s of real time, not 1 s of song at the new half speed (2 s).
+    expect(gain(index).linearRampToValueAtTime.mock.calls[0][0]).toBeCloseTo(
+      pianoLevel(
+        { gainDb: region.gainDb - region.decayDbPerSecond * 1.5 },
+        0.5,
+      ),
+      12,
+    );
+  });
+
+  it("decays a release shared by notes struck apart by the shorter hold", () => {
+    const { audio, transport, context, gain, played } = withVoices();
+    // Two tracks hold the same key from 0 and from 0.5 s, and release it
+    // together at 1 s.
+    const notes = [
+      { ...note(1, 60, 1), end: 1 },
+      { ...note(2, 60, 1), start: 0.5, end: 1, track: 1 },
+    ];
+    for (let tick = 0; tick * 0.02 <= 1.1; tick++) {
+      context.currentTime = tick * 0.02;
+      audio.schedule(notes, transport, true, []);
+    }
+    const region = pianoVoiceRegions("release", 60, 0.5)[0];
+    const index = played().findIndex(([file]) => file === region.file);
+    expect(gain(index).linearRampToValueAtTime.mock.calls[0][0]).toBeCloseTo(
+      pianoLevel(
+        { gainDb: region.gainDb - region.decayDbPerSecond * 0.5 },
+        0.5,
+      ),
+      12,
+    );
+  });
+
+  it("takes optional voices from the passage playback prepared", () => {
+    const { audio, transport, context, played } = withVoices();
+    transport.loop = [0, 2];
+    const notes = [
+      { ...note(1, 60, 1), end: 1 },
+      // Outside the loop, on another channel with a pedal inside it.
+      { ...note(2, 48, 4), start: 3, end: 4, channel: 1 },
+    ];
+    const pedals = [{ channel: 1, start: 0.5, end: 1.5 }];
+    audio.setPlaybackNotes([notes[0]], pedals);
+    for (let tick = 0; tick * 0.02 <= 1.6; tick++) {
+      context.currentTime = tick * 0.02;
+      transport.update(context.currentTime);
+      audio.schedule(notes, transport, true, pedals);
+    }
+    // Channel 1 has no note in the prepared passage: no pedal noise.
+    expect(
+      played().filter(([file]) => (file as string).startsWith("pedal")),
+    ).toEqual([]);
+    // After a stop, the song's own notes and pedal apply again.
+    audio.stop();
+    const before = played().length;
+    context.currentTime = 0.5;
+    transport.seek(0.45, 0.5);
+    audio.schedule(notes, transport, true, pedals);
+    expect(
+      played()
+        .slice(before)
+        .map(([file]) => file),
+    ).toContain("pedalD1.flac");
+  });
+
+  it("lets go of a song's optional voice events when playback stops", () => {
+    const { audio, transport } = withVoices();
+    const cache = () =>
+      (audio as unknown as { voiceEventCache?: unknown }).voiceEventCache;
+    audio.schedule([note(1, 60, 0.4)], transport, true, []);
+    expect(cache()).toBeDefined();
+    audio.stop();
+    expect(cache()).toBeUndefined();
+  });
+
+  it("moves resonance and pedal noise to a new speed with their notes", () => {
+    const { audio, transport, context, gain, run } = withVoices();
+    run(...passage(), 0.6);
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
+    context.currentTime = 1;
+    transport.setSpeed(0.5, 1);
+    audio.reschedule(transport);
+    // One second of song remains before the pedal lifts, now two seconds.
+    for (const index of [
+      3,
+      ...Array.from({ length: resonance }, (_, i) => 5 + i),
+    ])
+      expect(gain(index).setTargetAtTime.mock.lastCall![1]).toBeCloseTo(3);
+    // Released harmonics play out as they were.
+    expect(gain(2).cancelAndHoldAtTime).not.toHaveBeenCalled();
+  });
+});
+
+describe("optional piano voice loading", () => {
+  const response = () => ({
+    ok: true,
+    arrayBuffer: async () => new ArrayBuffer(8),
+  });
+  const song = (): [Note[], PedalSpan[]] => [
+    [
+      { ...note(1, 60, 0.4), velocity: 0.8 },
+      { ...note(2, 64, 2), start: 0.5, end: 0.9, velocity: 0.8 },
+    ],
+    [{ channel: 0, start: 0.45, end: 2 }],
+  ];
+
+  it("loads the optional recordings a passage triggers, but none for a preview", async () => {
+    const { audio } = fixture(false);
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.endsWith("pedalU1.flac")) throw new Error("offline");
+      return response();
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await audio.unlock();
+    await audio.prepare([sound(60)]);
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [notes, pedals] = song();
+    await audio.prepare(notes, undefined, pedals);
+    const files = pianoVoiceFiles(
+      pianoVoiceEvents(notes, pedals),
+      DEFAULT_PIANO_SOUND.voices,
+    );
+    expect(files).toEqual(
+      expect.arrayContaining([
+        "rel40.flac",
+        "rel44.flac",
+        pianoVoiceRegions("release", 60, 0.8)[0].file,
+        "pedalD1.flac",
+        "pedalU1.flac",
+        ...pianoVoiceRegions("resonance", 64, 0.8).map((r) => r.file),
+      ]),
+    );
+    // A recording that fails to load leaves its voice out, not the passage.
+    expect(audio.error).toBe("");
+    expect([...audio.samples.keys()].sort()).toEqual(
+      [
+        ...new Set([
+          fileFor(60),
+          fileFor(64),
+          ...files.filter((file) => file !== "pedalU1.flac"),
+        ]),
+      ].sort(),
+    );
+  });
+
+  it("loads only the voices that are turned on", async () => {
+    const { audio } = fixture(false);
+    const fetcher = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetcher);
+    await audio.unlock();
+    audio.setSound({
+      voices: {
+        release: false,
+        keyNoise: true,
+        pedalNoise: false,
+        resonance: false,
+      },
+    });
+    const [notes, pedals] = song();
+    await audio.prepare(notes, undefined, pedals);
+    expect([...audio.samples.keys()].sort()).toEqual(
+      [fileFor(60), fileFor(64), "rel40.flac", "rel44.flac"].sort(),
+    );
+  });
+
+  it("plays a passage without the optional recordings that do not fit", async () => {
+    const { audio, context } = fixture(false);
+    const fetcher = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetcher);
+    // Unknown metadata uses the conservative 32 MiB estimate per recording:
+    // the note's fits beside the sounding one, then no optional one does.
+    instrumentMetadata.files = {
+      [fileFor(66)]: { duration: 1, channels: 2 },
+    };
+    const sounding = fileFor(72);
+    audio.samples.set(sounding, sizedBuffer(476 * 1024 * 1024));
+    await audio.unlock();
+    audio.tone(72, 0.8, 0, 10);
+    const notes = [{ ...note(1, 60, 0.4), velocity: 0.8 }];
+    await audio.prepare(notes, undefined, []);
+    expect(audio.error).toBe("");
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith(
+      `/audio/accurate-salamander/${fileFor(60)}`,
+      expect.anything(),
+    );
+    // Recordings that did not load hold no place: another note still fits.
+    audio.setPlaybackNotes(notes, []);
+    await audio.prepare([sound(66)]);
+    expect(audio.samples.has(fileFor(66))).toBe(true);
+    expect(context.decodeAudioData).toHaveBeenCalledTimes(2);
   });
 });
