@@ -77,7 +77,7 @@ class ManifestPublicationTests(unittest.TestCase):
             self.assertEqual((output / "manifest.json").read_bytes(), previous)
             self.assertEqual(extraction.call_count, 2)
             metadata = json.loads((output / "source/regions.json").read_text())
-            self.assertEqual(len(metadata["regions"]), 704)
+            self.assertEqual(len(metadata["regions"]), 1408)
             self.assertNotIn("files", metadata)
 
     def test_fresh_metadata_only_import_does_not_publish_an_incomplete_bank(self):
@@ -92,8 +92,8 @@ class ManifestPublicationTests(unittest.TestCase):
             (output / "manifest.json").write_text('{"previous":true}')
             self.run_import(output)
             manifest = json.loads((output / "manifest.json").read_text())
-            self.assertEqual(len(manifest["files"]), 240)
-            self.assertEqual(len(manifest["regions"]), 704)
+            self.assertEqual(len(manifest["files"]), 480)
+            self.assertEqual(len(manifest["regions"]), 1408)
             self.assertFalse((output / "manifest.json.part").exists())
             for region in manifest["regions"]:
                 self.assertAlmostEqual(region["offset"], region["offsetFrames"] / 47917)

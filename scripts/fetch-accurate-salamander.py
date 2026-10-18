@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch a pinned, lossless eight-layer Accurate-Salamander browser bank.
+"""Fetch a pinned, lossless sixteen-layer Accurate-Salamander browser bank.
 
 Uses HTTP ranges to extract only selected ZIP members. The archive is never
 downloaded in full. Python 3 standard library only; reruns verify/reuse files.
@@ -23,11 +23,9 @@ ARCHIVE_URL = (
 )
 ARCHIVE_BYTES = 784289077
 SFZ_MEMBER = "sfz_live/Accurate-SalamanderGrandPiano_flat.Recommended.sfz"
-SOURCE_LAYERS = [1, 3, 5, 7, 9, 11, 13, 16]
-# Midpoints between the centres of the selected original SFZ velocity bands.
-# MIDI velocity 1 is silent in the original live preset.
-VELOCITY_BANDS = [(2, 24), (25, 40), (41, 50), (51, 61),
-                  (62, 75), (76, 91), (92, 111), (112, 127)]
+# Every recorded attack layer, with the live preset's own velocity bands.
+# MIDI velocity 1 is silent in that preset.
+SOURCE_LAYERS = list(range(1, 17))
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "public/audio/accurate-salamander"
 
 
@@ -145,12 +143,12 @@ def build_manifest(sfz):
             if not match or int(match[1]) not in SOURCE_LAYERS:
                 continue
             layer = int(match[1])
-            band = VELOCITY_BANDS[SOURCE_LAYERS.index(layer)]
             if merged["lokey"] != merged["hikey"]:
                 raise ValueError("Expected exact, per-key SFZ mapping")
             regions.append({
                 "pitch": int(merged["lokey"]),
-                "velocityMin": band[0], "velocityMax": band[1],
+                "velocityMin": int(merged["lovel"]),
+                "velocityMax": int(merged.get("hivel", 127)),
                 "sourceLayer": layer, "file": browser_filename(source_name),
                 "rootPitch": int(merged["pitch_keycenter"]),
                 "tune": float(merged.get("tune", 0)),
@@ -159,8 +157,8 @@ def build_manifest(sfz):
                 "gainDb": float(merged.get("volume", 0)),
                 "releaseSeconds": float(merged.get("ampeg_release", .5)),
             })
-    if len(regions) != 88 * 8:
-        raise ValueError(f"Expected 704 regions, got {len(regions)}")
+    if len(regions) != 88 * len(SOURCE_LAYERS):
+        raise ValueError(f"Expected {88 * len(SOURCE_LAYERS)} regions, got {len(regions)}")
     for pitch in range(21, 109):
         if [r["sourceLayer"] for r in regions if r["pitch"] == pitch] != SOURCE_LAYERS:
             raise ValueError(f"Incomplete key: {pitch}")
@@ -195,8 +193,8 @@ def main():
     wanted = {r["file"] for r in manifest["regions"]}
     sample_entries = {name: entry for name, entry in index.items()
                       if name.startswith("48khz24bit/") and browser_filename(name) in wanted}
-    if len(sample_entries) != 240:
-        raise ValueError(f"Expected 240 unique samples, got {len(sample_entries)}")
+    if len(sample_entries) != len(wanted):
+        raise ValueError(f"Expected {len(wanted)} unique samples, got {len(sample_entries)}")
     total = sum(entry["size"] for entry in sample_entries.values())
     print(f"{len(manifest['regions'])} key/velocity regions, {len(sample_entries)} FLAC samples, {total:,} bytes", flush=True)
     if args.dry_run:

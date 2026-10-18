@@ -10,7 +10,7 @@ import {
 } from "../src/piano";
 
 const pitches = Array.from({ length: 88 }, (_, i) => i + 21);
-const sourceLayers = [1, 3, 5, 7, 9, 11, 13, 16];
+const sourceLayers = Array.from({ length: 16 }, (_, i) => i + 1);
 
 describe("Accurate-Salamander instrument", () => {
   it("uses the lossless 24-bit instrument and its source regions", () => {
@@ -24,11 +24,11 @@ describe("Accurate-Salamander instrument", () => {
       sourceLayers,
     });
     expect(PIANO_REGIONS).toEqual(manifest.regions);
-    expect(PIANO_REGIONS).toHaveLength(704);
-    expect(new Set(PIANO_REGIONS.map((region) => region.file)).size).toBe(240);
+    expect(PIANO_REGIONS).toHaveLength(1408);
+    expect(new Set(PIANO_REGIONS.map((region) => region.file)).size).toBe(480);
   });
 
-  it("covers all 88 piano keys with eight nonoverlapping velocity bands", () => {
+  it("covers all 88 piano keys with sixteen nonoverlapping velocity bands", () => {
     expect([...new Set(PIANO_REGIONS.map((region) => region.pitch))]).toEqual(
       pitches,
     );
@@ -99,7 +99,7 @@ describe("Accurate-Salamander instrument", () => {
     }
   });
 
-  it("moves through all eight recordings as playing intensity increases", () => {
+  it("moves through all sixteen recordings as playing intensity increases", () => {
     for (const pitch of pitches) {
       const selected = Array.from({ length: 126 }, (_, i) =>
         selectPianoRegion(pitch, (i + 2) / 127)!,

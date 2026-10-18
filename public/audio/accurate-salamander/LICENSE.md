@@ -14,11 +14,9 @@ The exact source archive, member names, sizes, and checksums are recorded there.
 
 ## Browser adaptation
 
-This app uses eight of the original sixteen attack layers: 1, 3, 5, 7, 9, 11, 13,
-and 16. All 88 key mappings retain the live preset's per-key pitch correction,
-sample root, offset, volume, and release settings. The velocity boundaries are
-adapted to cover the reduced layer set; they are midpoints between the centres of
-the selected original layers. Velocity 1 is silent in the upstream live preset.
+This app uses all sixteen original attack layers. All 88 key mappings retain the
+live preset's velocity bands and per-key pitch correction, sample root, offset,
+volume, and release settings. Velocity 1 is silent in the upstream live preset.
 
 The FLAC audio files are byte-for-byte unchanged from the official nominal 48 kHz,
 24-bit stereo release, including slight per-sample rate adjustments used for

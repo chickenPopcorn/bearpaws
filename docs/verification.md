@@ -36,7 +36,7 @@ selection, separate-hand practice, all score notes, and seeking across the
 original MIDI download and byte-identical regeneration of the 26-song starter
 pack; full arrangements remain outside that pack.
 
-The sample bank contains 240 lossless FLACs, about 358 MiB compressed. Checks
+The sample bank contains 480 lossless FLACs, about 723 MiB compressed. Checks
 verify all hashes against the recorded source metadata. Runtime loading remains
 selective, with a 512 MiB decoded cache limit; a full-bank download is not needed
 to open the page. The CI artifact includes the complete bank.
