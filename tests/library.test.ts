@@ -63,6 +63,19 @@ describe("song library", () => {
       /bad note/,
     ],
     ["no duration", (song: Song) => ({ ...song, duration: 0 }), /duration/],
+    [
+      "two notes with one id",
+      (song: Song) => ({
+        ...song,
+        notes: [song.notes[0], { ...song.notes[1], id: song.notes[0].id }],
+      }),
+      /duplicate note id/,
+    ],
+    [
+      "two tracks with one id",
+      (song: Song) => ({ ...song, tracks: [song.tracks[0], song.tracks[0]] }),
+      /duplicate track id/,
+    ],
   ])("rejects a song with %s", (_, change, problem) => {
     expect(() => validateSong(change(ode()), ode().id)).toThrow(problem);
   });

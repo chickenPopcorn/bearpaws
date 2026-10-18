@@ -82,10 +82,14 @@ export function validateSong(value: unknown, id: string): Song {
       !whole(track.count)
     )
       fail(where, "each track needs id, name, hand and count");
+    if (tracks.has(track.id as number))
+      fail(where, `duplicate track id ${track.id}`);
     tracks.add(track.id as number);
   }
   if (!Array.isArray(value.notes) || !value.notes.length)
     fail(where, "missing notes");
+  // Scoring and rendering key on note ids, so each must be unique.
+  const notes = new Set<string>();
   for (const note of value.notes as unknown[]) {
     if (
       !isRecord(note) ||
@@ -101,6 +105,9 @@ export function validateSong(value: unknown, id: string): Song {
       !tracks.has(note.track as number)
     )
       fail(where, `bad note ${isRecord(note) ? String(note.id) : ""}`);
+    if (notes.has(note.id as string))
+      fail(where, `duplicate note id ${note.id}`);
+    notes.add(note.id as string);
   }
   return value as unknown as Song;
 }

@@ -24,7 +24,7 @@ import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { collectionForSong, songsInCollection } from "./collections";
-import { CloudSync } from "./cloud";
+import { BrowserStorageError, CloudSync } from "./cloud";
 import { OpeningStudio, SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
@@ -998,6 +998,14 @@ function Root() {
     const open = async (userId: string, email: string) => {
       if (userId === user.current) return;
       user.current = userId;
+      // The session ended or changed outside this page's Sign out button, such
+      // as in another tab: close the studio and stop its sync, so nothing more
+      // is sent for the old session. Supabase has already signed out.
+      if (cloud) {
+        studio.destroy();
+        cloud.stop();
+        cloud = null;
+      }
       if (!userId) {
         setGate({ status: "signed-out", error: "" });
         return;
@@ -1014,13 +1022,15 @@ function Root() {
           ),
           sync.pull(),
         ]);
-      } catch {
+      } catch (error) {
         if (user.current !== userId) return;
         // Still signed in: offer a retry, not another Google sign-in.
         setGate({
           status: "failed",
           error:
-            "Your songs could not be loaded. Check your connection and try again.",
+            error instanceof BrowserStorageError
+              ? error.message
+              : "Your songs could not be loaded. Check your connection and try again.",
         });
         return;
       }
@@ -1042,16 +1052,19 @@ function Root() {
   const signOut = useCallback(async () => {
     if (!cloud) return;
     const sync = cloud;
-    // Stop the studio first, so its last save is uploaded, not left behind.
-    studio.destroy();
-    setGate({ status: "loading" });
+    // Queue the latest position, so the upload before signing out carries it.
+    studio.save();
     try {
-      await sync.signOut();
-    } finally {
-      cloud = null;
-      user.current = "";
-      setGate({ status: "signed-out", error: "" });
+      await sync.signOut(() => studio.destroy());
+    } catch {
+      // Supabase still holds the session: stay signed in, and say so.
+      studio.notice = "Sign-out failed. Check your connection and try again.";
+      studio.emit();
+      return;
     }
+    cloud = null;
+    user.current = "";
+    setGate({ status: "signed-out", error: "" });
   }, []);
   if (gate.status === "ready")
     return (

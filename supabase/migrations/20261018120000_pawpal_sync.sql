@@ -20,6 +20,19 @@ create table public.settings (
   updated_at timestamptz not null default now()
 );
 
+-- The server stamps every write, so no device's clock decides anything.
+create function public.stamp_updated_at() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+create trigger progress_stamp before insert or update on public.progress
+  for each row execute function public.stamp_updated_at();
+create trigger settings_stamp before insert or update on public.settings
+  for each row execute function public.stamp_updated_at();
+
 alter table public.progress enable row level security;
 alter table public.settings enable row level security;
 

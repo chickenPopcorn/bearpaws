@@ -3,6 +3,7 @@ import {
   clearAccountData,
   localProgress,
   read,
+  removeProgress,
   write,
   type Progress,
   type Settings,
@@ -12,21 +13,50 @@ import {
 const DEBOUNCE_MS = 2000;
 /** A failed upload is tried again after this long. */
 const RETRY_MS = 15000;
-/** A request that takes longer than this is treated as failed. */
+/** A request that takes longer than this is aborted and treated as failed. */
 const TIMEOUT_MS = 30000;
+const NO_RESPONSE = "The account service did not respond.";
 
-/** Reject when `work` has not settled within TIMEOUT_MS. */
-function timed<T>(work: PromiseLike<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  return Promise.race([
-    Promise.resolve(work),
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error("The account service did not respond.")),
-        TIMEOUT_MS,
-      );
-    }),
-  ]).finally(() => clearTimeout(timer));
+/** This browser cannot store the account's data, so the studio cannot open. */
+export class BrowserStorageError extends Error {
+  constructor() {
+    super(
+      "This browser is blocking site storage, so your account cannot load here. Allow site data for this page and try again.",
+    );
+  }
+}
+
+/** Run a request with a time limit. Past it, the request is aborted. */
+async function timed<T>(
+  start: (signal: AbortSignal) => PromiseLike<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(NO_RESPONSE));
+    }, TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([
+      Promise.resolve(start(controller.signal)),
+      late,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Changes this browser has not confirmed with the account, kept in browser
+ * storage so they survive a reload. pull() lets these win over the account's
+ * copy; everything else follows the account, whatever each device's clock says.
+ */
+interface Unsynced {
+  settings?: boolean;
+  progress?: string[];
+  deleted?: string[];
 }
 
 /** What the studio reports so the signed-in account stays current. */
@@ -41,11 +71,14 @@ export interface SyncHooks {
  * Keeps one user's settings and practice progress in their Supabase account.
  * Imported MIDI files never leave the browser. This browser's storage stays
  * the working copy: pull() fills it from the account at sign-in, and later
- * changes upload shortly after they happen.
+ * changes upload shortly after they happen, one upload at a time.
  */
 export class CloudSync implements SyncHooks {
   private pendingSettings: Settings | null = null;
   private pendingProgress = new Map<string, Progress>();
+  private pendingDeletes = new Set<string>();
+  /** What the upload in progress carries, until the account confirms it. */
+  private inFlight: Required<Unsynced> | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private flushing: Promise<void> | null = null;
   private stopped = false;
@@ -65,12 +98,18 @@ export class CloudSync implements SyncHooks {
 
   /** Make this browser's storage match the account before the studio opens. */
   async pull() {
+    const store = (key: string, value: unknown) => {
+      if (!write(key, value)) throw new BrowserStorageError();
+    };
     // Another account's settings and progress must not show in, or upload
     // to, this one. Imported songs belong to the browser and stay.
     const owner = read<string | null>("owner", null);
     if (owner && owner !== this.userId) clearAccountData();
-    write("owner", this.userId);
-    const [settings, progress] = await timed(
+    // The first account on this browser adopts what was saved here before.
+    const adopting = owner !== this.userId;
+    const unsynced = adopting ? {} : read<Unsynced>("unsynced", {});
+    store("owner", this.userId);
+    const [settings, progress] = await timed(() =>
       Promise.all([
         this.client.from("settings").select("data").maybeSingle(),
         this.client.from("progress").select("song_id, data"),
@@ -79,61 +118,82 @@ export class CloudSync implements SyncHooks {
     if (settings.error) throw settings.error;
     if (progress.error) throw progress.error;
 
-    // The account's settings win. A first sign-in uploads this browser's.
-    if (settings.data) write("settings", settings.data.data);
-    else {
-      const local = read<Settings | null>("settings", null);
-      if (local) this.pendingSettings = local;
-    }
+    // Settings: this browser's unconfirmed change wins, then the account's.
+    const localSettings = read<Settings | null>("settings", null);
+    if (localSettings && (unsynced.settings || !settings.data))
+      this.pendingSettings = localSettings;
+    else if (settings.data) store("settings", settings.data.data);
 
-    // For each song, the more recently updated progress wins.
+    // Progress: this browser's unconfirmed changes win; otherwise the account
+    // is the record. Adopted progress fills in songs the account lacks.
     const remote = new Map(
       (progress.data as { song_id: string; data: Partial<Progress> }[]).map(
         (row) => [row.song_id, row.data],
       ),
     );
+    const changed = new Set(unsynced.progress);
+    for (const id of unsynced.deleted ?? []) {
+      this.pendingDeletes.add(id);
+      remote.delete(id);
+    }
     for (const { id, progress: local } of localProgress()) {
-      const theirs = remote.get(id);
-      if (!theirs || (local.updated ?? "") > (theirs.updated ?? "")) {
+      if (changed.has(id) || (adopting && !remote.has(id))) {
         this.pendingProgress.set(id, local as Progress);
         remote.delete(id);
+      } else if (!remote.has(id) && !this.pendingDeletes.has(id)) {
+        // Uploaded before, and since removed from the account.
+        try {
+          removeProgress(id);
+        } catch {
+          throw new BrowserStorageError();
+        }
       }
     }
-    for (const [id, data] of remote) write(`progress:${id}`, data);
-
+    for (const [id, data] of remote) store(`progress:${id}`, data);
     this.error = "";
-    if (this.pendingSettings || this.pendingProgress.size) this.schedule(0);
+    this.saveUnsynced();
+    if (this.pending) this.schedule(0);
   }
 
   settings(settings: Settings) {
     if (this.stopped) return;
     this.pendingSettings = { ...settings };
+    this.saveUnsynced();
     this.schedule();
   }
 
   progress(songId: string, progress: Progress) {
     if (this.stopped) return;
+    this.pendingDeletes.delete(songId);
     this.pendingProgress.set(songId, { ...progress });
+    this.saveUnsynced();
     this.schedule();
   }
 
   forgetProgress(songId: string) {
-    this.pendingProgress.delete(songId);
     if (this.stopped) return;
-    void timed(
-      this.client.from("progress").delete().eq("song_id", songId),
-    ).then(
-      (result) => {
-        if (result.error)
-          this.setError(
-            "The song's progress could not be removed from your account.",
-          );
-      },
-      () =>
-        this.setError(
-          "The song's progress could not be removed from your account.",
-        ),
-    );
+    // Deletes join the upload queue, so an upload already under way cannot
+    // land after the delete and bring the progress back.
+    this.pendingProgress.delete(songId);
+    this.pendingDeletes.add(songId);
+    this.saveUnsynced();
+    this.schedule();
+  }
+
+  private saveUnsynced() {
+    const flight = this.inFlight;
+    write("unsynced", {
+      settings: !!this.pendingSettings || !!flight?.settings,
+      progress: [
+        ...new Set([
+          ...this.pendingProgress.keys(),
+          ...(flight?.progress ?? []),
+        ]),
+      ],
+      deleted: [
+        ...new Set([...this.pendingDeletes, ...(flight?.deleted ?? [])]),
+      ],
+    } satisfies Unsynced);
   }
 
   private schedule(delay = DEBOUNCE_MS) {
@@ -145,74 +205,117 @@ export class CloudSync implements SyncHooks {
   }
 
   get pending() {
-    return !!this.pendingSettings || this.pendingProgress.size > 0;
+    return (
+      !!this.pendingSettings ||
+      this.pendingProgress.size > 0 ||
+      this.pendingDeletes.size > 0
+    );
   }
 
   /** Upload waiting changes now. Failures stay queued and retry later. */
   async flush(): Promise<void> {
-    if (this.flushing) await this.flushing;
-    if (!this.pending) return;
+    // One upload at a time: a newer change never overtakes an older request.
+    while (this.flushing) await this.flushing;
+    if (!this.pending || this.stopped) return;
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
     const settings = this.pendingSettings,
-      progress = [...this.pendingProgress];
+      progress = [...this.pendingProgress],
+      deleted = [...this.pendingDeletes];
     this.pendingSettings = null;
     this.pendingProgress.clear();
-    const updated = new Date().toISOString();
+    this.pendingDeletes.clear();
+    this.inFlight = {
+      settings: !!settings,
+      progress: progress.map(([id]) => id),
+      deleted,
+    };
     this.flushing = (async () => {
+      // Aborting at the time limit settles the request, so it cannot land
+      // after the retry that replaces it.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
       let ok = false;
       try {
-        const results = await timed(
-          Promise.all([
-            settings &&
-              this.client.from("settings").upsert({
-                user_id: this.userId,
-                data: settings,
-                updated_at: updated,
-              }),
-            progress.length > 0 &&
-              this.client.from("progress").upsert(
+        const results = await Promise.all([
+          settings &&
+            this.client
+              .from("settings")
+              .upsert({ user_id: this.userId, data: settings })
+              .abortSignal(controller.signal),
+          progress.length > 0 &&
+            this.client
+              .from("progress")
+              .upsert(
                 progress.map(([song_id, data]) => ({
                   user_id: this.userId,
                   song_id,
                   data,
-                  updated_at: updated,
                 })),
-              ),
-          ]),
-        );
+              )
+              .abortSignal(controller.signal),
+          deleted.length > 0 &&
+            this.client
+              .from("progress")
+              .delete()
+              .in("song_id", deleted)
+              .abortSignal(controller.signal),
+        ]);
         ok = results.every((result) => !result || !result.error);
-      } catch {}
-      if (ok) {
-        this.setError("");
-        return;
+      } catch {
+      } finally {
+        clearTimeout(timer);
       }
-      // Requeue what failed, unless a newer change arrived meanwhile.
-      if (settings && !this.pendingSettings) this.pendingSettings = settings;
-      for (const [id, data] of progress)
-        if (!this.pendingProgress.has(id)) this.pendingProgress.set(id, data);
-      this.setError("Changes could not be saved to your account. Retrying.");
-      this.schedule(RETRY_MS);
+      this.inFlight = null;
+      if (!ok) {
+        // Requeue what failed, unless a newer change arrived meanwhile.
+        if (settings && !this.pendingSettings) this.pendingSettings = settings;
+        for (const [id, data] of progress)
+          if (!this.pendingProgress.has(id) && !this.pendingDeletes.has(id))
+            this.pendingProgress.set(id, data);
+        for (const id of deleted)
+          if (!this.pendingProgress.has(id)) this.pendingDeletes.add(id);
+      }
+      if (this.stopped) return;
+      this.saveUnsynced();
+      if (ok) this.setError("");
+      else {
+        this.setError("Changes could not be saved to your account. Retrying.");
+        this.schedule(RETRY_MS);
+      }
     })().finally(() => {
       this.flushing = null;
     });
     await this.flushing;
   }
 
-  /**
-   * Upload what is waiting, stop syncing, and sign out. This browser's copy of
-   * the account's settings and progress is cleared unless some changes could
-   * not be uploaded: the next sign-in by the same account uploads them then.
-   * Imported songs stay on the browser.
-   */
-  async signOut() {
-    await this.flush();
+  /** Stop syncing, such as when the session ended elsewhere. Nothing more is sent. */
+  stop() {
     this.stopped = true;
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
-    if (!this.pending) clearAccountData();
-    await this.client.auth.signOut();
+    this.pendingSettings = null;
+    this.pendingProgress.clear();
+    this.pendingDeletes.clear();
+  }
+
+  /**
+   * Upload what is waiting, then sign out. Throws, still signed in and still
+   * syncing, if Supabase cannot end the session. Once signed out,
+   * `closeStudio` runs, syncing stops, and this browser's copy of the
+   * account's settings and progress is cleared, unless some changes could not
+   * be uploaded: the next sign-in by the same account uploads them then.
+   * Imported songs stay on the browser.
+   */
+  async signOut(closeStudio: () => void = () => {}) {
+    await this.flush();
+    const unsent = this.pending;
+    const { error } = await timed(() => this.client.auth.signOut());
+    if (error) throw error;
+    closeStudio();
+    this.stop();
+    if (!unsent) clearAccountData();
   }
 }
