@@ -496,6 +496,74 @@ describe("review regressions", () => {
     );
   });
 
+  it.each([
+    // [canvas width, pitch, label expected]: C3-C6 spans 22 white keys.
+    ["phone white key", 330, 60, true],
+    ["tablet black key", 452, 61, true],
+    ["phone black key", 330, 61, false],
+  ] as const)(
+    "shows only the finger on a narrow waterfall bar (%s)",
+    (_, width, pitch, shown) => {
+      vi.stubGlobal("window", { devicePixelRatio: 1 });
+      const n: Note = {
+        ...note("narrow-finger", pitch, 1, 2),
+        finger: 2,
+        fingerHand: "right",
+      };
+      const fixture = song([n]);
+      const { canvas, context, labelPaints } = drawingCanvas(width);
+      draw(
+        canvas,
+        fixture,
+        fixture.notes,
+        0,
+        new MidiState(),
+        new Practice(fixture.notes),
+        true,
+        false,
+        false,
+      );
+      const [x, , w] = context.roundRect.mock.calls[0] as number[];
+      expect(w).toBeLessThanOrEqual(18);
+      const waterfall = labelPaints.filter(({ y }) => y < strikeLine);
+      expect(waterfall.some(({ text }) => text.startsWith("C"))).toBe(false);
+      const finger = waterfall.filter(({ text }) => text === "2");
+      expect(finger).toHaveLength(shown ? 1 : 0);
+      if (shown) expect(finger[0].x).toBeCloseTo(x + w / 2);
+    },
+  );
+
+  it.each([
+    ["left edge when nothing covers it", [] as number[], "left"],
+    ["right edge when a low note covers the left", [48], "right"],
+    ["left edge on a chip when both edges are covered", [48, 84], "chip"],
+  ] as const)("places a bar label at the %s", (_, pitches, place) => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    // Beat 5 is at 2 seconds; each note spans the label just below its line.
+    const fixture = song(
+      pitches.map((pitch) => note(`edge-${pitch}`, pitch, 1.8, 2.4)),
+    );
+    const { canvas, labelPaints, noteFills } = drawingCanvas();
+    draw(
+      canvas,
+      fixture,
+      fixture.notes,
+      0,
+      new MidiState(),
+      new Practice(fixture.notes),
+      false,
+      false,
+      false,
+    );
+    const label = labelPaints.find(({ text }) => text === "beat 5")!;
+    expect(label.y).toBeCloseTo(strikeLine - 2 * pixelsPerSecond - 5);
+    // The test canvas measures text at 0.6 em per character.
+    expect(label.x).toBeCloseTo(place === "right" ? 880 - 7 - 6 * 12 * 0.6 : 7);
+    expect(noteFills.some(({ color }) => color === "#eeedf5")).toBe(
+      place === "chip",
+    );
+  });
+
   it("labels the playing key with its full pitch and finger while inactive keys stay unlabelled", () => {
     vi.stubGlobal("window", { devicePixelRatio: 1 });
     const right: Note = {
