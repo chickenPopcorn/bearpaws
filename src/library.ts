@@ -79,10 +79,15 @@ export function validateSong(value: unknown, id: string): Song {
   if (
     !Array.isArray(value.tempos) ||
     !value.tempos.every(
-      (t) => isRecord(t) && whole(t.tick) && finite(t.microseconds),
+      (t) =>
+        isRecord(t) &&
+        whole(t.tick) &&
+        (t.tick as number) >= 0 &&
+        finite(t.microseconds) &&
+        (t.microseconds as number) > 0,
     )
   )
-    fail(where, "tempos must be a list of { tick, microseconds }");
+    fail(where, "tempos must be a list of { tick, microseconds > 0 }");
   if (
     value.timeSignatures !== undefined &&
     !(
@@ -92,7 +97,9 @@ export function validateSong(value: unknown, id: string): Song {
           isRecord(t) &&
           whole(t.tick) &&
           whole(t.numerator) &&
-          whole(t.denominator),
+          (t.numerator as number) > 0 &&
+          whole(t.denominator) &&
+          (t.denominator as number) > 0,
       )
     )
   )

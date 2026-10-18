@@ -7,7 +7,8 @@
 // song, put its MIDI file at songs/<id>.mid and list it in index.json with an
 // id, title and collection: push converts the MIDI into songs/<id>.json.
 // The bucket names each file after its content hash (songs/<id>.<hash>.json),
-// so browsers can keep it for a year: a changed song gets a new name.
+// so browsers can keep it for a year: a changed song gets a new name. A file
+// the index stops listing is removed 24 hours later (see retired.json).
 // Uploading needs the project's secret key: SUPABASE_SECRET_KEY, or a Supabase
 // account token in MUSIC_API_KEY to look it up. Neither ever reaches the app.
 import { createClient } from "@supabase/supabase-js";
@@ -20,6 +21,11 @@ const FOLDER = "library";
 const FOREVER = "31536000";
 /** The index changes on every push. */
 const BRIEF = "60";
+/**
+ * A file stays this long after the index stops listing it: a browser may still
+ * be loading it from an index fetched just before the push.
+ */
+const RETIRE_MS = 24 * 60 * 60 * 1000;
 /** songs/<id>.<hash>.json -> songs/<id>.json */
 const plainName = (path) => path.replace(/\.[0-9a-f]{16}(\.\w+)$/, "$1");
 const command = process.argv[2];
@@ -126,13 +132,6 @@ async function push(bucket, validateIndex, validateSong) {
     });
     if (error) throw new Error(`Upload ${path}: ${error.message}`);
   };
-  // A browser may hold the previous index for up to BRIEF seconds, so the
-  // files it lists stay until the next push.
-  const previous = await fetch(
-    `${url}/storage/v1/object/public/${bucket}/index.json?t=${Date.now()}`,
-  )
-    .then((response) => (response.ok ? response.json() : { songs: [] }))
-    .catch(() => ({ songs: [] }));
   for (const [path, bytes, type] of files)
     await upload(path, bytes, type, FOREVER);
   // The index goes last, so it never lists a file that is not there yet.
@@ -143,24 +142,61 @@ async function push(bucket, validateIndex, validateSong) {
     BRIEF,
   );
 
-  // Remove files that neither the new nor the previous index lists.
-  const kept = new Set([
-    ...files.map(([path]) => path),
-    ...(previous.songs ?? []).flatMap((song) => [song.song, song.midi]),
-  ]);
-  const { data: listed, error } = await storage.list("songs", { limit: 1000 });
-  if (error) throw new Error(`List songs/: ${error.message}`);
-  const stale = listed
-    .map((file) => `songs/${file.name}`)
-    .filter((path) => !kept.has(path));
+  // retired.json records when each unlisted file left the index. Files are
+  // removed only once they have been unlisted for RETIRE_MS, however many
+  // pushes happen meanwhile.
+  const now = Date.now();
+  const listed = new Set(files.map(([path]) => path));
+  const retired = await readRetired(storage);
+  const keep = {};
+  const stale = [];
+  for (const path of await listAll(storage, "songs")) {
+    if (listed.has(path)) continue;
+    const since = retired[path] ?? now;
+    if (now - since >= RETIRE_MS) stale.push(path);
+    else keep[path] = since;
+  }
   if (stale.length) {
     const { error: removal } = await storage.remove(stale);
     if (removal) throw new Error(`Remove old files: ${removal.message}`);
   }
+  await upload(
+    "retired.json",
+    Buffer.from(JSON.stringify(keep, null, 2) + "\n"),
+    "application/json",
+    BRIEF,
+  );
   console.log(
     `Pushed ${index.songs.length} songs to the ${bucket} bucket` +
-      (stale.length ? `, removed ${stale.length} old files` : ""),
+      (stale.length ? `, removed ${stale.length} old files` : "") +
+      (Object.keys(keep).length
+        ? `, kept ${Object.keys(keep).length} unlisted files for now`
+        : ""),
   );
+}
+
+/** Every file path in a bucket folder, a page at a time. */
+async function listAll(storage, folder) {
+  const paths = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await storage.list(folder, { limit: 1000, offset });
+    if (error) throw new Error(`List ${folder}/: ${error.message}`);
+    paths.push(...data.map((file) => `${folder}/${file.name}`));
+    if (data.length < 1000) return paths;
+  }
+}
+
+/** When each unlisted file left the index. Read past the CDN, so it is current. */
+async function readRetired(storage) {
+  const { data, error } = await storage.download("retired.json");
+  // Missing on the first push. A file with no record counts as leaving now,
+  // so losing the record only keeps files longer.
+  if (error) return {};
+  try {
+    return JSON.parse(await data.text());
+  } catch {
+    return {};
+  }
 }
 
 async function secretKey() {

@@ -75,8 +75,9 @@ git), then run `npm run library:push`. To add a song, put its MIDI file at
 `title`, `collection`, `song: "songs/<id>.json"` and `midi: "songs/<id>.mid"`;
 push converts the MIDI into the song file. `./library` uses plain names; push
 adds the hashes. Push checks every song before it uploads anything, uploads the
-index last, and removes files that neither the new nor the previous index lists
-(a browser may hold the previous index for a minute).
+index last, and removes a file only 24 hours after the index stops listing it,
+since a browser may still be loading it from an earlier index (`retired.json` in
+the bucket records when each file left).
 Uploading needs the project's secret key, in `SUPABASE_SECRET_KEY`, or a
 Supabase account token in `MUSIC_API_KEY` to look it up. The app itself only
 reads the bucket. A copy of three songs in `tests/fixtures/` serves the tests.

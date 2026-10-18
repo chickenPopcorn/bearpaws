@@ -20,6 +20,8 @@ interface Backend {
   hang: "no" | "abort" | "manual";
   release: () => void;
   signOutError: unknown;
+  /** How long Supabase takes to answer a sign-out, in ms. */
+  signOutDelay: number;
   /** Makes the settings read fail, as a broken connection would. */
   failReads: boolean;
   /** When set, reads wait for this promise. */
@@ -36,6 +38,7 @@ function backend(): Backend {
     hang: "no",
     release: () => {},
     signOutError: null,
+    signOutDelay: 0,
     failReads: false,
     readGate: null,
   };
@@ -90,7 +93,11 @@ function client(b: Backend) {
       }),
     }),
     auth: {
-      signOut: vi.fn(async () => ({ error: b.signOutError })),
+      signOut: vi.fn(async () => {
+        if (b.signOutDelay)
+          await new Promise((resolve) => setTimeout(resolve, b.signOutDelay));
+        return { error: b.signOutError };
+      }),
     },
   };
   return fake as unknown as SupabaseClient & typeof fake;
@@ -325,6 +332,21 @@ describe("account sync", () => {
     sync.progress("song", { best: 3 } as never);
     await vi.advanceTimersByTimeAsync(20000);
     expect(b.calls).toHaveLength(sent);
+  });
+
+  it("waits for Supabase's answer however long sign-out takes", async () => {
+    const b = backend();
+    b.signOutDelay = 45000;
+    const sync = new CloudSync(client(b), USER);
+    const done = vi.fn();
+    const signing = sync.signOut().then(done);
+    await vi.advanceTimersByTimeAsync(30000);
+    // A time limit here would report failure, then sign out anyway.
+    expect(done).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(15000);
+    await signing;
+    expect(done).toHaveBeenCalledOnce();
+    expect(clearAccountData).toHaveBeenCalledOnce();
   });
 
   it("keeps unsent changes on the browser when signing out offline", async () => {

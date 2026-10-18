@@ -329,7 +329,10 @@ export class CloudSync implements SyncHooks {
   async signOut() {
     await this.flush();
     const unsent = this.pending;
-    const { error } = await timed(() => this.client.auth.signOut());
+    // No time limit: the request cannot be cancelled, so a timeout could
+    // report failure and then sign out later anyway. Supabase answers with an
+    // error when it cannot reach the server.
+    const { error } = await this.client.auth.signOut();
     if (error) throw error;
     this.stop();
     if (!unsent) clearAccountData();

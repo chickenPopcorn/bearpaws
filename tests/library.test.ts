@@ -71,6 +71,14 @@ describe("song library", () => {
       /duplicate note id/,
     ],
     [
+      "a tempo of zero",
+      (song: Song) => ({
+        ...song,
+        tempos: [{ tick: 0, microseconds: 0 }],
+      }),
+      /microseconds > 0/,
+    ],
+    [
       "a warning that is not text",
       (song: Song) => ({ ...song, warnings: [{}] as never }),
       /warnings must be a list of text/,
