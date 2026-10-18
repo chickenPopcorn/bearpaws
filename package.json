@@ -14,6 +14,7 @@
     "midi:build": "node scripts/create-library.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.117.2",
     "midi-file": "^1.2.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

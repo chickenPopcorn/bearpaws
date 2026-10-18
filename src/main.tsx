@@ -25,8 +25,14 @@ import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { isBuiltInSong } from "./lessons";
 import { collectionForSong, songsInCollection } from "./collections";
+import { CloudSync } from "./cloud";
+import { OpeningStudio, SignIn } from "./SignIn";
+import { signInWithGoogle, supabase } from "./supabase";
 import "./style.css";
-const studio = new Studio();
+// One studio per signed-in session, created once the account's songs and
+// progress are on this browser. App only renders while it exists.
+let studio!: Studio;
+let cloud: CloudSync | null = null;
 const stamp = (t: number) =>
   `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 // The studio is a singleton, so these stay stable and let memoized views skip
@@ -428,7 +434,7 @@ const KeyboardHelp = memo(function KeyboardHelp() {
     </details>
   );
 });
-function App() {
+function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [deviceOpen, setDeviceOpen] = useState(false),
     [busy, setBusy] = useState(false);
@@ -561,6 +567,13 @@ function App() {
             <path d="m2.5 7.5 3.5-3.5 3.5 3.5" />
           </svg>
         </button>
+        <button
+          className="account"
+          title={email ? `Signed in as ${email}` : undefined}
+          onClick={onSignOut}
+        >
+          Sign out
+        </button>
       </header>
       {/* Connection changes are announced even while the panel is folded. */}
       <p className="sr-only" role="status">
@@ -621,9 +634,9 @@ function App() {
             }}
           />
           <p className="privacy">
-            Your songs stay here.
+            Imported songs stay on this browser.
             <br />
-            No uploads. No account.
+            Progress syncs to your account.
           </p>
           <div className="side-footer">
             <strong>One phrase at a time.</strong>Slow it down.
@@ -659,7 +672,11 @@ function App() {
               </p>
             </div>
             <div className="song-tools">
-              <span className="chip">Saved on this browser</span>
+              <span className="chip">
+                {isBuiltInSong(studio.song.id)
+                  ? "Built-in song"
+                  : "Saved on this browser"}
+              </span>
               {isBuiltInSong(studio.song.id) && (
                 <a
                   className="song-midi-download"
@@ -675,6 +692,11 @@ function App() {
           {studio.storageNotice && (
             <p className="alert" role="status">
               {studio.storageNotice}
+            </p>
+          )}
+          {cloud?.error && (
+            <p className="alert" role="status">
+              {cloud.error}
             </p>
           )}
           <FingerGuide song={studio.song} left={s.left} right={s.right} />
@@ -930,7 +952,7 @@ function App() {
           </section>
           <KeyboardHelp />
           <footer>
-            Practice stays on this browser.{" "}
+            Practice syncs to your account.{" "}
             <span>USB MIDI · Desktop Chrome / Edge · HTTPS required</span>
             <span className="footer-separator" aria-hidden="true">
               ·
@@ -938,7 +960,7 @@ function App() {
             <a
               href={`${import.meta.env.BASE_URL}audio/accurate-salamander/CREDITS.md`}
             >
-              Accurate-Salamander · 8 layers · sound credits
+              Accurate-Salamander · 16 layers · sound credits
             </a>
           </footer>
         </main>
@@ -946,16 +968,96 @@ function App() {
     </div>
   );
 }
-const container = document.getElementById("root")!;
-const root = createRoot(container);
-const render = () => root.render(<App />);
-// A saved import loads from browser storage. While the page as it was left is
-// on screen, wait briefly for it, so the first render does not show another
-// song. With nothing on screen, rendering now beats a blank wait.
-if (isBuiltInSong(studio.savedSelection) || !container.hasChildNodes())
-  render();
-else
-  void Promise.race([
-    studio.init(),
-    new Promise((resolve) => setTimeout(resolve, 1000)),
-  ]).then(render);
+type Gate =
+  | { status: "loading" }
+  | { status: "failed"; error: string }
+  | { status: "signed-out"; error: string }
+  | { status: "ready"; userId: string; email: string };
+
+/** Signs the user in, loads their account, then opens the studio. */
+function Root() {
+  const [gate, setGate] = useState<Gate>({ status: "loading" });
+  // The user whose studio is open or opening: null until the first auth
+  // event says whether anyone is signed in, and "" once nobody is.
+  const user = useRef<string | null>(null);
+  useEffect(() => {
+    const client = supabase;
+    if (!client) {
+      setGate({
+        status: "signed-out",
+        error: "Sign-in is not set up for this site.",
+      });
+      return;
+    }
+    const open = async (userId: string, email: string) => {
+      if (userId === user.current) return;
+      user.current = userId;
+      if (!userId) {
+        setGate({ status: "signed-out", error: "" });
+        return;
+      }
+      setGate({ status: "loading" });
+      const sync = new CloudSync(client, userId);
+      try {
+        await sync.pull();
+      } catch {
+        if (user.current !== userId) return;
+        // Still signed in: offer a retry, not another Google sign-in.
+        setGate({
+          status: "failed",
+          error:
+            "Your songs could not be loaded. Check your connection and try again.",
+        });
+        return;
+      }
+      if (user.current !== userId) return;
+      cloud = sync;
+      studio = new Studio(sync);
+      sync.onChange = () => studio.emit();
+      setGate({ status: "ready", userId, email });
+    };
+    // Supabase asks that auth callbacks not await its own calls directly.
+    const { data } = client.auth.onAuthStateChange((_event, session) => {
+      setTimeout(
+        () => void open(session?.user.id ?? "", session?.user.email ?? ""),
+        0,
+      );
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+  const signOut = useCallback(async () => {
+    if (!cloud) return;
+    const sync = cloud;
+    // Stop the studio first, so its last save is uploaded, not left behind.
+    studio.destroy();
+    setGate({ status: "loading" });
+    try {
+      await sync.signOut();
+    } finally {
+      cloud = null;
+      user.current = "";
+      setGate({ status: "signed-out", error: "" });
+    }
+  }, []);
+  if (gate.status === "ready")
+    return (
+      <App
+        key={gate.userId}
+        email={gate.email}
+        onSignOut={() => void signOut()}
+      />
+    );
+  if (gate.status === "loading") return <OpeningStudio error="" />;
+  if (gate.status === "failed") return <OpeningStudio error={gate.error} />;
+  return (
+    <SignIn
+      error={gate.error}
+      onSignIn={async () => {
+        const { error } = await signInWithGoogle();
+        if (error) throw error;
+      }}
+    />
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<Root />);

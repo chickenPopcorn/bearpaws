@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
 import type { Song } from "../src/song";
-import { deleteSong, library } from "../src/storage";
+import { deleteSong, library, saveSong } from "../src/storage";
 import { builtInSongs } from "../src/lessons";
 
 const env = vi.hoisted(() => ({
@@ -1488,5 +1488,72 @@ describe("practice studio integration", () => {
     active.push(studio);
     await studio.init();
     expect(studio.song.id).toBe("imported");
+  });
+});
+
+describe("account sync hooks", () => {
+  const hooks = () => ({
+    settings: vi.fn(),
+    progress: vi.fn(),
+    forgetProgress: vi.fn(),
+  });
+  const midiFile = () =>
+    new File(
+      [
+        new Uint8Array([
+          0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 1, 0xe0, 0x4d, 0x54,
+          0x72, 0x6b, 0, 0, 0, 13, 0, 0x90, 60, 80, 0x83, 0x60, 0x80, 60, 0, 0,
+          0xff, 0x2f, 0,
+        ]),
+      ],
+      "Local tune.mid",
+    );
+
+  it("reports saved settings and progress to the account", () => {
+    const sync = hooks();
+    const studio = new Studio(sync);
+    active.push(studio);
+    studio.load(song([[60, 1]]));
+    expect(sync.settings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ selected: "controller-fixture" }),
+    );
+    studio.save();
+    expect(sync.progress).toHaveBeenLastCalledWith(
+      "controller-fixture",
+      expect.objectContaining({ updated: expect.any(String) }),
+    );
+  });
+
+  it("keeps an imported file on this browser only", async () => {
+    const sync = hooks();
+    const studio = new Studio(sync);
+    active.push(studio);
+    vi.mocked(saveSong).mockClear();
+    await studio.import(midiFile());
+    expect(studio.song.id).toBe("fixture-hash");
+    expect(studio.notice).toMatch(/^Imported locally\./);
+    // The song itself goes to IndexedDB, and nowhere else.
+    expect(saveSong).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "fixture-hash", title: "Local tune" }),
+    );
+    expect(Object.keys(sync)).toEqual([
+      "settings",
+      "progress",
+      "forgetProgress",
+    ]);
+  });
+
+  it("forgets an imported song's progress in the account when it is removed", async () => {
+    const sync = hooks();
+    const imported = song([[60, 1]], "local-song");
+    const studio = new Studio(sync);
+    active.push(studio);
+    studio.songs.push(imported);
+    studio.load(imported);
+    vi.mocked(deleteSong).mockClear();
+    await studio.remove();
+    expect(deleteSong).toHaveBeenCalledWith(imported.id);
+    expect(sync.forgetProgress).toHaveBeenCalledWith(imported.id);
+    expect(studio.songs.some((s) => s.id === imported.id)).toBe(false);
   });
 });

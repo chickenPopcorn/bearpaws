@@ -61,6 +61,22 @@ export function write(key: string, value: unknown) {
 export function removeProgress(id: string) {
   localStorage.removeItem(storageKey(`progress:${id}`));
 }
+/** Every song's saved progress on this browser, unvalidated, for account sync. */
+export function localProgress() {
+  const saved: { id: string; progress: Partial<Progress> }[] = [];
+  try {
+    const prefix = storageKey("progress:");
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(prefix)) continue;
+      const id = key.slice(prefix.length);
+      const progress = read<Partial<Progress> | null>(`progress:${id}`, null);
+      if (progress && typeof progress === "object")
+        saved.push({ id, progress });
+    }
+  } catch {}
+  return saved;
+}
 export function settings(): Settings {
   const saved = read<Partial<Settings>>("settings", {}),
     s = { ...defaults, ...(saved && typeof saved === "object" ? saved : {}) };
@@ -121,7 +137,8 @@ export async function songId(bytes: Uint8Array) {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
-// IndexedDB holds normalized songs; no file upload, analytics, or network requests.
+// IndexedDB holds imported songs, normalized. They stay on this browser: no
+// file upload, analytics or network requests.
 const db = () =>
   new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open("cadence-library", 1);
@@ -168,4 +185,18 @@ export async function saveSong(song: Song) {
 }
 export async function deleteSong(id: string) {
   await transact("readwrite", (songs) => songs.delete(id));
+}
+/**
+ * Forget the signed-in account's settings and progress on this browser, such
+ * as at sign-out. Imported songs belong to the browser and stay.
+ */
+export function clearAccountData() {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(storageKey(""))) keys.push(key);
+    }
+    for (const key of keys) localStorage.removeItem(key);
+  } catch {}
 }

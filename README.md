@@ -1,6 +1,6 @@
 # Paw Pal · MIDI piano practice
 
-A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, and local browser storage. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
+A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, browser storage, and Supabase accounts. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
 
 ## Run locally
 
@@ -110,11 +110,20 @@ no pedal, so they use only release harmonics and key noise. See the
 [adaptation notes](public/audio/accurate-salamander/LICENSE.md) for how each
 voice follows the SFZ preset.
 
-## Local data and file support
+## Accounts, data and file support
 
-Settings and per-song position, track assignments, passage, number of starts, and best matched-note proportion are stored in localStorage. Best proportion uses all eligible notes in the current passage, including upcoming notes. Imported normalized songs are stored in IndexedDB, keyed by a SHA-256 hash of their contents. Removing a local song removes its stored song/progress. Storage failures show a message and allow session-only use. Browser storage is specific to the origin/browser/profile; clearing it removes your library and progress.
+Sign-in with Google is required. Supabase (project `pawpal`) holds each user's settings and practice progress, and row-level security limits every row to the user who owns it:
 
-No songs or MIDI input are uploaded. There is no backend, account, analytics, billing, cloud sync, Bluetooth integration, sheet-music recognition, or teacher dashboard.
+- `settings`: one row per user, the studio settings.
+- `progress`: per song, the position, track assignments, passage, number of starts, and best matched-note proportion.
+
+MIDI files you import are stored only in this browser (IndexedDB, normalized and keyed by a SHA-256 hash of their contents); they are never uploaded and do not appear on other devices. Removing an imported song removes it from the browser and its progress from your account. Signing out keeps imported songs.
+
+The browser keeps the working copy of settings and progress in localStorage. At sign-in the app downloads the account's copy; changes upload about two seconds after they happen, and failed uploads retry. For progress, the more recently updated copy wins. Signing out uploads waiting changes, then clears this browser's copy of the account's settings and progress. Best proportion uses all eligible notes in the current passage, including upcoming notes.
+
+MIDI input from your piano is never uploaded. There is no analytics, billing, Bluetooth integration, sheet-music recognition, or teacher dashboard.
+
+The schema is in `supabase/migrations/`. Local development reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` from `.env.local` (see `.env.example`); deployment reads them from GitHub repository variables. Both values are public.
 
 Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Imported notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. Imports are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
 
@@ -127,6 +136,7 @@ Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, in
 - `src/controller.ts`: shared practice timeline, transport actions and local progress.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings/progress and IndexedDB song library.
+- `src/cloud.ts`, `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in and account sync.
 - `src/main.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.

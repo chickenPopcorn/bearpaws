@@ -27,6 +27,7 @@ import {
   songId,
   type Progress,
 } from "./storage";
+import type { SyncHooks } from "./cloud";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
 const NO_PEDALS: readonly PedalSpan[] = [];
 export class Studio {
@@ -75,7 +76,8 @@ export class Studio {
   loopStart = 0;
   loopEnd = this.song.duration;
   timer: ReturnType<typeof setInterval> | null = null;
-  constructor() {
+  /** `sync` copies saved changes to the signed-in account. */
+  constructor(private sync?: SyncHooks) {
     this.audio.setSound({
       ambience: this.settings.ambience,
       voices: this.settings.pianoVoices,
@@ -215,6 +217,7 @@ export class Studio {
     if (!write("settings", this.settings))
       this.storageNotice =
         "Browser storage is full or blocked. Changes will last for this session.";
+    this.sync?.settings(this.settings);
   }
   save() {
     this.progress = {
@@ -229,6 +232,7 @@ export class Studio {
     };
     if (!write(`progress:${this.song.id}`, this.progress))
       this.storageNotice = "Progress could not be saved in this browser.";
+    this.sync?.progress(this.song.id, this.progress);
   }
   load(song: Song) {
     this.cancelPlaybackPreparation();
@@ -651,6 +655,7 @@ export class Studio {
       return;
     }
     // IndexedDB deletion has committed. Progress cleanup must not undo the UI result.
+    this.sync?.forgetProgress(id);
     try {
       removeProgress(id);
     } catch {
