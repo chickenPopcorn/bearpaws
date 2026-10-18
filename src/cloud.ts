@@ -19,6 +19,31 @@ const NO_RESPONSE = "The account service did not respond.";
 /** The Data API returns at most this many rows per request (Supabase's default). */
 const PAGE = 1000;
 
+/**
+ * A record's content for comparison: keys sorted, and without `updated`, which
+ * every save rewrites even when nothing else changed.
+ */
+function canon(value: unknown): string {
+  const sort = (item: unknown): unknown =>
+    Array.isArray(item)
+      ? item.map(sort)
+      : item && typeof item === "object"
+        ? Object.fromEntries(
+            Object.keys(item)
+              .sort()
+              .map((key) => [
+                key,
+                sort((item as Record<string, unknown>)[key]),
+              ]),
+          )
+        : item;
+  const { updated: _updated, ...rest } = (value ?? {}) as Record<
+    string,
+    unknown
+  >;
+  return JSON.stringify(sort(rest));
+}
+
 /** This browser cannot store the account's data, so the studio cannot open. */
 export class BrowserStorageError extends Error {
   constructor() {
@@ -84,6 +109,13 @@ export class CloudSync implements SyncHooks {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private flushing: Promise<void> | null = null;
   private stopped = false;
+  /**
+   * What this browser last loaded from or confirmed with the account. A save
+   * that matches it is not a change, so an idle page closing cannot upload a
+   * stale copy over newer practice from another device.
+   */
+  private syncedSettings = "";
+  private syncedProgress = new Map<string, string>();
   error = "";
   /** Called when error changes. */
   onChange = () => {};
@@ -122,6 +154,7 @@ export class CloudSync implements SyncHooks {
 
     // Settings: this browser's unconfirmed change wins, then the account's.
     const localSettings = read<Settings | null>("settings", null);
+    if (settings.data) this.syncedSettings = canon(settings.data.data);
     if (localSettings && (unsynced.settings || !settings.data))
       this.pendingSettings = localSettings;
     else if (settings.data) store("settings", settings.data.data);
@@ -129,6 +162,7 @@ export class CloudSync implements SyncHooks {
     // Progress: this browser's unconfirmed changes win; otherwise the account
     // is the record. Adopted progress fills in songs the account lacks.
     const remote = new Map(rows.map((row) => [row.song_id, row.data]));
+    for (const [id, data] of remote) this.syncedProgress.set(id, canon(data));
     const changed = new Set(unsynced.progress);
     for (const id of unsynced.deleted ?? []) {
       this.pendingDeletes.add(id);
@@ -173,6 +207,8 @@ export class CloudSync implements SyncHooks {
 
   settings(settings: Settings) {
     if (this.stopped) return;
+    if (!this.pendingSettings && canon(settings) === this.syncedSettings)
+      return;
     this.pendingSettings = { ...settings };
     this.saveUnsynced();
     this.schedule();
@@ -180,6 +216,12 @@ export class CloudSync implements SyncHooks {
 
   progress(songId: string, progress: Progress) {
     if (this.stopped) return;
+    if (
+      !this.pendingProgress.has(songId) &&
+      !this.pendingDeletes.has(songId) &&
+      canon(progress) === this.syncedProgress.get(songId)
+    )
+      return;
     this.pendingDeletes.delete(songId);
     this.pendingProgress.set(songId, { ...progress });
     this.saveUnsynced();
@@ -285,7 +327,12 @@ export class CloudSync implements SyncHooks {
         clearTimeout(timer);
       }
       this.inFlight = null;
-      if (!ok) {
+      if (ok) {
+        if (settings) this.syncedSettings = canon(settings);
+        for (const [id, data] of progress)
+          this.syncedProgress.set(id, canon(data));
+        for (const id of deleted) this.syncedProgress.delete(id);
+      } else {
         // Requeue what failed, unless a newer change arrived meanwhile.
         if (settings && !this.pendingSettings) this.pendingSettings = settings;
         for (const [id, data] of progress)
@@ -331,8 +378,9 @@ export class CloudSync implements SyncHooks {
     const unsent = this.pending;
     // No time limit: the request cannot be cancelled, so a timeout could
     // report failure and then sign out later anyway. Supabase answers with an
-    // error when it cannot reach the server.
-    const { error } = await this.client.auth.signOut();
+    // error when it cannot reach the server. Only this browser signs out;
+    // other devices keep their sessions.
+    const { error } = await this.client.auth.signOut({ scope: "local" });
     if (error) throw error;
     this.stop();
     if (!unsent) clearAccountData();

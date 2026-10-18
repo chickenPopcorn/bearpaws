@@ -90,6 +90,19 @@ async function push(bucket, validateIndex, validateSong) {
   const files = [];
   /** The index as published: every path carries its file's hash. */
   const published = structuredClone(index);
+  // The live index, to notice a MIDI file replaced without its song data.
+  const live = await fetch(
+    `${url}/storage/v1/object/public/${bucket}/index.json?t=${Date.now()}`,
+  )
+    .then((response) => (response.ok ? response.json() : { songs: [] }))
+    .catch(() => ({ songs: [] }));
+  const hashOf = (path) => /\.([0-9a-f]{16})\.\w+$/.exec(path ?? "")?.[1];
+  const before = new Map(
+    (live.songs ?? []).map((song) => [
+      song.id,
+      { song: hashOf(song.song), midi: hashOf(song.midi) },
+    ]),
+  );
   // Check every song before uploading anything.
   for (const entry of index.songs) {
     const songPath = `${FOLDER}/${entry.song}`;
@@ -117,6 +130,19 @@ async function push(bucket, validateIndex, validateSong) {
       const midiBytes = readFileSync(midiPath);
       out.midi = hashed(entry.midi, midiBytes);
       files.push([out.midi, midiBytes, "audio/midi"]);
+      // The app plays the song data and offers the MIDI file for download,
+      // so a new MIDI file with the old song data would make them disagree.
+      const was = before.get(entry.id);
+      if (
+        was?.midi &&
+        was.midi !== hash(midiBytes) &&
+        was.song === hash(songBytes)
+      )
+        throw new Error(
+          `${entry.id}: ${entry.midi} changed but ${entry.song} did not. ` +
+            `Update ${entry.song} to match, or delete it to rebuild it from ` +
+            `the MIDI file (that drops any lesson details and fingering).`,
+        );
     }
   }
 

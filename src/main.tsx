@@ -1081,11 +1081,16 @@ async function signOut() {
   try {
     await sync.signOut();
   } catch {
-    // Supabase still holds the session: reopen the studio, and say so.
+    // Supabase still holds the session: reopen the studio, and say so,
+    // unless another tab has since opened a different session here.
+    if (cloud !== sync) return;
     studio.notice = "Sign-out failed. Check your connection and try again.";
     if (readyGate) setGate(readyGate);
     return;
   }
+  // Another tab may have changed the session while this one signed out: then
+  // the newer session's studio and sync are not this sign-out's to close.
+  if (cloud !== sync) return;
   cloud = null;
   currentUser = "";
   setGate({ status: "signed-out", error: "" });

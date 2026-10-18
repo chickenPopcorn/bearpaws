@@ -9,6 +9,8 @@ const restore = new Function(/<script>([\s\S]*?)<\/script>/.exec(page)![1]);
 const image = "data:image/webp;base64,AAAA";
 let root: HTMLElement;
 let values: Map<string, string>;
+// Keys in localStorage.
+let stored: string[];
 // Whether a value is too big for the browser to keep.
 let full: (value: string) => boolean;
 
@@ -22,6 +24,14 @@ beforeEach(() => {
       values.set(k, v);
     },
     removeItem: (k: string) => values.delete(k),
+  });
+  // A Supabase sign-in this browser still holds.
+  stored = ["cadence:settings", "sb-test-auth-token"];
+  vi.stubGlobal("localStorage", {
+    get length() {
+      return stored.length;
+    },
+    key: (i: number) => stored[i] ?? null,
   });
   document.head.innerHTML = '<link rel="stylesheet" />';
   document.body.innerHTML = '<div id="root"></div>';
@@ -77,6 +87,14 @@ it("uses a snapshot only for the next load", () => {
 it("leaves the page empty while the stylesheet comes from script", () => {
   leave();
   document.head.innerHTML = "";
+  restore();
+  expect(root.innerHTML).toBe("");
+  expect(sessionStorage.getItem(RELOAD_SNAPSHOT_KEY)).toBeNull();
+});
+
+it("shows nothing once this browser holds no sign-in", () => {
+  leave();
+  stored = ["cadence:settings"];
   restore();
   expect(root.innerHTML).toBe("");
   expect(sessionStorage.getItem(RELOAD_SNAPSHOT_KEY)).toBeNull();

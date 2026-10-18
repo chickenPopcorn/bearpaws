@@ -188,7 +188,14 @@ export function validateSong(value: unknown, id: string): Song {
       (note.fingerHand !== undefined &&
         !["left", "right"].includes(note.fingerHand as string)) ||
       (note.notatedBeats !== undefined && !finite(note.notatedBeats)) ||
-      (note.staccato !== undefined && typeof note.staccato !== "boolean")
+      (note.staccato !== undefined && typeof note.staccato !== "boolean") ||
+      // Every note sounds inside the song, in order: playback, scoring and
+      // the score all assume it.
+      (note.start as number) < 0 ||
+      (note.end as number) < (note.start as number) ||
+      (note.soundEnd as number) < (note.end as number) ||
+      (note.start as number) >= (value.duration as number) ||
+      (note.soundEnd as number) > (value.duration as number) + 1e-6
     )
       fail(where, `bad note ${isRecord(note) ? String(note.id) : ""}`);
     if (notes.has(note.id as string))

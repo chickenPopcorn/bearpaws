@@ -100,6 +100,37 @@ describe("song library", () => {
       /bad note/,
     ],
     [
+      "a note that ends before it starts",
+      (song: Song) => ({
+        ...song,
+        notes: [{ ...song.notes[0], end: song.notes[0].start - 0.1 }],
+      }),
+      /bad note/,
+    ],
+    [
+      "a note that starts after the song ends",
+      (song: Song) => ({
+        ...song,
+        notes: [
+          {
+            ...song.notes[0],
+            start: song.duration,
+            end: song.duration,
+            soundEnd: song.duration,
+          },
+        ],
+      }),
+      /bad note/,
+    ],
+    [
+      "a note that sounds past the song's end",
+      (song: Song) => ({
+        ...song,
+        notes: [{ ...song.notes[0], soundEnd: song.duration + 1 }],
+      }),
+      /bad note/,
+    ],
+    [
       "two tracks with one id",
       (song: Song) => ({ ...song, tracks: [song.tracks[0], song.tracks[0]] }),
       /duplicate track id/,

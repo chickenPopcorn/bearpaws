@@ -270,6 +270,35 @@ describe("account sync", () => {
     ]);
   });
 
+  it("uploads only what changed since the account last had it", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.settings = [{ data: { mode: "wait", speed: 1 } }];
+    b.progress = [{ song_id: "song", data: { best: 1, updated: 10 } }];
+    const sync = new CloudSync(client(b), USER);
+    await sync.pull();
+    // An idle page saving what it loaded must not overwrite newer practice
+    // from another device. Saves rewrite updated, and key order can differ.
+    sync.settings({ speed: 1, mode: "wait", updated: 20 } as never);
+    sync.progress("song", { updated: 30, best: 1 } as never);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(b.calls).toEqual([]);
+    expect(sync.pending).toBe(false);
+
+    sync.progress("song", { best: 2 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.calls).toEqual(["upsert progress"]);
+    // Once confirmed, the same save again is not a change.
+    sync.progress("song", { best: 2, updated: 40 } as never);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(b.calls).toEqual(["upsert progress"]);
+    // A removed song saved again is a change, even with the same content.
+    sync.forgetProgress("song");
+    sync.progress("song", { best: 2 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.calls).toEqual(["upsert progress", "upsert progress"]);
+  });
+
   it("aborts a timed-out upload and holds newer changes until it settles", async () => {
     const b = backend();
     const sync = new CloudSync(client(b), USER);
@@ -328,6 +357,8 @@ describe("account sync", () => {
       { user_id: USER, song_id: "song", data: { best: 2 } },
     ]);
     expect(clearAccountData).toHaveBeenCalledOnce();
+    // Other devices keep their sessions.
+    expect(api.auth.signOut).toHaveBeenLastCalledWith({ scope: "local" });
     const sent = b.calls.length;
     sync.progress("song", { best: 3 } as never);
     await vi.advanceTimersByTimeAsync(20000);
