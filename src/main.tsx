@@ -600,6 +600,7 @@ function App() {
           <SongLibrary
             songs={studio.songs}
             selected={studio.song.id}
+            savedSelection={studio.savedSelection}
             onSelect={selectSong}
             onImport={openImport}
           />
@@ -731,29 +732,31 @@ function App() {
                     ⇄
                   </button>
                 </div>
-                <div
-                  className="playback-status"
-                  role="group"
-                  aria-label="Speed, position and full screen"
-                >
-                  <label className="speed">
-                    Speed
-                    <input
-                      aria-label="Playback speed"
-                      type="range"
-                      min={SPEED_PERCENT.min}
-                      max={SPEED_PERCENT.max}
-                      step={SPEED_PERCENT.step}
-                      value={s.speed * 100}
-                      onChange={(e) =>
-                        studio.speed(Number(e.target.value) / 100)
-                      }
-                    />
-                    <output>{Math.round(s.speed * 100)}%</output>
-                  </label>
-                  <span className="time">
-                    {stamp(studio.position)} / {stamp(studio.song.duration)}
-                  </span>
+                <div className="playback-cluster">
+                  <div
+                    className="playback-status"
+                    role="group"
+                    aria-label="Speed and position"
+                  >
+                    <label className="speed">
+                      Speed
+                      <input
+                        aria-label="Playback speed"
+                        type="range"
+                        min={SPEED_PERCENT.min}
+                        max={SPEED_PERCENT.max}
+                        step={SPEED_PERCENT.step}
+                        value={s.speed * 100}
+                        onChange={(e) =>
+                          studio.speed(Number(e.target.value) / 100)
+                        }
+                      />
+                      <output>{Math.round(s.speed * 100)}%</output>
+                    </label>
+                    <span className="time">
+                      {stamp(studio.position)} / {stamp(studio.song.duration)}
+                    </span>
+                  </div>
                   <button
                     className="fullscreen-toggle"
                     aria-label={

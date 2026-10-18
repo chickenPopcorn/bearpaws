@@ -425,7 +425,7 @@ h1 {
 .practice-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px 24px;
+  gap: 12px 20px;
   flex: 0 0 auto;
   flex-wrap: wrap;
   margin-bottom: var(--space-3);
@@ -589,11 +589,16 @@ h1 {
 .transport-buttons .play:hover {
   background: #6446c0;
 }
-.playback-status {
+/* Speed and Full screen wrap together at the end of the toolbar. */
+.playback-cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin-left: auto;
+}
+.playback-status {
   gap: var(--space-3);
-  /* The Full screen button ends the group at the pill's 3 px inset. */
-  padding: 0 3px 0 var(--space-3);
+  padding: 0 var(--space-3);
 }
 .playback-status .time {
   padding-left: var(--space-3);
@@ -1253,7 +1258,7 @@ footer a {
   main {
     padding: var(--space-5);
   }
-  .playback-status {
+  .playback-cluster {
     margin-left: auto;
   }
   .settings-row {
@@ -1358,7 +1363,7 @@ footer a {
   .hands button {
     padding: 0 var(--space-2);
   }
-  .playback-status {
+  .playback-cluster {
     margin-left: 0;
   }
   .settings-row {
@@ -1393,19 +1398,23 @@ footer a {
   margin-left: auto;
   white-space: nowrap;
 }
-/* Lives in the speed group, so it wraps with Speed on narrow toolbars. */
+/* Filled like Play: the other primary action in the toolbar. */
 .fullscreen-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
-  padding: 0 var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-3);
   border: 0;
-  border-radius: 7px;
-  background: transparent;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
   font-size: var(--text-sm);
-  color: var(--text-2);
+  font-weight: 500;
   white-space: nowrap;
+}
+.fullscreen-toggle:hover {
+  background: #6446c0;
 }
 .fullscreen-toggle > span {
   font-size: 16px;
@@ -1441,7 +1450,7 @@ footer a {
 .piano-expanded .transport-buttons {
   flex-shrink: 0;
 }
-.piano-expanded .playback-status {
+.piano-expanded .playback-cluster {
   flex-shrink: 0;
   margin-left: 0;
 }

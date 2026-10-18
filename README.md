@@ -46,6 +46,8 @@ Its original notes and timing are preserved, with suggested hands split at middl
 C and no added finger numbers. The source MIDI is kept in `src/assets/an-jing.mid`
 and is available through the song’s individual download, outside the starter pack.
 
+Library collections start folded; click one to open it. Searching opens them
+all, and moving to a song in another collection opens that one.
 Search the library by title or composer. **Download starter MIDI pack** saves the
 26 standard MIDI files as a ZIP; **Download MIDI** saves the selected arrangement.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
