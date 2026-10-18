@@ -976,6 +976,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
 }
 type Gate =
   | { status: "loading" }
+  | { status: "signing-out" }
   | { status: "failed"; error: string }
   | { status: "signed-out"; error: string }
   | { status: "ready"; userId: string; email: string };
@@ -986,6 +987,8 @@ function Root() {
   // The user whose studio is open or opening: null until the first auth
   // event says whether anyone is signed in, and "" once nobody is.
   const user = useRef<string | null>(null);
+  /** The open studio's session, to return to if sign-out fails. */
+  const ready = useRef<Extract<Gate, { status: "ready" }> | null>(null);
   useEffect(() => {
     const client = supabase;
     if (!client) {
@@ -995,9 +998,13 @@ function Root() {
       });
       return;
     }
+    // The sign-in still loading, so a newer auth event can stop it.
+    let loading: CloudSync | null = null;
     const open = async (userId: string, email: string) => {
       if (userId === user.current) return;
       user.current = userId;
+      loading?.stop();
+      loading = null;
       // The session ended or changed outside this page's Sign out button, such
       // as in another tab: close the studio and stop its sync, so nothing more
       // is sent for the old session. Supabase has already signed out.
@@ -1012,6 +1019,7 @@ function Root() {
       }
       setGate({ status: "loading" });
       const sync = new CloudSync(client, userId);
+      loading = sync;
       let library: Song[];
       try {
         [library] = await Promise.all([
@@ -1035,10 +1043,12 @@ function Root() {
         return;
       }
       if (user.current !== userId) return;
+      loading = null;
       cloud = sync;
       studio = new Studio(library, sync);
       sync.onChange = () => studio.emit();
-      setGate({ status: "ready", userId, email });
+      ready.current = { status: "ready", userId, email };
+      setGate(ready.current);
     };
     // Supabase asks that auth callbacks not await its own calls directly.
     const { data } = client.auth.onAuthStateChange((_event, session) => {
@@ -1052,14 +1062,16 @@ function Root() {
   const signOut = useCallback(async () => {
     if (!cloud) return;
     const sync = cloud;
-    // Queue the latest position, so the upload before signing out carries it.
-    studio.save();
+    // Close the studio first: its final save joins the upload, and nothing
+    // can change while signing out.
+    studio.destroy();
+    setGate({ status: "signing-out" });
     try {
-      await sync.signOut(() => studio.destroy());
+      await sync.signOut();
     } catch {
-      // Supabase still holds the session: stay signed in, and say so.
+      // Supabase still holds the session: reopen the studio, and say so.
       studio.notice = "Sign-out failed. Check your connection and try again.";
-      studio.emit();
+      if (ready.current) setGate(ready.current);
       return;
     }
     cloud = null;
@@ -1075,6 +1087,8 @@ function Root() {
       />
     );
   if (gate.status === "loading") return <OpeningStudio error="" />;
+  if (gate.status === "signing-out")
+    return <OpeningStudio error="" message="Signing out…" />;
   if (gate.status === "failed") return <OpeningStudio error={gate.error} />;
   return (
     <SignIn

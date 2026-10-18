@@ -72,6 +72,27 @@ describe("song library", () => {
       /duplicate note id/,
     ],
     [
+      "a warning that is not text",
+      (song: Song) => ({ ...song, warnings: [{}] as never }),
+      /warnings must be a list of text/,
+    ],
+    [
+      "a lesson without its text",
+      (song: Song) => ({
+        ...song,
+        lesson: { ...song.lesson!, composer: 5 as never },
+      }),
+      /lesson needs/,
+    ],
+    [
+      "a finger outside 1 to 5",
+      (song: Song) => ({
+        ...song,
+        notes: [{ ...song.notes[0], finger: 9 as never }],
+      }),
+      /bad note/,
+    ],
+    [
       "two tracks with one id",
       (song: Song) => ({ ...song, tracks: [song.tracks[0], song.tracks[0]] }),
       /duplicate track id/,
@@ -104,9 +125,10 @@ describe("song library", () => {
     });
     expect(collectionForSong(songs[1]).id).toBe("classes");
     // The index is always revalidated; songs are cached by their hash.
-    expect(fetcher).toHaveBeenCalledWith(url("index.json"), {
-      cache: "no-cache",
-    });
+    expect(fetcher).toHaveBeenCalledWith(
+      url("index.json"),
+      expect.objectContaining({ cache: "no-cache" }),
+    );
   });
 
   it("fails clearly when a song file is missing", async () => {
@@ -118,6 +140,28 @@ describe("song library", () => {
     await expect(loadLibrary(url, fetcher as typeof fetch)).rejects.toThrow(
       /HTTP 404/,
     );
+  });
+
+  it("gives up on a library file that does not answer", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn(
+        (_input: string | URL | Request, init?: RequestInit) =>
+          new Promise<Response>((_, reject) =>
+            init?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            ),
+          ),
+      );
+      const loading = loadLibrary(url, fetcher as typeof fetch);
+      const failure = expect(loading).rejects.toThrow(
+        /no response within 30 seconds/,
+      );
+      await vi.advanceTimersByTimeAsync(30000);
+      await failure;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("puts imported songs in Papa Bear's Collections", () => {

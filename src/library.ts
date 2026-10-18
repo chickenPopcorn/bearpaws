@@ -1,5 +1,8 @@
 import type { Song } from "./song";
 
+/** A library request that takes longer than this fails, so startup can offer a retry. */
+const TIMEOUT_MS = 30000;
+
 /** The public Supabase bucket that holds the shared song library. */
 export const LIBRARY_BUCKET = "library";
 export const COLLECTION_IDS = ["classes", "songs", "pops"] as const;
@@ -68,8 +71,79 @@ export function validateSong(value: unknown, id: string): Song {
     fail(where, "duration must be a positive number");
   if (!whole(value.ppq) || (value.ppq as number) <= 0)
     fail(where, "ppq must be a positive whole number");
-  if (!Array.isArray(value.warnings)) fail(where, "missing warnings list");
-  if (!Array.isArray(value.tempos)) fail(where, "missing tempos list");
+  // The studio renders these fields directly, so each must have its type.
+  if (
+    !Array.isArray(value.warnings) ||
+    !value.warnings.every((w) => typeof w === "string")
+  )
+    fail(where, "warnings must be a list of text");
+  if (
+    !Array.isArray(value.tempos) ||
+    !value.tempos.every(
+      (t) => isRecord(t) && whole(t.tick) && finite(t.microseconds),
+    )
+  )
+    fail(where, "tempos must be a list of { tick, microseconds }");
+  if (
+    value.timeSignatures !== undefined &&
+    !(
+      Array.isArray(value.timeSignatures) &&
+      value.timeSignatures.every(
+        (t) =>
+          isRecord(t) &&
+          whole(t.tick) &&
+          whole(t.numerator) &&
+          whole(t.denominator),
+      )
+    )
+  )
+    fail(
+      where,
+      "timeSignatures must be a list of { tick, numerator, denominator }",
+    );
+  for (const key of ["beatsPerBar", "leadInBeats"])
+    if (value[key] !== undefined && !finite(value[key]))
+      fail(where, `${key} must be a number`);
+  if (
+    value.lesson !== undefined &&
+    !(
+      isRecord(value.lesson) &&
+      ["composer", "description", "level"].every(
+        (key) =>
+          typeof (value.lesson as Record<string, unknown>)[key] === "string",
+      ) &&
+      finite(value.lesson.bpm) &&
+      isRecord(value.lesson.handPositions) &&
+      typeof value.lesson.handPositions.left === "string" &&
+      typeof value.lesson.handPositions.right === "string"
+    )
+  )
+    fail(
+      where,
+      "lesson needs composer, description, level, bpm and handPositions",
+    );
+  if (
+    value.source !== undefined &&
+    !(
+      isRecord(value.source) &&
+      ["composer", "description", "url", "credit"].every(
+        (key) =>
+          typeof (value.source as Record<string, unknown>)[key] === "string",
+      )
+    )
+  )
+    fail(where, "source needs composer, description, url and credit");
+  if (
+    value.pedals !== undefined &&
+    !(
+      Array.isArray(value.pedals) &&
+      value.pedals.every(
+        (p) =>
+          isRecord(p) && whole(p.channel) && finite(p.start) && finite(p.end),
+      )
+    )
+  )
+    fail(where, "pedals must be a list of { channel, start, end }");
   if (!Array.isArray(value.tracks) || !value.tracks.length)
     fail(where, "missing tracks");
   const tracks = new Set<number>();
@@ -102,7 +176,13 @@ export function validateSong(value: unknown, id: string): Song {
       !finite(note.soundEnd) ||
       !finite(note.velocity) ||
       !whole(note.channel) ||
-      !tracks.has(note.track as number)
+      !tracks.has(note.track as number) ||
+      (note.finger !== undefined &&
+        ![1, 2, 3, 4, 5].includes(note.finger as number)) ||
+      (note.fingerHand !== undefined &&
+        !["left", "right"].includes(note.fingerHand as string)) ||
+      (note.notatedBeats !== undefined && !finite(note.notatedBeats)) ||
+      (note.staccato !== undefined && typeof note.staccato !== "boolean")
     )
       fail(where, `bad note ${isRecord(note) ? String(note.id) : ""}`);
     if (notes.has(note.id as string))
@@ -122,13 +202,26 @@ export async function loadLibrary(
   fetcher: typeof fetch = fetch,
 ): Promise<Song[]> {
   const get = async (path: string, hash?: string) => {
-    const response = await fetcher(
-      hash ? `${url(path)}?v=${hash}` : url(path),
-      hash ? undefined : { cache: "no-cache" },
-    );
-    if (!response.ok)
-      throw new Error(`Library file ${path}: HTTP ${response.status}`);
-    return response.json() as Promise<unknown>;
+    // A stalled request must not hold the studio's loading screen forever.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const response = await fetcher(
+        hash ? `${url(path)}?v=${hash}` : url(path),
+        hash
+          ? { signal: controller.signal }
+          : { cache: "no-cache", signal: controller.signal },
+      );
+      if (!response.ok)
+        throw new Error(`Library file ${path}: HTTP ${response.status}`);
+      return (await response.json()) as unknown;
+    } catch (error) {
+      if (controller.signal.aborted)
+        throw new Error(`Library file ${path}: no response within 30 seconds`);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   };
   const index = validateIndex(await get("index.json"));
   return Promise.all(

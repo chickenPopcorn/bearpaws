@@ -20,6 +20,10 @@ interface Backend {
   hang: "no" | "abort" | "manual";
   release: () => void;
   signOutError: unknown;
+  /** Makes the settings read fail, as a broken connection would. */
+  failReads: boolean;
+  /** When set, reads wait for this promise. */
+  readGate: Promise<void> | null;
 }
 
 function backend(): Backend {
@@ -32,6 +36,8 @@ function backend(): Backend {
     hang: "no",
     release: () => {},
     signOutError: null,
+    failReads: false,
+    readGate: null,
   };
 }
 
@@ -63,10 +69,20 @@ function client(b: Backend) {
   });
   const fake = {
     from: (table: "settings" | "progress") => ({
-      select: () =>
-        Object.assign(Promise.resolve(reply(b[table])), {
-          maybeSingle: async () => reply(b[table][0] ?? null),
+      select: () => ({
+        maybeSingle: async () => {
+          await b.readGate;
+          return b.failReads
+            ? reply(null, { message: "offline" })
+            : reply(b[table][0] ?? null);
+        },
+        order: () => ({
+          range: async (from: number, to: number) => {
+            await b.readGate;
+            return reply(b[table].slice(from, to + 1));
+          },
         }),
+      }),
       upsert: (rows: unknown) => write(`upsert ${table}`, [table, rows]),
       delete: () => ({
         in: (_column: string, ids: string[]) =>
@@ -199,10 +215,10 @@ describe("account sync", () => {
   it("gives up on a request that does not answer", async () => {
     const api = client(backend());
     api.from = (() => ({
-      select: () =>
-        Object.assign(new Promise(() => {}), {
-          maybeSingle: () => new Promise(() => {}),
-        }),
+      select: () => ({
+        maybeSingle: () => new Promise(() => {}),
+        order: () => ({ range: () => new Promise(() => {}) }),
+      }),
     })) as never;
     const pull = new CloudSync(api, USER).pull();
     const failure = expect(pull).rejects.toThrow(/did not respond/);
@@ -291,23 +307,20 @@ describe("account sync", () => {
     const b = backend();
     const api = client(b);
     const sync = new CloudSync(api, USER);
-    const closeStudio = vi.fn();
     b.signOutError = { message: "offline" };
     sync.progress("song", { best: 1 } as never);
-    await expect(sync.signOut(closeStudio)).rejects.toBeTruthy();
-    expect(closeStudio).not.toHaveBeenCalled();
+    await expect(sync.signOut()).rejects.toBeTruthy();
     expect(clearAccountData).not.toHaveBeenCalled();
     // Still signed in, so still syncing.
     sync.progress("song", { best: 2 } as never);
     expect(sync.pending).toBe(true);
 
     b.signOutError = null;
-    await sync.signOut(closeStudio);
-    expect(closeStudio).toHaveBeenCalledOnce();
+    await sync.signOut();
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "song", data: { best: 2 } },
+    ]);
     expect(clearAccountData).toHaveBeenCalledOnce();
-    expect(
-      vi.mocked(clearAccountData).mock.invocationCallOrder[0],
-    ).toBeGreaterThan(closeStudio.mock.invocationCallOrder[0]);
     const sent = b.calls.length;
     sync.progress("song", { best: 3 } as never);
     await vi.advanceTimersByTimeAsync(20000);
@@ -322,6 +335,57 @@ describe("account sync", () => {
     await sync.signOut();
     expect(clearAccountData).not.toHaveBeenCalled();
     expect(unsynced().progress).toEqual(["song"]);
+  });
+
+  it("marks the browser as the account's only after a successful pull", async () => {
+    const b = backend();
+    write("progress:only-here", { best: 4 });
+    b.failReads = true;
+    await expect(new CloudSync(client(b), USER).pull()).rejects.toBeTruthy();
+    expect(read("owner", null)).toBeNull();
+    expect(read("progress:only-here", {})).toEqual({ best: 4 });
+    // The retry still adopts this browser's earlier progress.
+    b.failReads = false;
+    await new CloudSync(client(b), USER).pull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read("owner", "")).toBe(USER);
+    expect(b.upserts).toEqual([
+      [
+        "progress",
+        [{ user_id: USER, song_id: "only-here", data: { best: 4 } }],
+      ],
+    ]);
+  });
+
+  it("changes nothing when a newer sign-in replaces one still loading", async () => {
+    const b = backend();
+    write("settings", { mode: "listen" });
+    b.settings = [{ data: { mode: "rhythm" } }];
+    let open!: () => void;
+    b.readGate = new Promise((resolve) => (open = resolve));
+    const sync = new CloudSync(client(b), USER);
+    const pull = sync.pull();
+    sync.stop();
+    open();
+    await expect(pull).rejects.toThrow(/replaced/);
+    expect(read("settings", {})).toEqual({ mode: "listen" });
+    expect(read("owner", null)).toBeNull();
+  });
+
+  it("reads every page of progress before deciding what the account lacks", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.progress = Array.from({ length: 2500 }, (_, i) => ({
+      song_id: `song-${String(i).padStart(4, "0")}`,
+      data: { best: i % 100 },
+    }));
+    write("progress:song-2400", { best: 1 });
+    await new CloudSync(client(b), USER).pull();
+    expect(read("progress:song-2400", {})).toEqual({ best: 0 });
+    expect(read("progress:song-0001", {})).toEqual({ best: 1 });
+    expect(
+      [...stored.keys()].filter((key) => key.startsWith("cadence:progress:")),
+    ).toHaveLength(2500);
   });
 
   it("sends nothing more once stopped", async () => {

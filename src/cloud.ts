@@ -16,6 +16,8 @@ const RETRY_MS = 15000;
 /** A request that takes longer than this is aborted and treated as failed. */
 const TIMEOUT_MS = 30000;
 const NO_RESPONSE = "The account service did not respond.";
+/** The Data API returns at most this many rows per request (Supabase's default). */
+const PAGE = 1000;
 
 /** This browser cannot store the account's data, so the studio cannot open. */
 export class BrowserStorageError extends Error {
@@ -106,17 +108,17 @@ export class CloudSync implements SyncHooks {
     const owner = read<string | null>("owner", null);
     if (owner && owner !== this.userId) clearAccountData();
     // The first account on this browser adopts what was saved here before.
+    // The owner mark is written only once the pull succeeds, so a failed
+    // first pull still adopts on the next try.
     const adopting = owner !== this.userId;
     const unsynced = adopting ? {} : read<Unsynced>("unsynced", {});
-    store("owner", this.userId);
-    const [settings, progress] = await timed(() =>
-      Promise.all([
-        this.client.from("settings").select("data").maybeSingle(),
-        this.client.from("progress").select("song_id, data"),
-      ]),
-    );
+    const [settings, rows] = await Promise.all([
+      timed(() => this.client.from("settings").select("data").maybeSingle()),
+      this.allProgress(),
+    ]);
     if (settings.error) throw settings.error;
-    if (progress.error) throw progress.error;
+    // A newer sign-in replaced this one while it loaded: change nothing.
+    if (this.stopped) throw new Error("This sign-in was replaced.");
 
     // Settings: this browser's unconfirmed change wins, then the account's.
     const localSettings = read<Settings | null>("settings", null);
@@ -126,11 +128,7 @@ export class CloudSync implements SyncHooks {
 
     // Progress: this browser's unconfirmed changes win; otherwise the account
     // is the record. Adopted progress fills in songs the account lacks.
-    const remote = new Map(
-      (progress.data as { song_id: string; data: Partial<Progress> }[]).map(
-        (row) => [row.song_id, row.data],
-      ),
-    );
+    const remote = new Map(rows.map((row) => [row.song_id, row.data]));
     const changed = new Set(unsynced.progress);
     for (const id of unsynced.deleted ?? []) {
       this.pendingDeletes.add(id);
@@ -150,9 +148,27 @@ export class CloudSync implements SyncHooks {
       }
     }
     for (const [id, data] of remote) store(`progress:${id}`, data);
+    store("owner", this.userId);
     this.error = "";
     this.saveUnsynced();
     if (this.pending) this.schedule(0);
+  }
+
+  /** Every progress row of the account, a page at a time. */
+  private async allProgress() {
+    const rows: { song_id: string; data: Partial<Progress> }[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const page = await timed(() =>
+        this.client
+          .from("progress")
+          .select("song_id, data")
+          .order("song_id")
+          .range(from, from + PAGE - 1),
+      );
+      if (page.error) throw page.error;
+      rows.push(...(page.data as typeof rows));
+      if (page.data.length < PAGE || this.stopped) return rows;
+    }
   }
 
   settings(settings: Settings) {
@@ -302,19 +318,19 @@ export class CloudSync implements SyncHooks {
   }
 
   /**
-   * Upload what is waiting, then sign out. Throws, still signed in and still
-   * syncing, if Supabase cannot end the session. Once signed out,
-   * `closeStudio` runs, syncing stops, and this browser's copy of the
-   * account's settings and progress is cleared, unless some changes could not
-   * be uploaded: the next sign-in by the same account uploads them then.
+   * Upload what is waiting, then sign out. Close the studio first, so its
+   * final save is in the upload and nothing changes during sign-out. Throws,
+   * still signed in and still syncing, if Supabase cannot end the session.
+   * Once signed out, syncing stops and this browser's copy of the account's
+   * settings and progress is cleared, unless some changes could not be
+   * uploaded: the next sign-in by the same account uploads them then.
    * Imported songs stay on the browser.
    */
-  async signOut(closeStudio: () => void = () => {}) {
+  async signOut() {
     await this.flush();
     const unsent = this.pending;
     const { error } = await timed(() => this.client.auth.signOut());
     if (error) throw error;
-    closeStudio();
     this.stop();
     if (!unsent) clearAccountData();
   }

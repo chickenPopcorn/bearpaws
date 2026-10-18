@@ -1,7 +1,13 @@
 import { useState } from "react";
 
-/** Shown while the account loads, or when it could not load. */
-export function OpeningStudio({ error }: { error: string }) {
+/** Shown while the account loads or signs out, or when it could not load. */
+export function OpeningStudio({
+  error,
+  message = "Opening your studio…",
+}: {
+  error: string;
+  message?: string;
+}) {
   return (
     <main className="signin" aria-busy={!error}>
       <div className="signin-card">
@@ -27,7 +33,7 @@ export function OpeningStudio({ error }: { error: string }) {
             </button>
           </>
         ) : (
-          <p role="status">Opening your studio…</p>
+          <p role="status">{message}</p>
         )}
       </div>
     </main>
