@@ -350,22 +350,33 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
   notes.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
   const playable = tracks.filter((t) => t.count);
   if (playable.length === 1) playable[0].hand = "right";
+  const pedals = [...intervals]
+    .flatMap(([channel, list]) =>
+      // A press and lift at one instant sustain nothing, but they are
+      // still pedal actions, with their own noise.
+      list.map((span) => ({ channel, ...span })),
+    )
+    .sort((a, b) => a.start - b.start || a.channel - b.channel);
+  // Playback reaches the last pedal action that sounds, on a channel with
+  // notes. A file's end is not an action.
+  const channels = new Set(notes.map((n) => n.channel));
+  const lastAction = pedals.reduce(
+    (last, span) =>
+      channels.has(span.channel)
+        ? Math.max(last, span.open ? span.start : span.end)
+        : last,
+    -Infinity,
+  );
   return {
     id,
     title,
     notes,
     tracks,
-    duration: Math.max(...notes.map((n) => n.soundEnd)) + 0.5,
+    duration: Math.max(lastAction, ...notes.map((n) => n.soundEnd)) + 0.5,
     tempos,
     ppq,
     timeSignatures: timeSignatures.sort((a, b) => a.tick - b.tick),
-    pedals: [...intervals]
-      .flatMap(([channel, list]) =>
-        // A press and lift at one instant sustain nothing, but they are
-        // still pedal actions, with their own noise.
-        list.map((span) => ({ channel, ...span })),
-      )
-      .sort((a, b) => a.start - b.start || a.channel - b.channel),
+    pedals,
     warnings: [...new Set(warnings)],
   };
 }

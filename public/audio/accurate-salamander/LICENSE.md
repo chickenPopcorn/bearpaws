@@ -52,7 +52,8 @@ values. The adaptations are:
   one channel both sound, as do a press and lift at one instant; a press that
   another channel takes over at that instant stays down. The noise has no key
   velocity, so it plays at its group volume. A file that ends with any
-  channel's pedal down has no lift noise. During playback these voices follow
+  channel's pedal down has no lift noise, and its last press rings out.
+  Imported songs play on through their last pedal action. During playback these voices follow
   the notes and pedal of the prepared passage.
 - **Pseudo pedal resonance** (CC23): a note struck with the pedal down
   (`locc64=22`) adds one or two softest-layer recordings of neighbouring

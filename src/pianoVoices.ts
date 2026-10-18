@@ -258,7 +258,8 @@ export function pianoVoiceEvents(
   presses.forEach((press, index) => {
     const next = presses[index + 1]?.start ?? Infinity;
     for (const [down, time, songEnd] of [
-      [true, press.start, press.end],
+      // A press still down where the file ends rings out.
+      [true, press.start, press.open ? Infinity : press.end],
       [false, press.end, next],
     ] as const) {
       // A file that ends with the pedal down has no lift to sound.

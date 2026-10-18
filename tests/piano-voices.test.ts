@@ -240,6 +240,16 @@ describe("optional voice triggers", () => {
     ]);
   });
 
+  it("lets a press still down where the file ends ring out", () => {
+    const [press, ...rest] = pianoVoiceEvents(
+      [note("a", 60, 0, 0.5)],
+      [{ channel: 0, start: 1, end: 1, open: true }],
+    ).filter((event) => event.region.voice === "pedalNoise");
+    expect(press).toMatchObject({ time: 1, songEnd: Infinity });
+    expect(press.region.trigger).toBe("pedalDown");
+    expect(rest).toEqual([]);
+  });
+
   it("sounds a press and lift at one instant", () => {
     const events = pianoVoiceEvents(
       [note("a", 60, 0, 0.5)],

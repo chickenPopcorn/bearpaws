@@ -261,6 +261,48 @@ describe("MIDI import and the musical timeline", () => {
     expect(song.pedals).toEqual([{ channel: 0, start: 0, end: 1 }]);
   });
 
+  it("plays through pedal actions after the last note on its channels", () => {
+    const pedal = (deltaTime: number, channel: number, value: number) => ({
+      deltaTime,
+      type: "controller" as const,
+      channel,
+      controllerType: 64,
+      value,
+    });
+    const song = (lift: number | null, channel: number) =>
+      parseSong(
+        midi([
+          [
+            {
+              deltaTime: 0,
+              type: "noteOn",
+              channel: 0,
+              noteNumber: 60,
+              velocity: 100,
+            },
+            {
+              deltaTime: 480,
+              type: "noteOff",
+              channel: 0,
+              noteNumber: 60,
+              velocity: 0,
+            },
+            pedal(960, channel, 127),
+            ...(lift === null ? [] : [pedal(lift, channel, 0)]),
+            { deltaTime: 1920, type: "endOfTrack" as const },
+          ],
+        ]),
+        "Trailing pedal",
+        "trailing-pedal",
+      );
+    // Pressed at 1.5 s and lifted at 2.5 s, well after the note ends.
+    expect(song(960, 0).duration).toBe(3);
+    // Still down where the file ends at 3.5 s: the press is the action.
+    expect(song(null, 0).duration).toBe(2);
+    // A channel with no notes makes no pedal noise to wait for.
+    expect(song(960, 1).duration).toBe(1);
+  });
+
   it("records each channel's sustain-pedal presses in time order", () => {
     const pedal = (deltaTime: number, channel: number, value: number) => ({
       deltaTime,
