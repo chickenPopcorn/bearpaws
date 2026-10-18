@@ -136,8 +136,12 @@ export function pianoVoiceLevel(event: PianoVoiceEvent, heldSeconds: number) {
   );
 }
 
-/** Spread draws for pedal noise over [0, 1) without a random source. */
-const draw = (index: number) => (index * 0.6180339887498949) % 1;
+/**
+ * A draw in [0, 1) for the pedal change at `index`, without a random
+ * source: successive presses, and successive lifts, take turns between
+ * their two recordings.
+ */
+const draw = (index: number) => (index % 2 ? 0.75 : 0.25);
 
 /** Merge every channel's pedal into one foot pedal. */
 function footPedal(spans: readonly PedalSpan[]) {
@@ -247,32 +251,40 @@ export function pianoVoiceEvents(
   // player strikes them, so its key comes up only when the last does.
   const strikes = new Map<
     string,
-    { end: number; soundEnd: number; channels: number[] }
+    {
+      end: number;
+      soundEnd: number;
+      /** The channels of the duplicates whose keys come up last. */
+      releasing: number[];
+    }
   >();
   for (const note of notes) {
     if (note.velocity <= 0) continue;
     const key = `${note.pitch}:${note.start}`,
       strike = strikes.get(key);
-    if (!strike)
+    if (!strike || note.end > strike.end)
       strikes.set(key, {
         end: note.end,
-        soundEnd: note.soundEnd,
-        channels: [note.channel],
+        soundEnd: Math.max(strike?.soundEnd ?? -Infinity, note.soundEnd),
+        releasing: [note.channel],
       });
     else {
-      strike.end = Math.max(strike.end, note.end);
       strike.soundEnd = Math.max(strike.soundEnd, note.soundEnd);
-      strike.channels.push(note.channel);
+      if (note.end === strike.end) strike.releasing.push(note.channel);
     }
   }
   for (const note of notes) {
     if (note.velocity <= 0) continue;
-    const { end, soundEnd, channels } = strikes.get(
+    const { end, soundEnd, releasing } = strikes.get(
         `${note.pitch}:${note.start}`,
       )!,
       released = { ...note, end };
     trigger("keyNoise", released, end, Infinity);
-    if (soundEnd <= end && !channels.some((channel) => pedalDown(channel, end)))
+    // Only the pedal on a key that comes up then can hold its dampers off.
+    if (
+      soundEnd <= end &&
+      !releasing.some((channel) => pedalDown(channel, end))
+    )
       trigger("release", released, end, Infinity);
     if (pedalDown(note.channel, note.start))
       trigger("resonance", note, note.start, note.soundEnd);

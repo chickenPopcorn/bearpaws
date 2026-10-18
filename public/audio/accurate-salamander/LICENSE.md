@@ -40,7 +40,8 @@ values. The adaptations are:
   where the file ends. Each recording plays to
   its end, less `rt_decay` for each second the note sounded before its key-up,
   in real time, so speed changes count. Duplicate tracks that strike a key
-  together sound as one note and release once, when the last key comes up.
+  together sound as one note and release once, when the last key comes up;
+  only the pedal on the keys that come up then holds its harmonics back.
 - **Hammer noise** (CC21, `rel1` to `rel88`): the key's release noise at every
   key-up, pedal or not (`trigger=release_key`), unpitched.
 - **Pedal noise** (CC22, `pedalD1`, `pedalD2`, `pedalU1`, `pedalU2`): sounds at

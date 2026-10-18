@@ -344,6 +344,48 @@ describe("optional voice triggers", () => {
     ).toEqual([["keyNoise", 1, ["short~keyNoise~0", "long~keyNoise~0"]]]);
   });
 
+  it("ignores the pedal of a duplicate whose key came up earlier", () => {
+    const short = note("short", 60, 0, 0.5, 0.5, 0),
+      long = note("long", 60, 0, 1, 1, 1);
+    for (const order of [
+      [short, long],
+      [long, short],
+    ]) {
+      const events = pianoVoiceEvents(
+        order,
+        // Pressed on the short note's channel after its key came up.
+        [{ channel: 0, start: 0.7, end: 2 }],
+      ).filter((event) => event.time === 1 && event.notes.length);
+      expect(events.map((event) => event.region.voice)).toEqual([
+        "keyNoise",
+        "release",
+      ]);
+    }
+  });
+
+  it("alternates the two recordings of each pedal noise", () => {
+    const pedals = Array.from({ length: 8 }, (_, i) => ({
+      channel: 0,
+      start: i,
+      end: i + 0.5,
+    }));
+    const files = (trigger: string) =>
+      pianoVoiceEvents([note("a", 60, 0, 8)], pedals)
+        .filter((event) => event.region.trigger === trigger)
+        .map((event) => event.region.file.slice(-6, -5));
+    expect(files("pedalDown")).toEqual([
+      "1",
+      "2",
+      "1",
+      "2",
+      "1",
+      "2",
+      "1",
+      "2",
+    ]);
+    expect(files("pedalUp")).toEqual(["1", "2", "1", "2", "1", "2", "1", "2"]);
+  });
+
   it("triggers one voice for duplicate tracks, from the louder note", () => {
     const events = pianoVoiceEvents(
       [
