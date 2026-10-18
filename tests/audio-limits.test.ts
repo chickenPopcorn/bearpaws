@@ -1544,6 +1544,71 @@ describe("optional piano voices", () => {
     );
   });
 
+  it("decays a release shared by notes struck apart by the shorter hold", () => {
+    const { audio, transport, context, gain, played } = withVoices();
+    // Two tracks hold the same key from 0 and from 0.5 s, and release it
+    // together at 1 s.
+    const notes = [
+      { ...note(1, 60, 1), end: 1 },
+      { ...note(2, 60, 1), start: 0.5, end: 1, track: 1 },
+    ];
+    for (let tick = 0; tick * 0.02 <= 1.1; tick++) {
+      context.currentTime = tick * 0.02;
+      audio.schedule(notes, transport, true, []);
+    }
+    const region = pianoVoiceRegions("release", 60, 0.5)[0];
+    const index = played().findIndex(([file]) => file === region.file);
+    expect(gain(index).linearRampToValueAtTime.mock.calls[0][0]).toBeCloseTo(
+      pianoLevel(
+        { gainDb: region.gainDb - region.decayDbPerSecond * 0.5 },
+        0.5,
+      ),
+      12,
+    );
+  });
+
+  it("takes optional voices from the passage playback prepared", () => {
+    const { audio, transport, context, played } = withVoices();
+    transport.loop = [0, 2];
+    const notes = [
+      { ...note(1, 60, 1), end: 1 },
+      // Outside the loop, on another channel with a pedal inside it.
+      { ...note(2, 48, 4), start: 3, end: 4, channel: 1 },
+    ];
+    const pedals = [{ channel: 1, start: 0.5, end: 1.5 }];
+    audio.setPlaybackNotes([notes[0]], pedals);
+    for (let tick = 0; tick * 0.02 <= 1.6; tick++) {
+      context.currentTime = tick * 0.02;
+      transport.update(context.currentTime);
+      audio.schedule(notes, transport, true, pedals);
+    }
+    // Channel 1 has no note in the prepared passage: no pedal noise.
+    expect(
+      played().filter(([file]) => (file as string).startsWith("pedal")),
+    ).toEqual([]);
+    // After a stop, the song's own notes and pedal apply again.
+    audio.stop();
+    const before = played().length;
+    context.currentTime = 0.5;
+    transport.seek(0.45, 0.5);
+    audio.schedule(notes, transport, true, pedals);
+    expect(
+      played()
+        .slice(before)
+        .map(([file]) => file),
+    ).toContain("pedalD1.flac");
+  });
+
+  it("lets go of a song's optional voice events when playback stops", () => {
+    const { audio, transport } = withVoices();
+    const cache = () =>
+      (audio as unknown as { voiceEventCache?: unknown }).voiceEventCache;
+    audio.schedule([note(1, 60, 0.4)], transport, true, []);
+    expect(cache()).toBeDefined();
+    audio.stop();
+    expect(cache()).toBeUndefined();
+  });
+
   it("moves resonance and pedal noise to a new speed with their notes", () => {
     const { audio, transport, context, gain, run } = withVoices();
     run(...passage(), 0.6);

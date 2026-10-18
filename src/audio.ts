@@ -129,6 +129,8 @@ export class ReferenceAudio {
   private playbackFiles = new Set<string>();
   /** When each note of a pass was struck, in context time, for rt_decay. */
   private struck = new WeakMap<Set<string>, Map<string, number>>();
+  /** The passage that playback prepared, which its optional voices follow. */
+  private playback?: { notes: readonly Note[]; pedals: readonly PedalSpan[] };
   private voiceEventCache?: {
     notes: readonly Note[];
     pedals: readonly PedalSpan[];
@@ -446,6 +448,11 @@ export class ReferenceAudio {
    */
   setPlaybackNotes(notes: readonly PianoNote[], pedals?: readonly PedalSpan[]) {
     this.playbackFiles = sampleFiles(notes);
+    // The scheduler takes optional voices from this same passage, so that
+    // each one it plays is one whose recording was prepared.
+    this.playback = pedals
+      ? { notes: notes.filter(isSongNote), pedals }
+      : undefined;
     if (pedals)
       for (const file of this.voiceFiles(notes, pedals))
         if (this.samples.has(file)) this.playbackFiles.add(file);
@@ -566,12 +573,17 @@ export class ReferenceAudio {
     } catch {}
   }
   stop(releasePrepared = true, resetRoom = true) {
-    if (releasePrepared) this.playbackFiles.clear();
+    if (releasePrepared) {
+      this.playbackFiles.clear();
+      this.playback = undefined;
+    }
     const now = this.now();
     for (const voice of this.voices) this.fade(voice, now);
     this.scheduled.clear();
     this.ahead.clear();
     this.struck = new WeakMap();
+    // A large song's events are rebuilt on the next tick that needs them.
+    this.voiceEventCache = undefined;
     this.aheadStart = Infinity;
     // Rebuilding the room flushes its tail. Skip it when there is no tail,
     // such as while dragging the playhead with nothing playing.
@@ -641,11 +653,12 @@ export class ReferenceAudio {
   ) {
     const { region } = event;
     // rt_decay counts the time the voice's note has sounded, across speed
-    // changes, from when it was struck in this pass.
+    // changes, from when it was struck in this pass. Notes released together
+    // share one voice, decayed for the shortest of their holds.
     const struck = this.struck.get(pass),
       times = event.notes.flatMap((id) => struck?.get(id) ?? []);
     const held = times.length
-      ? Math.max(0, when - Math.min(...times))
+      ? Math.max(0, when - Math.max(...times))
       : event.held / speed;
     const level = pianoVoiceLevel(event, held);
     if (level < MIN_PIANO_VOICE_LEVEL) return;
@@ -838,7 +851,9 @@ export class ReferenceAudio {
         previous.ids.push(n.id);
       }
     }
-    const { events, resonance } = this.voiceEvents(notes, pedals);
+    const { events, resonance } = this.playback
+      ? this.voiceEvents(this.playback.notes, this.playback.pedals)
+      : this.voiceEvents(notes, pedals);
     /** Where the next pass's first pedal press falls, after this pass. */
     const wrappedPress = () => {
       if (!Number.isFinite(to)) return Infinity;

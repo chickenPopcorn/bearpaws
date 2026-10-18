@@ -49,9 +49,11 @@ values. The adaptations are:
   recordings of each kind in a fixed pattern instead of drawing at random. The
   next pedal change cuts the previous noise after `off_time` (0.1 s), including
   the next loop pass's first press. A lift and press at the same instant on
-  one channel both sound; a press that another channel takes over at that
-  instant stays down. The noise has no key velocity, so it plays at its
-  group volume. A file that ends with the pedal down has no lift noise.
+  one channel both sound, as do a press and lift at one instant; a press that
+  another channel takes over at that instant stays down. The noise has no key
+  velocity, so it plays at its group volume. A file that ends with any
+  channel's pedal down has no lift noise. During playback these voices follow
+  the notes and pedal of the prepared passage.
 - **Pseudo pedal resonance** (CC23): a note struck with the pedal down
   (`locc64=22`) adds one or two softest-layer recordings of neighbouring
   strings, retuned to the struck key, with a 50 ms attack. They are damped

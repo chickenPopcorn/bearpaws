@@ -283,7 +283,7 @@ describe("MIDI import and the musical timeline", () => {
           pedal(240, 0, 64),
           pedal(120, 0, 127),
           pedal(120, 0, 63),
-          // A press and lift at the same instant leaves no press.
+          // A press and lift at the same instant sustain nothing, but are kept.
           pedal(0, 1, 127),
           pedal(0, 1, 0),
           pedal(240, 1, 100),
@@ -303,6 +303,7 @@ describe("MIDI import and the musical timeline", () => {
     );
     expect(song.pedals).toEqual([
       { channel: 0, start: 0.25, end: 0.5 },
+      { channel: 1, start: 0.5, end: 0.5 },
       // Still down at the end of the file: no lift.
       { channel: 1, start: 0.75, end: 1.5, open: true },
     ]);

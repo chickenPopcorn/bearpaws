@@ -171,8 +171,8 @@ function footPedal(spans: readonly PedalSpan[]) {
         lifting: new Set([span.channel]),
       });
     else if (span.end === last.end) {
-      // Any channel that lifts there makes it a lift.
-      last.open &&= open;
+      // The foot pedal stays down while any channel is still down.
+      last.open ||= open;
       last.lifting.add(span.channel);
     }
   }

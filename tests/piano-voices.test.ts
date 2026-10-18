@@ -240,6 +240,17 @@ describe("optional voice triggers", () => {
     ]);
   });
 
+  it("sounds a press and lift at one instant", () => {
+    const events = pianoVoiceEvents(
+      [note("a", 60, 0, 0.5)],
+      [{ channel: 0, start: 1, end: 1 }],
+    ).filter((event) => event.region.voice === "pedalNoise");
+    expect(events.map((event) => [event.region.trigger, event.time])).toEqual([
+      ["pedalDown", 1],
+      ["pedalUp", 1],
+    ]);
+  });
+
   it("keeps one foot pedal down when another channel takes it over at a lift", () => {
     const events = pianoVoiceEvents(
       [note("a", 60, 0, 0.5, 3), note("b", 48, 0, 0.5, 3, 1)],
@@ -277,13 +288,13 @@ describe("optional voice triggers", () => {
     expect(lifts([{ channel: 0, start: 0.25, end: 4, open: true }])).toEqual(
       [],
     );
-    // One channel lifting where another is still down at the end is a lift.
+    // While any channel is still down at the end, the foot pedal never lifts.
     expect(
       lifts([
         { channel: 0, start: 0.25, end: 4, open: true },
         { channel: 1, start: 1, end: 4 },
       ]),
-    ).toEqual([4]);
+    ).toEqual([]);
     expect(
       lifts([
         { channel: 0, start: 0.25, end: 2 },

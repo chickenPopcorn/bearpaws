@@ -5,7 +5,7 @@ release, key release noise, pedal noise and pseudo pedal resonance.
 
 ## Automated checks
 
-- `npm test`: 772 tests across 31 suites passed.
+- `npm test`: 776 tests across 31 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: 10 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
@@ -55,8 +55,10 @@ time, level and damping, turning each voice off, speed changes (including
 `rt_decay` over the real time a key was held), a voice due where playback
 starts or a full lookahead after a stall, key and pedal lifts at the end of a
 loop pass but not at its start, lift noise cut by the next pass's press, a lift
-and press at one instant on one channel or across two, resonance damped after
-its attack when its note ends sooner, pitches beyond the piano,
+and press at one instant on one channel or across two, a press and lift at one
+instant, resonance damped after its attack when its note ends sooner, pitches
+beyond the piano, notes released together decayed by the shorter hold, voices
+taken only from the prepared passage, the event cache released on stop,
 resonance for a note struck where playback starts, no pedal lift or release
 harmonics where a file ends with the pedal down, stopping a voice turned off
 (including sources waiting to start), restarting a passage still loading when a

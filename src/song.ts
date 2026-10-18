@@ -361,9 +361,9 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     timeSignatures: timeSignatures.sort((a, b) => a.tick - b.tick),
     pedals: [...intervals]
       .flatMap(([channel, list]) =>
-        list
-          .filter((span) => span.end > span.start)
-          .map((span) => ({ channel, ...span })),
+        // A press and lift at one instant sustain nothing, but they are
+        // still pedal actions, with their own noise.
+        list.map((span) => ({ channel, ...span })),
       )
       .sort((a, b) => a.start - b.start || a.channel - b.channel),
     warnings: [...new Set(warnings)],
