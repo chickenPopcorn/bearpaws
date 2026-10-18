@@ -22,6 +22,8 @@ export const KEYBOARD_HEIGHT = 132;
 export const BLACK_KEY_HEIGHT = 88;
 /** Smallest finger number drawn on a note bar narrower than its usual label. */
 const MIN_NARROW_LABEL = 9;
+/** Smallest label size; a label that cannot fit at this size is left off. */
+const MIN_LABEL = 7;
 export const rightColor = "#a086e9",
   leftColor = "#51b3a5";
 /** Darker hand colours for text on white keys, which the fills fail (2.5-3:1). */
@@ -144,6 +146,17 @@ function noteLabel(
     descent,
     height: ascent + descent,
   };
+}
+/** Shrinks a label to fit, since a fillText maxWidth squeezes the glyphs. */
+function fittedSize(
+  c: CanvasRenderingContext2D,
+  text: string,
+  size: number,
+  weight: number,
+  maxWidth: number,
+) {
+  const { width } = noteLabel(c, text, size, weight);
+  return width > maxWidth ? (size * maxWidth) / width : size;
 }
 export function draw(
   canvas: HTMLCanvasElement,
@@ -350,23 +363,26 @@ export function draw(
           let inkTop = centerY - stackHeight / 2;
           for (const label of [pitchLabel, fingerLabel]) {
             c.font = label.font;
-            c.fillText(label.text, centerX, inkTop + label.ascent, maxWidth);
+            c.fillText(label.text, centerX, inkTop + label.ascent);
             inkTop += label.height + 4;
           }
         } else {
           // Finger position takes priority when a short note cannot fit both.
-          const label = noteLabel(
-            c,
-            finger ? String(finger) : noteName(n.pitch),
-            Math.max(7, Math.min(finger ? 13 : 12, visibleHeight - 2)),
-            finger ? 700 : 400,
+          const text = finger ? String(finger) : noteName(n.pitch),
+            base = finger ? 13 : 12,
+            weight = finger ? 700 : 400;
+          const size = Math.min(
+            Math.max(MIN_LABEL, Math.min(base, visibleHeight - 2)),
+            fittedSize(c, text, base, weight, maxWidth),
           );
-          c.fillText(
-            label.text,
-            centerX,
-            centerY + (label.ascent - label.descent) / 2,
-            maxWidth,
-          );
+          if (size >= MIN_LABEL) {
+            const label = noteLabel(c, text, size, weight);
+            c.fillText(
+              label.text,
+              centerX,
+              centerY + (label.ascent - label.descent) / 2,
+            );
+          }
         }
       } else if (finger) {
         // Narrow bars (tablet and phone widths) show only the finger number,
@@ -491,21 +507,24 @@ export function draw(
       c.fillText(String(finger), x + w / 2, fall + (k.black ? 48 : h - 15));
     }
     if (names && (fingerNote || input.down.has(k.pitch)) && w > 18) {
-      c.fillStyle =
-        input.down.has(k.pitch) || k.black || ref ? "#fff" : textColor;
-      c.font = `700 12px ${scoreFont}`;
-      c.textAlign = "center";
-      c.fillText(
-        noteName(k.pitch),
-        x + w / 2,
-        fall + (k.black ? 26 : h - 35),
-        w - 4,
-      );
+      const name = noteName(k.pitch),
+        size = fittedSize(c, name, 12, 700, w - 4);
+      if (size >= MIN_LABEL) {
+        c.fillStyle =
+          input.down.has(k.pitch) || k.black || ref ? "#fff" : textColor;
+        c.font = `700 ${size}px ${scoreFont}`;
+        c.textAlign = "center";
+        c.fillText(name, x + w / 2, fall + (k.black ? 26 : h - 35));
+      }
     } else if (!k.black && k.pitch % 12 === 0 && w > 12) {
-      c.fillStyle = input.down.has(k.pitch) ? "#fff" : labelColor;
-      c.font = `12px ${scoreFont}`;
-      c.textAlign = "center";
-      c.fillText(noteName(k.pitch), x + w / 2, fall + h - 35, w - 4);
+      const name = noteName(k.pitch),
+        size = fittedSize(c, name, 12, 400, w - 4);
+      if (size >= MIN_LABEL) {
+        c.fillStyle = input.down.has(k.pitch) ? "#fff" : labelColor;
+        c.font = `${size}px ${scoreFont}`;
+        c.textAlign = "center";
+        c.fillText(name, x + w / 2, fall + h - 35);
+      }
     }
   };
   keys.filter((k) => !k.black).forEach(drawKey);

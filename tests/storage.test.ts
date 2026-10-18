@@ -22,7 +22,7 @@ afterEach(() => vi.unstubAllGlobals());
 it("persists actual settings and song progress under independent browser keys", () => {
   write("settings", {
     mode: "rhythm",
-    speed: 0.5,
+    speed: 0.6,
     tolerance: 0.35,
     left: false,
     right: true,
@@ -37,7 +37,7 @@ it("persists actual settings and song progress under independent browser keys", 
   });
   expect(settings()).toMatchObject({
     mode: "rhythm",
-    speed: 0.5,
+    speed: 0.6,
     tolerance: 0.35,
     selected: "imported",
   });
@@ -133,6 +133,18 @@ it("preserves an explicit loop preference separately from its custom range", () 
     loop: [1, 4],
   });
 });
+it("snaps saved speeds onto the slider's 20% steps within its range", () => {
+  for (const [saved, loaded] of [
+    [0.75, 0.8],
+    [0.25, 0.2],
+    [1.5, 1.4],
+    [3, 1.4],
+    [0.01, 0.2],
+  ]) {
+    write("settings", { speed: saved });
+    expect(settings().speed).toBe(loaded);
+  }
+});
 it("reports quota or denied storage instead of throwing", () => {
   vi.stubGlobal("localStorage", {
     getItem: () => {
@@ -143,7 +155,7 @@ it("reports quota or denied storage instead of throwing", () => {
     },
   });
   expect(write("settings", {})).toBe(false);
-  expect(settings().speed).toBe(0.75);
+  expect(settings().speed).toBe(1);
   expect(progress("blocked", 5).position).toBe(0);
 });
 

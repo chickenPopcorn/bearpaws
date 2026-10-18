@@ -53,7 +53,7 @@ vi.mock("../src/midi", () => ({
 vi.mock("../src/storage", () => ({
   settings: () => ({
     mode: "wait",
-    speed: 0.75,
+    speed: 1,
     left: true,
     right: true,
     tolerance: 0.22,
@@ -483,7 +483,7 @@ describe("practice studio integration", () => {
     },
   );
 
-  it.each([1, 1.5])(
+  it.each([1, 1.4])(
     "lets the final piano release finish naturally at %sx speed, while explicit pause still stops it",
     async (speed) => {
       const studio = create(song([[60, 3.5]]));
@@ -912,7 +912,7 @@ describe("practice studio integration", () => {
     },
   );
 
-  it.each([0.5, 1, 1.5])(
+  it.each([0.6, 1, 1.4])(
     "accepts a Wait note 500ms early at %sx without jumping the timeline forward",
     async (speed) => {
       const studio = create(

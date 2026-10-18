@@ -1,4 +1,4 @@
-import { memo, useEffect, useEffectEvent, useState } from "react";
+import { memo, useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   collections,
   collectionForSong,
@@ -13,8 +13,8 @@ const songMatches = (song: Song, term: string) =>
   searchText(
     `${song.title} ${song.lesson?.composer ?? song.source?.composer ?? ""}`,
   ).includes(term);
-const allExpanded = () =>
-  Object.fromEntries(collections.map(({ id }) => [id, true])) as Record<
+const allSections = (open: boolean) =>
+  Object.fromEntries(collections.map(({ id }) => [id, open])) as Record<
     CollectionId,
     boolean
   >;
@@ -22,16 +22,25 @@ const allExpanded = () =>
 export const SongLibrary = memo(function SongLibrary({
   songs,
   selected,
+  savedSelection,
   onSelect,
   onImport,
 }: {
   songs: Song[];
   selected: string;
+  /** The song restored at startup, which may load after the first render. */
+  savedSelection?: string;
   onSelect(song: Song): void;
   onImport(): void;
 }) {
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState(allExpanded);
+  // Sections start folded, even for the restored song; a later song change
+  // opens that song's section.
+  const [expanded, setExpanded] = useState(() => allSections(false));
+  const startup = useRef<{ initial: string; saved?: string } | undefined>({
+    initial: selected,
+    saved: savedSelection,
+  });
   const revealSelection = useEffectEvent(() => {
     const group = collectionForSong(selected).id;
     setExpanded((current) => ({ ...current, [group]: true }));
@@ -41,6 +50,17 @@ export const SongLibrary = memo(function SongLibrary({
     );
   });
   useEffect(() => {
+    const pending = startup.current;
+    if (
+      pending &&
+      (selected === pending.initial || selected === pending.saved)
+    ) {
+      // Startup ends once the saved song is showing.
+      if (!pending.saved || selected === pending.saved)
+        startup.current = undefined;
+      return;
+    }
+    startup.current = undefined;
     revealSelection();
   }, [selected]);
   const term = searchText(query.trim());
@@ -62,7 +82,7 @@ export const SongLibrary = memo(function SongLibrary({
         onChange={(event) => {
           const value = event.target.value;
           setQuery(value);
-          if (value.trim()) setExpanded(allExpanded());
+          if (value.trim()) setExpanded(allSections(true));
         }}
       />
       {groups.map((group) => {

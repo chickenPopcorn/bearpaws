@@ -434,6 +434,50 @@ describe("review regressions", () => {
     }
   });
 
+  it("shrinks a pitch name to fit a narrow block instead of squeezing its glyphs", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const n = note("narrow-sharp", 61, 1, 2);
+    const fixture = song([n]);
+    let shrunk = false;
+    for (const width of [600, 880, 1200, 1760]) {
+      const { canvas, context } = drawingCanvas(width);
+      const paints: { args: unknown[]; font: string }[] = [];
+      context.fillText.mockImplementation((...args: unknown[]) => {
+        paints.push({
+          args,
+          font: (context as unknown as { font: string }).font,
+        });
+      });
+      draw(
+        canvas,
+        fixture,
+        fixture.notes,
+        0,
+        new MidiState(),
+        new Practice(fixture.notes),
+        true,
+        false,
+        false,
+      );
+      const [, , blockWidth] = context.roundRect.mock.calls[0] as number[];
+      const label = paints.find(({ args }) => args[0] === "C♯4");
+      if (blockWidth <= 18) continue;
+      if (!label) {
+        // Left off only when even the smallest size would not fit.
+        expect("C♯4".length * 7 * 0.6).toBeGreaterThan(blockWidth - 6);
+        continue;
+      }
+      expect(label.args).toHaveLength(3);
+      const size = Number(label.font.match(/([\d.]+)px/)![1]);
+      expect(size).toBeLessThanOrEqual(12);
+      if (size < 12) shrunk = true;
+      expect("C♯4".length * size * 0.6).toBeLessThanOrEqual(
+        blockWidth - 6 + 1e-9,
+      );
+    }
+    expect(shrunk).toBe(true);
+  });
+
   it("centers the full sharp pitch and finger as one stack when both fit in a waterfall block", () => {
     vi.stubGlobal("window", { devicePixelRatio: 1 });
     const n: Note = {
