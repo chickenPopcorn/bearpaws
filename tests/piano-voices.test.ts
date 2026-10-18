@@ -221,6 +221,37 @@ describe("optional voice triggers", () => {
     expect(new Set(events.map((event) => event.region.file)).size).toBe(4);
   });
 
+  it("keeps a lift and press at one instant on one channel", () => {
+    const events = pianoVoiceEvents(
+      [note("a", 60, 0, 0.5, 3)],
+      [
+        { channel: 0, start: 1, end: 2 },
+        { channel: 0, start: 2, end: 3 },
+      ],
+    ).filter((event) => event.region.voice === "pedalNoise");
+    expect(
+      events.map((event) => [event.region.trigger, event.time, event.songEnd]),
+    ).toEqual([
+      ["pedalDown", 1, 2],
+      // The press at the same instant cuts the lift's noise at once.
+      ["pedalUp", 2, 2],
+      ["pedalDown", 2, 3],
+      ["pedalUp", 3, Infinity],
+    ]);
+  });
+
+  it("gives a pitch beyond the piano its nearest key's voices, as its note", () => {
+    const [low, high] = pianoVoiceEvents([
+      note("low", 15, 0, 0.5),
+      note("high", 115, 1, 1.5),
+    ]).filter((event) => event.region.voice === "keyNoise");
+    expect([low.region.file, low.pitch]).toEqual(["rel1.flac", 15]);
+    expect([high.region.file, high.pitch]).toEqual(["rel88.flac", 115]);
+    expect(pianoVoiceRegions("release", 15, 0.6)).toEqual(
+      pianoVoiceRegions("release", 21, 0.6),
+    );
+  });
+
   it("sounds no pedal lift where a file ends with the pedal down", () => {
     const lifts = (pedals: PedalSpan[]) =>
       pianoVoiceEvents(

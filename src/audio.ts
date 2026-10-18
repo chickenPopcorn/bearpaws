@@ -144,6 +144,8 @@ export class ReferenceAudio {
   /** Context time at which the pass that `ahead` belongs to begins. */
   private aheadStart = Infinity;
   private cycle = -1;
+  /** Where the current pass began playing: a play position or loop start. */
+  private passStart = -Infinity;
   error = "";
   get loading() {
     return this.preparations > 0;
@@ -474,16 +476,23 @@ export class ReferenceAudio {
   }
   /**
    * Make room for a voice that is due now: fade the oldest voice that started
-   * before it. Optional voices give way first, and only a note may take a
-   * note's voice.
+   * before it. Optional voices give way first, even before they start, and
+   * only a note may take a note's voice.
    */
   private steal(now: number, optional: boolean) {
     let oldest: Voice | undefined;
     for (const voice of this.voices)
       if (voice.layer && voice.start < (oldest?.start ?? now)) oldest = voice;
-    if (!oldest && !optional)
+    if (!oldest && !optional) {
+      // A note may also cancel an optional voice still waiting to start,
+      // the last to start first, before it takes a note's voice.
       for (const voice of this.voices)
-        if (voice.start < (oldest?.start ?? now)) oldest = voice;
+        if (voice.layer && voice.start > (oldest?.start ?? -Infinity))
+          oldest = voice;
+      if (!oldest)
+        for (const voice of this.voices)
+          if (voice.start < (oldest?.start ?? now)) oldest = voice;
+    }
     if (oldest) this.fade(oldest, now);
     return oldest !== undefined;
   }
@@ -764,11 +773,8 @@ export class ReferenceAudio {
       this.ahead = new Set();
       this.aheadStart = Infinity;
       this.cycle = transport.cycle;
+      this.passStart = transport.position;
     }
-    // Release, noise and resonance voices start at an instant. One that a
-    // late tick missed, such as at the very start of playback, still sounds
-    // up to a lookahead late, but none from before playback (re)started.
-    const late = position - LOOKAHEAD_SECONDS * transport.speed;
     this.schedulePass(
       notes,
       pedals,
@@ -776,9 +782,7 @@ export class ReferenceAudio {
       now,
       position,
       this.scheduled,
-      transport.position <= position
-        ? Math.max(late, transport.position)
-        : late,
+      this.passStart <= position ? this.passStart : -Infinity,
     );
     // Start the next pass within the lookahead too. Waiting for the tick
     // that observes the wrap would strike its first notes up to a tick late.
@@ -798,8 +802,8 @@ export class ReferenceAudio {
   /**
    * Schedule one pass's notes that start within the lookahead. `position` is
    * measured from the start of that pass, so for the next loop pass it is
-   * one loop length earlier than the transport position. Optional voices
-   * from `earliest` on are due.
+   * one loop length earlier than the transport position. `start` is where
+   * playback of the pass began, if not at the loop start.
    */
   private schedulePass(
     notes: Note[],
@@ -808,7 +812,7 @@ export class ReferenceAudio {
     now: number,
     position: number,
     pass: Set<string>,
-    earliest: number,
+    start: number,
   ) {
     const [from, to] = transport.loop ?? [-Infinity, Infinity];
     // A note that sounds into the pass is struck where the pass begins.
@@ -833,10 +837,22 @@ export class ReferenceAudio {
       }
     }
     const { events, resonance } = this.voiceEvents(notes, pedals);
+    /** Where the next pass's first pedal press falls, after this pass. */
+    const wrappedPress = () => {
+      if (!Number.isFinite(to)) return Infinity;
+      for (
+        let i = firstIndexAtOrAfter(events, "time", from);
+        i < events.length && events[i].time < to;
+        i++
+      )
+        if (events[i].region.trigger === "pedalDown")
+          return to + events[i].time - from;
+      return Infinity;
+    };
     /** Play an optional voice from song time `at`. */
     const sound = (event: PianoVoiceEvent, at: number) => {
-      // Held voices end with the pass. A lift's noise is cut only by a
-      // press within it.
+      // Held voices end with the pass. The next press cuts a lift's noise,
+      // in the next pass if none follows in this one.
       this.optionalVoice(
         event,
         now + (at - position) / transport.speed,
@@ -845,7 +861,7 @@ export class ReferenceAudio {
         event.songEnd <= to
           ? event.songEnd
           : liftTriggered(event.region)
-            ? Infinity
+            ? wrappedPress()
             : to,
         pass,
       );
@@ -884,7 +900,14 @@ export class ReferenceAudio {
       for (const id of carried)
         for (const event of resonance.get(id) ?? [])
           if (!pass.has(event.ids[0])) sound(event, head);
-    const first = Math.max(earliest, from),
+    // Release, noise and resonance voices start at an instant. One that a
+    // late tick missed, such as at the very start of playback, still sounds
+    // up to a lookahead late, but none from before the pass began.
+    const boundary = Math.max(start, from),
+      first = Math.max(
+        boundary,
+        position - LOOKAHEAD_SECONDS * transport.speed,
+      ),
       limit = position + LOOKAHEAD_SECONDS * transport.speed;
     for (
       let i = firstIndexAtOrAfter(events, "time", first);
@@ -898,7 +921,7 @@ export class ReferenceAudio {
       if (
         event.time > to ||
         (event.time === to && !lift) ||
-        (event.time === first && lift) ||
+        (event.time === boundary && lift) ||
         !this.sound.voices[event.region.voice] ||
         pass.has(event.ids[0])
       )

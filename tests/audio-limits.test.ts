@@ -1337,6 +1337,32 @@ describe("optional piano voices", () => {
     expect(faded).toEqual([52]);
   });
 
+  it("lets a due note cancel an optional voice waiting to start before it takes a note's", () => {
+    const { audio, transport, context, nodes, gain } = withVoices();
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
+    const older = MAX_REFERENCE_VOICES - 1 - resonance;
+    for (let i = 0; i < older; i++) audio.tone(36 + i, 0.8, i / 1000, 10);
+    context.currentTime = 0.05;
+    // A pedalled note and its resonance wait to start at 0.1 s.
+    audio.schedule(
+      [{ ...note(1, 64, 3), start: 0.1, end: 2 }],
+      transport,
+      true,
+      [{ channel: 0, start: 0.1, end: 3 }],
+    );
+    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    // An on-screen preview, due now.
+    expect(audio.tone(100, 0.8, 0.05, 1)).toBe(true);
+    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    const faded = nodes
+      .map((_, index) => index)
+      .filter((index) => gain(index).cancelAndHoldAtTime.mock.calls.length);
+    // One of the waiting resonance voices, after the older notes and the
+    // pedalled note at index `older`.
+    expect(faded).toHaveLength(1);
+    expect(faded[0]).toBeGreaterThan(older);
+  });
+
   it("never takes a note's voice for an optional voice", () => {
     const { audio, transport, context, nodes, gain } = withVoices();
     for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
@@ -1398,9 +1424,26 @@ describe("optional piano voices", () => {
       ["pedalD1.flac", 0.2],
       ["pedalD1.flac", 1.2],
     ]);
-    // The pedal's lift noise plays out rather than being cut as it starts.
+    // The pedal's lift noise is not cut as it starts, but by the next pass's
+    // press, 0.2 s into it.
     const lift = played().findIndex(([file]) => file === "pedalU1.flac");
-    expect(gain(lift).setTargetAtTime).not.toHaveBeenCalled();
+    expect(gain(lift).setTargetAtTime).toHaveBeenCalledExactlyOnceWith(
+      0,
+      expect.closeTo(1.2),
+      expect.closeTo(0.1 / 7),
+    );
+  });
+
+  it("still plays a lift a full lookahead late after a stall", () => {
+    const { audio, transport, context, played } = withVoices();
+    // The first tick comes 1.12 s after playback starts at 0.
+    context.currentTime = 1.12;
+    const late = transport.at(1.12) - 0.12 * transport.speed;
+    audio.schedule([{ ...note(1, 60, late), end: late }], transport, true, []);
+    expect(played().map(([file]) => file)).toEqual([
+      "rel40.flac",
+      pianoVoiceRegions("release", 60, 0.5)[0].file,
+    ]);
   });
 
   it("leaves a key that comes up as a loop pass begins to the passage before it", () => {

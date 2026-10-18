@@ -84,17 +84,21 @@ export const liftTriggered = (region: PianoVoiceRegion) =>
 const midiVelocity = (velocity: number) =>
   Math.round(Math.max(0, Math.min(1, velocity)) * 127);
 
-/** Every region of `voice` that a key at this pitch and velocity triggers. */
+/**
+ * Every region of `voice` that a key at this pitch and velocity triggers. A
+ * pitch beyond the piano uses its nearest key, as its note does.
+ */
 export function pianoVoiceRegions(
   voice: PianoVoice,
   pitch: number,
   velocity: number,
 ) {
-  const value = midiVelocity(velocity);
+  const value = midiVelocity(velocity),
+    key = Math.max(21, Math.min(108, Math.round(pitch)));
   return PIANO_VOICE_GROUPS[voice].regions.filter(
     (region) =>
-      pitch >= region.pitchMin &&
-      pitch <= region.pitchMax &&
+      key >= region.pitchMin &&
+      key <= region.pitchMax &&
       value >= region.velocityMin &&
       value <= region.velocityMax,
   );
@@ -141,7 +145,8 @@ function footPedal(spans: readonly PedalSpan[]) {
   for (const span of [...spans].sort((a, b) => a.start - b.start)) {
     const last = merged.at(-1),
       open = !!span.open;
-    if (!last || span.start > last.end)
+    // A lift and press at one instant on one channel are both kept.
+    if (!last || span.start >= last.end)
       merged.push({ start: span.start, end: span.end, open });
     else if (span.end > last.end) Object.assign(last, { end: span.end, open });
     // Any channel that lifts there makes it a lift.

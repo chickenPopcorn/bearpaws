@@ -47,9 +47,10 @@ values. The adaptations are:
   values of exactly 127 and 0; the app uses each press and lift of its CC64
   threshold of 64, merges all channels into one pedal, and alternates the two
   recordings of each kind in a fixed pattern instead of drawing at random. The
-  next pedal change cuts the previous noise after `off_time` (0.1 s). The
-  noise has no key velocity, so it plays at its group volume. A file that ends
-  with the pedal down has no lift noise.
+  next pedal change cuts the previous noise after `off_time` (0.1 s), including
+  the next loop pass's first press. A lift and press at the same instant on
+  one channel both sound. The noise has no key velocity, so it plays at its
+  group volume. A file that ends with the pedal down has no lift noise.
 - **Pseudo pedal resonance** (CC23): a note struck with the pedal down
   (`locc64=22`) adds one or two softest-layer recordings of neighbouring
   strings, retuned to the struck key, with a 50 ms attack. They are damped
@@ -57,7 +58,8 @@ values. The adaptations are:
   playback or a loop pass starts partway through is struck again with its
   resonance.
 
-Half pedalling is not modelled: the pedal is either down or up. A key or pedal
+Half pedalling is not modelled: the pedal is either down or up. A MIDI pitch
+beyond the piano uses its nearest key's voices, as its note does. A key or pedal
 that comes up exactly as a loop pass ends still sounds in that pass; one that
 comes up exactly as playback or a pass begins belongs to the music before it. Optional voices
 take at most half of the 64 voices, never take a voice from a note, and give up
