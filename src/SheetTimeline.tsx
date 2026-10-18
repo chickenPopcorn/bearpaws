@@ -29,6 +29,9 @@ import {
   type ScoreNote,
 } from "./notation";
 
+/** Line spacing for stacked chord labels, in SVG units (labels are 13). */
+const LABEL_ROW = 14;
+
 interface SheetTimelineProps {
   song: Song;
   position: number;
@@ -292,8 +295,8 @@ export function SheetTimeline({
   const bounds = useMemo(() => {
     const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
     let minimum = 0;
-    // The third bass-chord label has baseline 264; retain its descenders too.
-    let maximum = 270;
+    // The third bass-chord label has baseline 270; retain its descenders too.
+    let maximum = 276;
     for (const note of song.notes) {
       const hand = hands.get(note.track);
       if (hand !== "left" && hand !== "right") continue;
@@ -398,7 +401,7 @@ export function SheetTimeline({
             row < 3
               ? `${noteName(item.note.pitch)}${finger ? ` · ${finger}` : ""}`
               : "",
-          labelY: (hand === "right" ? 134 : 242) + row * 11,
+          labelY: (hand === "right" ? 134 : 242) + row * LABEL_ROW,
         });
       }
       // Built-in lessons retain printed values, including rests and articulation.

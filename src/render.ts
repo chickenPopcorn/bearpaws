@@ -22,6 +22,10 @@ export const KEYBOARD_HEIGHT = 132;
 export const BLACK_KEY_HEIGHT = 88;
 export const rightColor = "#a086e9",
   leftColor = "#51b3a5";
+/** Darker hand colours for text on white keys, which the fills fail (2.5-3:1). */
+const rightText = "#6a4bc6",
+  leftText = "#22766a",
+  labelColor = "#625c70";
 export const black = (pitch: number) => [1, 3, 6, 8, 10].includes(pitch % 12);
 export function keyLayout(min: number, max: number) {
   const whites: number[] = [];
@@ -206,14 +210,14 @@ export function draw(
     const y = fall - (t - position) * px;
     const bar = meter.at(beat);
     const barStart = beat >= 0 && Math.abs(beat - bar.start) < 1e-9;
-    c.strokeStyle = barStart ? "#d5d1e3" : "#e3e0ed";
+    c.strokeStyle = barStart ? "#c4bdd6" : "#dcd8e8";
     c.beginPath();
     c.moveTo(0, y);
     c.lineTo(width, y);
     c.stroke();
     if (barStart) {
-      c.fillStyle = "#777287";
-      c.font = `10px ${scoreFont}`;
+      c.fillStyle = labelColor;
+      c.font = `12px ${scoreFont}`;
       c.textAlign = "left";
       const writtenBeat =
         bar.writtenBeat + (bar.start - bar.beat) / bar.beatUnit;
@@ -326,10 +330,10 @@ export function draw(
         const centerY = (top + bottom) / 2;
         const maxWidth = w - 6;
         const pitchLabel = names
-          ? noteLabel(c, noteName(n.pitch), 11, 400)
+          ? noteLabel(c, noteName(n.pitch), 12, 400)
           : null;
         const fingerLabel = finger
-          ? noteLabel(c, String(finger), 12, 700)
+          ? noteLabel(c, String(finger), 13, 700)
           : null;
         const stackHeight =
           (pitchLabel?.height ?? 0) + (fingerLabel?.height ?? 0) + 4;
@@ -352,7 +356,7 @@ export function draw(
           const label = noteLabel(
             c,
             finger ? String(finger) : noteName(n.pitch),
-            Math.max(7, Math.min(finger ? 12 : 11, visibleHeight - 2)),
+            Math.max(7, Math.min(finger ? 13 : 12, visibleHeight - 2)),
             finger ? 700 : 400,
           );
           c.fillText(
@@ -381,6 +385,7 @@ export function draw(
     const target = expected?.targets.get(k.pitch);
     const hand = hands.get((ref || target)?.track ?? -1);
     const color = hand === "left" ? leftColor : rightColor;
+    const textColor = hand === "left" ? leftText : rightText;
     c.fillStyle = input.down.has(k.pitch)
       ? "#7354cf"
       : ref
@@ -431,14 +436,16 @@ export function draw(
     const fingerNote = target || ref;
     const finger = fingerNote && suggestedFinger(fingerNote, hand ?? "off");
     if (finger && w > 18) {
-      c.fillStyle = input.down.has(k.pitch) || k.black || ref ? "#fff" : color;
+      c.fillStyle =
+        input.down.has(k.pitch) || k.black || ref ? "#fff" : textColor;
       c.font = `700 14px ${scoreFont}`;
       c.textAlign = "center";
       c.fillText(String(finger), x + w / 2, fall + (k.black ? 48 : h - 15));
     }
     if (names && (fingerNote || input.down.has(k.pitch)) && w > 18) {
-      c.fillStyle = input.down.has(k.pitch) || k.black || ref ? "#fff" : color;
-      c.font = `700 11px ${scoreFont}`;
+      c.fillStyle =
+        input.down.has(k.pitch) || k.black || ref ? "#fff" : textColor;
+      c.font = `700 12px ${scoreFont}`;
       c.textAlign = "center";
       c.fillText(
         noteName(k.pitch),
@@ -447,10 +454,10 @@ export function draw(
         w - 4,
       );
     } else if (!k.black && k.pitch % 12 === 0 && w > 12) {
-      c.fillStyle = input.down.has(k.pitch) ? "#fff" : "#777287";
-      c.font = `11px ${scoreFont}`;
+      c.fillStyle = input.down.has(k.pitch) ? "#fff" : labelColor;
+      c.font = `12px ${scoreFont}`;
       c.textAlign = "center";
-      c.fillText(noteName(k.pitch), x + w / 2, fall + h - 35);
+      c.fillText(noteName(k.pitch), x + w / 2, fall + h - 35, w - 4);
     }
   };
   keys.filter((k) => !k.black).forEach(drawKey);

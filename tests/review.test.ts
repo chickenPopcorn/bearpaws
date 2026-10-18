@@ -460,8 +460,8 @@ describe("review regressions", () => {
     );
     expect(labels.map(({ text }) => text).sort()).toEqual(["2", "C♯4"]);
     for (const label of labels) expect(label.x).toBeCloseTo(x + width / 2);
-    const top = labels.find(({ text }) => text === "C♯4")!.y - 11 * 0.7;
-    const bottom = labels.find(({ text }) => text === "2")!.y + 12 * 0.3;
+    const top = labels.find(({ text }) => text === "C♯4")!.y - 12 * 0.7;
+    const bottom = labels.find(({ text }) => text === "2")!.y + 13 * 0.3;
     expect((top + bottom) / 2).toBeCloseTo(y + height / 2);
     expect(top).toBeGreaterThan(y);
     expect(bottom).toBeLessThan(y + height);
@@ -491,7 +491,7 @@ describe("review regressions", () => {
     const label = labelPaints.find(({ text }) => text === "3")!;
     expect(y).toBeLessThan(0);
     expect(label.x).toBeCloseTo(x + width / 2);
-    expect(label.y - (12 * 0.7 - 12 * 0.3) / 2).toBeCloseTo(
+    expect(label.y - (13 * 0.7 - 13 * 0.3) / 2).toBeCloseTo(
       (Math.max(0, y) + Math.min(strikeLine, y + height)) / 2,
     );
   });
