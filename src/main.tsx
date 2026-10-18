@@ -542,7 +542,10 @@ function App() {
             width="40"
             height="40"
           />
-          Paw Pal
+          <span className="brand-name" aria-hidden="true">
+            <span className="brand-initial">P</span>aw{" "}
+            <span className="brand-initial">P</span>al
+          </span>
         </a>
         <span className="eyebrow">A little practice. Every day.</span>
         <div className="device-group">

@@ -129,11 +129,21 @@ select {
   display: flex;
   gap: 10px;
   align-items: center;
+  font-family: var(--score-font);
   font-size: 24px;
-  letter-spacing: -1px;
+  letter-spacing: -0.02em;
   font-weight: 700;
   color: inherit;
   text-decoration: none;
+}
+/* Same decorative initials as the song title, one per word. */
+.brand-initial {
+  font-family: "Cinzel Decorative", Georgia, serif;
+  font-size: 1.35em;
+  font-weight: 400;
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  color: var(--accent);
 }
 .brand-mark {
   display: block;
