@@ -53,7 +53,7 @@ vi.mock("../src/midi", () => ({
 vi.mock("../src/storage", () => ({
   settings: () => ({
     mode: "wait",
-    speed: 0.75,
+    speed: 1,
     left: true,
     right: true,
     tolerance: 0.22,

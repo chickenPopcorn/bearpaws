@@ -143,7 +143,7 @@ it("reports quota or denied storage instead of throwing", () => {
     },
   });
   expect(write("settings", {})).toBe(false);
-  expect(settings().speed).toBe(0.75);
+  expect(settings().speed).toBe(1);
   expect(progress("blocked", 5).position).toBe(0);
 });
 

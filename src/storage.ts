@@ -29,7 +29,7 @@ export interface Progress {
 }
 export const defaults: Settings = {
   mode: "wait",
-  speed: 0.75,
+  speed: 1,
   left: true,
   right: true,
   tolerance: 0.22,
@@ -72,7 +72,7 @@ export function settings(): Settings {
     mode: ["listen", "wait", "rhythm"].includes(s.mode) ? s.mode : "wait",
     speed: Number.isFinite(s.speed)
       ? Math.max(0.25, Math.min(1.5, s.speed))
-      : 0.75,
+      : defaults.speed,
     tolerance: Number.isFinite(s.tolerance)
       ? Math.max(0.08, Math.min(0.35, s.tolerance))
       : 0.22,
