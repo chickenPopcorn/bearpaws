@@ -11,6 +11,7 @@ import { createRoot } from "react-dom/client";
 import { Studio } from "./controller";
 import { draw, pianoKeyAt } from "./render";
 import { watchCanvasRedraws } from "./canvasRedraw";
+import { saveReloadSnapshot } from "./reloadSnapshot";
 import { noteName, type Hand, type Song } from "./song";
 import type { Feedback, Mode } from "./engine";
 import { FingerGuide } from "./FingerGuide";
@@ -80,7 +81,8 @@ const shortcuts: Record<string, number> = {
 const Piano = memo(function Piano() {
   const canvas = useRef<HTMLCanvasElement>(null),
     pointers = useRef(new Map<number, number>());
-  useEffect(() => {
+  // Paint before the first frame shows, so the piano never appears blank.
+  useLayoutEffect(() => {
     const element = canvas.current!;
     return watchCanvasRedraws(element, studio.subscribe, () =>
       draw(
@@ -480,7 +482,10 @@ function App() {
     const hidden = () => {
       if (document.hidden && studio.transport.playing) studio.pause();
     };
-    const save = () => studio.save();
+    const save = () => {
+      studio.save();
+      saveReloadSnapshot(document.getElementById("root")!);
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
@@ -941,4 +946,13 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById("root")!).render(<App />);
+const root = createRoot(document.getElementById("root")!);
+const render = () => root.render(<App />);
+// A saved import loads from browser storage. Wait briefly for it, so the first
+// render does not show another song while the page as it was left stays up.
+if (isBuiltInSong(studio.savedSelection)) render();
+else
+  void Promise.race([
+    studio.init(),
+    new Promise((resolve) => setTimeout(resolve, 1000)),
+  ]).then(render);
