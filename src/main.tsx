@@ -946,11 +946,14 @@ function App() {
     </div>
   );
 }
-const root = createRoot(document.getElementById("root")!);
+const container = document.getElementById("root")!;
+const root = createRoot(container);
 const render = () => root.render(<App />);
-// A saved import loads from browser storage. Wait briefly for it, so the first
-// render does not show another song while the page as it was left stays up.
-if (isBuiltInSong(studio.savedSelection)) render();
+// A saved import loads from browser storage. While the page as it was left is
+// on screen, wait briefly for it, so the first render does not show another
+// song. With nothing on screen, rendering now beats a blank wait.
+if (isBuiltInSong(studio.savedSelection) || !container.hasChildNodes())
+  render();
 else
   void Promise.race([
     studio.init(),
