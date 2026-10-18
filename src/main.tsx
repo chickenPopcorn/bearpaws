@@ -2,6 +2,7 @@ import React, {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -123,6 +124,30 @@ const Piano = memo(function Piano() {
     />
   );
 });
+/** Where the mode switcher's highlight sits, measured from the active button. */
+function useActiveIndicator(
+  group: React.RefObject<HTMLElement | null>,
+  active: string,
+) {
+  const [indicator, setIndicator] = useState<{ left: number; width: number }>();
+  useLayoutEffect(() => {
+    const element = group.current;
+    if (!element) return;
+    const measure = () => {
+      const button = element.querySelector<HTMLElement>(
+        '[aria-pressed="true"]',
+      );
+      if (button)
+        setIndicator({ left: button.offsetLeft, width: button.offsetWidth });
+    };
+    measure();
+    // Labels change width when fonts load or the layout wraps.
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [group, active]);
+  return indicator;
+}
 const PracticeControls = memo(function PracticeControls({
   mode,
   left,
@@ -132,9 +157,26 @@ const PracticeControls = memo(function PracticeControls({
   left: boolean;
   right: boolean;
 }) {
+  const tabs = useRef<HTMLDivElement>(null);
+  const indicator = useActiveIndicator(tabs, mode);
   return (
     <div className="toolbar-preferences">
-      <div className="tabs" role="group" aria-label="Practice mode">
+      <div
+        ref={tabs}
+        className={`tabs${indicator ? " has-indicator" : ""}`}
+        role="group"
+        aria-label="Practice mode"
+      >
+        {indicator && (
+          <span
+            className="tabs-indicator"
+            aria-hidden="true"
+            style={{
+              transform: `translateX(${indicator.left}px)`,
+              width: indicator.width,
+            }}
+          />
+        )}
         {(["listen", "wait", "rhythm"] as const).map((option) => (
           <button
             key={option}
