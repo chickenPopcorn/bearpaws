@@ -14,11 +14,12 @@ export interface LibraryEntry {
   title: string;
   collection: LibraryCollection;
   /**
-   * The song in the app's format, as JSON. Published paths end in the file's
-   * content hash (songs/<id>.<hash>.json), so a changed song gets a new name.
+   * The song in the app's format, as JSON: songs/<id>.json. Published paths
+   * end in the file's content hash (songs/<id>.<hash>.json), so a changed
+   * song gets a new name.
    */
   song: string;
-  /** Its MIDI file, for downloads, named the same way. */
+  /** Its MIDI file, for downloads, named the same way: songs/<id>.mid. */
   midi?: string;
 }
 export interface LibraryIndex {
@@ -32,6 +33,8 @@ const finite = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value);
 const whole = (value: unknown) => Number.isSafeInteger(value);
 const text = (value: unknown) => typeof value === "string" && value !== "";
+/** Text matched literally inside a regular expression. */
+const literal = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function fail(where: string, problem: string): never {
   throw new Error(`${where}: ${problem}`);
@@ -52,9 +55,19 @@ export function validateIndex(value: unknown): LibraryIndex {
     if (!text(entry.title)) fail(where, "missing title");
     if (!COLLECTION_IDS.includes(entry.collection as LibraryCollection))
       fail(where, `collection must be one of ${COLLECTION_IDS.join(", ")}`);
-    if (!text(entry.song)) fail(where, "missing song path");
-    if (entry.midi !== undefined && !text(entry.midi))
-      fail(where, "midi must be a non-empty string");
+    // Paths name the song's own files in songs/, optionally with a content
+    // hash, so nothing can point outside the library folder.
+    const path = (ext: string) =>
+      new RegExp(
+        `^songs/${literal(entry.id as string)}(\\.[0-9a-f]{16})?\\.${ext}$`,
+      );
+    if (typeof entry.song !== "string" || !path("json").test(entry.song))
+      fail(where, "song must be songs/<id>.json, with an optional hash");
+    if (
+      entry.midi !== undefined &&
+      (typeof entry.midi !== "string" || !path("mid").test(entry.midi))
+    )
+      fail(where, "midi must be songs/<id>.mid, with an optional hash");
   });
   if (!value.songs.length) fail("index.json", "the library has no songs");
   return value as unknown as LibraryIndex;

@@ -14,6 +14,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { createServer, loadEnv } from "vite";
 
 const FOLDER = "library";
@@ -63,14 +64,22 @@ async function pull(publicUrl, validateIndex) {
   const index = validateIndex(
     JSON.parse(new TextDecoder().decode(await download("index.json"))),
   );
-  mkdirSync(`${FOLDER}/songs`, { recursive: true });
+  const songsFolder = resolve(FOLDER, "songs");
+  mkdirSync(songsFolder, { recursive: true });
   // The working copy uses plain names; push adds the hashes again.
   for (const entry of index.songs) {
     for (const key of ["song", "midi"]) {
       if (!entry[key]) continue;
-      const bytes = await download(entry[key]);
+      const original = entry[key];
       entry[key] = plainName(entry[key]);
-      writeFileSync(`${FOLDER}/${entry[key]}`, bytes);
+      // validateIndex allows only songs/<id>.json and .mid; check again here,
+      // since this writes into the repository.
+      const target = resolve(FOLDER, entry[key]);
+      if (dirname(target) !== songsFolder)
+        throw new Error(
+          `${entry.id}: ${entry[key]} is outside ${FOLDER}/songs`,
+        );
+      writeFileSync(target, await download(original));
     }
     delete entry.hash;
     delete entry.midiHash;

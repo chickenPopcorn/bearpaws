@@ -38,6 +38,22 @@ describe("song library", () => {
       { version: 1, songs: [{ ...index().songs[0], id: "../escape" }] },
       /id must use/,
     ],
+    [
+      {
+        version: 1,
+        songs: [{ ...index().songs[0], song: "../src/library.ts" }],
+      },
+      /song must be songs/,
+    ],
+    [
+      {
+        version: 1,
+        songs: [
+          { ...index().songs[0], midi: `songs/${index().songs[1].id}.mid` },
+        ],
+      },
+      /midi must be songs/,
+    ],
   ])("rejects a broken index %#", (value, problem) => {
     expect(() => validateIndex(value)).toThrow(problem);
   });
