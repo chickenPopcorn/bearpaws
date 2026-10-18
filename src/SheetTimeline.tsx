@@ -2,6 +2,7 @@ import {
   memo,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -264,18 +265,21 @@ export function SheetTimeline({
     gesture.current = null;
     setFrozen(null);
   }, [song.id]);
-  useEffect(() => {
+  // Measure before the first frame shows, so the score never appears at the
+  // placeholder size.
+  useLayoutEffect(() => {
     const element = svg.current;
     if (!element) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
+    const resize = ({ width, height }: { width: number; height: number }) => {
       if (width <= 0 || height <= 0) return;
       setSize((previous) =>
         previous.width === width && previous.height === height
           ? previous
           : { width, height },
       );
-    });
+    };
+    resize(element.getBoundingClientRect());
+    const observer = new ResizeObserver(([entry]) => resize(entry.contentRect));
     observer.observe(element);
     return () => observer.disconnect();
   }, []);

@@ -34,6 +34,30 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Show the page as it was left until the app renders over it (see
+      // src/reloadSnapshot.ts). The dev server styles the page from script,
+      // and markup without its stylesheet would flash unstyled.
+      (function () {
+        try {
+          var key = "cadence:reload-snapshot";
+          var saved = JSON.parse(sessionStorage.getItem(key) || "null");
+          sessionStorage.removeItem(key);
+          if (!saved || !document.querySelector('link[rel="stylesheet"]'))
+            return;
+          var root = document.getElementById("root");
+          root.innerHTML = saved.html;
+          root.querySelectorAll("canvas").forEach(function (canvas, i) {
+            if (saved.canvases[i])
+              canvas.style.background =
+                "url(" + saved.canvases[i] + ") 0 0 / 100% 100%";
+          });
+          // It only looks like the app, so keep clicks and focus off it.
+          for (var i = 0; i < root.children.length; i++)
+            root.children[i].inert = true;
+        } catch (error) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
