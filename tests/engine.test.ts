@@ -303,7 +303,8 @@ describe("MIDI import and the musical timeline", () => {
     );
     expect(song.pedals).toEqual([
       { channel: 0, start: 0.25, end: 0.5 },
-      { channel: 1, start: 0.75, end: 1.5 },
+      // Still down at the end of the file: no lift.
+      { channel: 1, start: 0.75, end: 1.5, open: true },
     ]);
   });
 

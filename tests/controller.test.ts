@@ -147,6 +147,33 @@ afterEach(() => {
 });
 
 describe("practice studio integration", () => {
+  it("restarts a passage still loading without a voice turned off", async () => {
+    const studio = create(
+      song([
+        [60, 0],
+        [64, 2],
+      ]),
+    );
+    studio.mode("listen");
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const playing = studio.play();
+    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
+    const [, signal] = vi.mocked(studio.audio.prepare).mock.calls[0];
+    studio.pianoVoice("resonance", false);
+    // The loading voice's recordings are no longer waited for.
+    expect(signal!.aborted).toBe(true);
+    await vi.waitFor(() =>
+      expect(studio.audio.prepare).toHaveBeenCalledTimes(2),
+    );
+    finish();
+    await playing;
+    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
+    expect(studio.position).toBe(0);
+  });
+
   it("restores sound preferences before audio starts and preserves them across songs", () => {
     env.values.set("settings", { ambience: 0.43 });
     const studio = create();

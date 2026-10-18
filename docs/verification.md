@@ -5,7 +5,7 @@ release, key release noise, pedal noise and pseudo pedal resonance.
 
 ## Automated checks
 
-- `npm test`: 758 tests across 31 suites passed.
+- `npm test`: 762 tests across 31 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: 10 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
@@ -51,8 +51,11 @@ pedal-noise random split) and the SFZ trigger rules: release harmonics only for
 a key released with the pedal up, key noise at every key-up, resonance only for
 notes struck with the pedal down and damped with them, and pedal noise at each
 press and lift, cut by the next change. Player tests cover each voice's start
-time, level and damping, turning each voice off, speed changes, a voice due
-where playback starts, and the voice budget: optional voices take at most half
+time, level and damping, turning each voice off, speed changes (including
+`rt_decay` over the real time a key was held), a voice due where playback
+starts, key and pedal lifts at the end of a loop pass, no pedal lift where a
+file ends with the pedal down, restarting a passage still loading when a voice
+is turned off, and the voice budget: optional voices take at most half
 of the 64 voices, never a note's voice, and give up theirs first to a note.
 Loading tests cover lazy loading of only the enabled voices' recordings, none
 for previews, a failed optional download, and optional recordings that do not

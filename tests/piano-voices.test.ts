@@ -221,6 +221,32 @@ describe("optional voice triggers", () => {
     expect(new Set(events.map((event) => event.region.file)).size).toBe(4);
   });
 
+  it("sounds no pedal lift where a file ends with the pedal down", () => {
+    const lifts = (pedals: PedalSpan[]) =>
+      pianoVoiceEvents(
+        [note("a", 60, 0, 0.5, 4), note("b", 48, 0, 0.5, 4, 1)],
+        pedals,
+      )
+        .filter((event) => event.region.trigger === "pedalUp")
+        .map((event) => event.time);
+    expect(lifts([{ channel: 0, start: 0.25, end: 4, open: true }])).toEqual(
+      [],
+    );
+    // One channel lifting where another is still down at the end is a lift.
+    expect(
+      lifts([
+        { channel: 0, start: 0.25, end: 4, open: true },
+        { channel: 1, start: 1, end: 4 },
+      ]),
+    ).toEqual([4]);
+    expect(
+      lifts([
+        { channel: 0, start: 0.25, end: 2 },
+        { channel: 1, start: 1, end: 4, open: true },
+      ]),
+    ).toEqual([]);
+  });
+
   it("triggers one voice for duplicate tracks, from the louder note", () => {
     const events = pianoVoiceEvents(
       [

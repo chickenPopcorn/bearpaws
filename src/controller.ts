@@ -331,12 +331,12 @@ export class Studio {
   }
   pianoVoice(voice: PianoVoice, enabled: boolean) {
     if (this.settings.pianoVoices[voice] === enabled) return;
-    // A voice turned on mid-passage needs its recordings: play on from here
-    // once they load, as for the Rhythm reference.
+    // A voice turned on mid-passage needs its recordings, and a passage still
+    // loading should not wait for those of one turned off. Play on from here
+    // once the right ones load, as for the Rhythm reference.
     const resume =
-      enabled &&
       this.referenceAudible &&
-      (this.transport.playing || this.playbackPending);
+      (this.playbackPending || (enabled && this.transport.playing));
     if (resume) this.pause();
     this.settings.pianoVoices = {
       ...this.settings.pianoVoices,

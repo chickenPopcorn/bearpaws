@@ -37,7 +37,8 @@ values. The adaptations are:
 - **Sampled release** (CC20, `harmL`, `harmS`, `harmV3`): string harmonics at
   key-up, only when the sustain pedal is up (`hicc64=32`). The app treats the
   pedal as up when a note's sound ends with its key. Each recording plays to
-  its end, less `rt_decay` for each second the key was held.
+  its end, less `rt_decay` for each second the note sounded before its key-up,
+  in real time, so speed changes count.
 - **Hammer noise** (CC21, `rel1` to `rel88`): the key's release noise at every
   key-up, pedal or not (`trigger=release_key`), unpitched.
 - **Pedal noise** (CC22, `pedalD1`, `pedalD2`, `pedalU1`, `pedalU2`): sounds at
@@ -46,7 +47,8 @@ values. The adaptations are:
   threshold of 64, merges all channels into one pedal, and alternates the two
   recordings of each kind in a fixed pattern instead of drawing at random. The
   next pedal change cuts the previous noise after `off_time` (0.1 s). The
-  noise has no key velocity, so it plays at its group volume.
+  noise has no key velocity, so it plays at its group volume. A file that ends
+  with the pedal down has no lift noise.
 - **Pseudo pedal resonance** (CC23): a note struck with the pedal down
   (`locc64=22`) adds one or two softest-layer recordings of neighbouring
   strings, retuned to the struck key, with a 50 ms attack. They are damped

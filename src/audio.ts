@@ -14,6 +14,7 @@ import {
   selectPianoRegion,
 } from "./piano";
 import {
+  liftTriggered,
   MIN_PIANO_VOICE_LEVEL,
   pianoVoiceEvents,
   pianoVoiceFiles,
@@ -125,6 +126,8 @@ export class ReferenceAudio {
   private preparationGeneration = 0;
   private playbackBlocked = false;
   private playbackFiles = new Set<string>();
+  /** When each note of a pass was struck, in context time, for rt_decay. */
+  private struck = new WeakMap<Set<string>, Map<string, number>>();
   private voiceEventCache?: {
     notes: readonly Note[];
     pedals: readonly PedalSpan[];
@@ -548,6 +551,7 @@ export class ReferenceAudio {
     for (const voice of this.voices) this.fade(voice, now);
     this.scheduled.clear();
     this.ahead.clear();
+    this.struck = new WeakMap();
     this.aheadStart = Infinity;
     // Rebuilding the room flushes its tail. Skip it when there is no tail,
     // such as while dragging the playhead with nothing playing.
@@ -615,7 +619,14 @@ export class ReferenceAudio {
     pass: Set<string>,
   ) {
     const { region } = event;
-    const level = pianoVoiceLevel(event, event.held / speed);
+    // rt_decay counts the time the voice's note has sounded, across speed
+    // changes, from when it was struck in this pass.
+    const struck = this.struck.get(pass),
+      times = event.notes.flatMap((id) => struck?.get(id) ?? []);
+    const held = times.length
+      ? Math.max(0, when - Math.min(...times))
+      : event.held / speed;
+    const level = pianoVoiceLevel(event, held);
     if (level < MIN_PIANO_VOICE_LEVEL) return;
     // Resonance is damped with its note, and the next pedal change cuts
     // pedal noise. Release and key noise play their recording out.
@@ -813,8 +824,8 @@ export class ReferenceAudio {
         end = (Math.min(n.soundEnd, to) - position) / transport.speed;
       // A note the voice cap refused stays unscheduled, so a later tick can
       // play it once a voice is free.
-      if (
-        end <= 0 ||
+      if (end <= 0) for (const id of n.ids) pass.add(id);
+      else if (
         this.tone(
           n.pitch,
           n.velocity,
@@ -824,8 +835,14 @@ export class ReferenceAudio {
           pass,
           Math.min(n.soundEnd, to),
         )
-      )
-        for (const id of n.ids) pass.add(id);
+      ) {
+        let struck = this.struck.get(pass);
+        if (!struck) this.struck.set(pass, (struck = new Map()));
+        for (const id of n.ids) {
+          pass.add(id);
+          struck.set(id, now + start);
+        }
+      }
     }
     // Then the optional voices, after the notes they belong to have a voice.
     const events = this.voiceEvents(notes, pedals),
@@ -835,18 +852,23 @@ export class ReferenceAudio {
       i < events.length && events[i].time <= limit;
       i++
     ) {
-      const event = events[i];
+      const event = events[i],
+        lift = liftTriggered(event.region);
+      // A key or pedal that comes up as the pass ends still sounds in it.
       if (
-        event.time >= to ||
+        event.time > to ||
+        (event.time === to && !lift) ||
         !this.sound.voices[event.region.voice] ||
         pass.has(event.ids[0])
       )
         continue;
+      // Held voices end with the pass. A lift's noise is cut only by a
+      // press within it.
       this.optionalVoice(
         event,
         now + (event.time - position) / transport.speed,
         transport.speed,
-        Math.min(event.songEnd, to),
+        event.songEnd <= to ? event.songEnd : lift ? Infinity : to,
         pass,
       );
       for (const id of event.ids) pass.add(id);

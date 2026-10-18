@@ -56,6 +56,8 @@ export const MIN_PIANO_VOICE_LEVEL = 1e-4;
 export interface PianoVoiceEvent {
   /** Pass ids: one for each note, or pedal change, this voice sounds for. */
   ids: string[];
+  /** The ids of the notes it sounds for. */
+  notes: string[];
   region: PianoVoiceRegion;
   pitch: number;
   velocity: number;
@@ -69,6 +71,15 @@ export interface PianoVoiceEvent {
   /** How long the key was held, in song seconds, for rt_decay. */
   held: number;
 }
+
+/**
+ * Whether a region sounds as a key or the pedal comes up. Such a voice still
+ * belongs to a loop pass that ends at that instant.
+ */
+export const liftTriggered = (region: PianoVoiceRegion) =>
+  region.trigger === "release" ||
+  region.trigger === "release_key" ||
+  region.trigger === "pedalUp";
 
 const midiVelocity = (velocity: number) =>
   Math.round(Math.max(0, Math.min(1, velocity)) * 127);
@@ -126,11 +137,15 @@ const draw = (index: number) => (index * 0.6180339887498949) % 1;
 
 /** Merge every channel's pedal into one foot pedal. */
 function footPedal(spans: readonly PedalSpan[]) {
-  const merged: { start: number; end: number }[] = [];
+  const merged: { start: number; end: number; open: boolean }[] = [];
   for (const span of [...spans].sort((a, b) => a.start - b.start)) {
-    const last = merged.at(-1);
-    if (last && span.start <= last.end) last.end = Math.max(last.end, span.end);
-    else merged.push({ start: span.start, end: span.end });
+    const last = merged.at(-1),
+      open = !!span.open;
+    if (!last || span.start > last.end)
+      merged.push({ start: span.start, end: span.end, open });
+    else if (span.end > last.end) Object.assign(last, { end: span.end, open });
+    // Any channel that lifts there makes it a lift.
+    else if (span.end === last.end) last.open &&= open;
   }
   return merged;
 }
@@ -177,6 +192,7 @@ export function pianoVoiceEvents(
       if (!previous)
         events.set(key, {
           ids: [id],
+          notes: [note.id],
           region,
           pitch: note.pitch,
           velocity: note.velocity,
@@ -186,6 +202,7 @@ export function pianoVoiceEvents(
         });
       else {
         previous.ids.push(id);
+        previous.notes.push(note.id);
         previous.songEnd = Math.max(previous.songEnd, songEnd);
         // A louder duplicate picks the region, as for the note itself.
         if (note.velocity > previous.velocity) {
@@ -212,9 +229,12 @@ export function pianoVoiceEvents(
     for (const [down, time, songEnd] of [
       [true, press.start, press.end],
       [false, press.end, next],
-    ] as const)
+    ] as const) {
+      // A file that ends with the pedal down has no lift to sound.
+      if (!down && press.open) continue;
       events.set(`pedal:${index}:${down}`, {
         ids: [`pedal~${index}~${down ? "down" : "up"}`],
+        notes: [],
         region: pedalNoiseRegion(down, draw(index)),
         pitch: 60,
         velocity: 1,
@@ -222,6 +242,7 @@ export function pianoVoiceEvents(
         songEnd,
         held: 0,
       });
+    }
   });
   return [...events.values()].sort((a, b) => a.time - b.time);
 }

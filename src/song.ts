@@ -22,6 +22,8 @@ export interface PedalSpan {
   channel: number;
   start: number;
   end: number;
+  /** The file ends with the pedal down: `end` is the file's end, not a lift. */
+  open?: true;
 }
 export interface Track {
   id: number;
@@ -312,7 +314,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     };
   });
   // Controllers are channel-wide in SMF, even when a different track owns them.
-  const intervals = new Map<number, { start: number; end: number }[]>(),
+  const intervals = new Map<number, Omit<PedalSpan, "channel">[]>(),
     down = new Map<number, number>();
   const controls = events
     .flat()
@@ -335,7 +337,7 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
   }
   for (const [channel, start] of down) {
     const list = intervals.get(channel) || [];
-    list.push({ start, end: time(lastTick) });
+    list.push({ start, end: time(lastTick), open: true });
     intervals.set(channel, list);
   }
   for (const n of notes) {

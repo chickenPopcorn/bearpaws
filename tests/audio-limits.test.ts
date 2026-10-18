@@ -1369,6 +1369,64 @@ describe("optional piano voices", () => {
     ]);
   });
 
+  it("sounds a key or pedal lift at the end of a loop pass, every pass", () => {
+    const { audio, context, played, gain } = withVoices();
+    const transport = new Transport(4);
+    transport.loop = [0, 1];
+    transport.play(0);
+    const notes = [{ ...note(1, 60, 1), end: 1 }];
+    const pedals = [
+      { channel: 0, start: 0.2, end: 1 },
+      // Pressed again after the loop ends.
+      { channel: 0, start: 1.05, end: 2 },
+    ];
+    for (let tick = 0; tick * 0.02 <= 1.95; tick++) {
+      context.currentTime = tick * 0.02;
+      transport.update(context.currentTime);
+      audio.schedule(notes, transport, true, pedals);
+    }
+    const release = pianoVoiceRegions("release", 60, 0.5)[0].file;
+    const lifts = played().filter(([file]) =>
+      ["rel40.flac", release, "pedalU1.flac", "pedalU2.flac"].includes(
+        file as string,
+      ),
+    );
+    expect(lifts.map(([, time]) => time)).toEqual([1, 1, 1, 2, 2, 2]);
+    expect(
+      played().filter(([file]) => (file as string).startsWith("pedalD")),
+    ).toEqual([
+      ["pedalD1.flac", 0.2],
+      ["pedalD1.flac", 1.2],
+    ]);
+    // The pedal's lift noise plays out rather than being cut as it starts.
+    const lift = played().findIndex(([file]) => file === "pedalU1.flac");
+    expect(gain(lift).setTargetAtTime).not.toHaveBeenCalled();
+  });
+
+  it("decays release harmonics by the time the key was really held, across speed changes", () => {
+    const { audio, transport, context, gain, played, run } = withVoices();
+    // Held for 1 s of song: 0.5 s at 1x, then 0.5 s of song at half speed.
+    const notes = [{ ...note(1, 60, 1), end: 1 }];
+    run(notes, [], 0.5);
+    transport.setSpeed(0.5, 0.5);
+    audio.reschedule(transport);
+    for (let tick = 26; tick * 0.02 <= 1.6; tick++) {
+      context.currentTime = tick * 0.02;
+      audio.schedule(notes, transport, true, []);
+    }
+    const region = pianoVoiceRegions("release", 60, 0.5)[0];
+    const index = played().findIndex(([file]) => file === region.file);
+    expect(played()[index][1]).toBeCloseTo(1.5);
+    // 1.5 s of real time, not 1 s of song at the new half speed (2 s).
+    expect(gain(index).linearRampToValueAtTime.mock.calls[0][0]).toBeCloseTo(
+      pianoLevel(
+        { gainDb: region.gainDb - region.decayDbPerSecond * 1.5 },
+        0.5,
+      ),
+      12,
+    );
+  });
+
   it("moves resonance and pedal noise to a new speed with their notes", () => {
     const { audio, transport, context, gain, run } = withVoices();
     run(...passage(), 0.6);
