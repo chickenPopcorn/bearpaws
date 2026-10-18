@@ -129,11 +129,21 @@ select {
   display: flex;
   gap: 10px;
   align-items: center;
+  font-family: var(--score-font);
   font-size: 24px;
-  letter-spacing: -1px;
+  letter-spacing: -0.02em;
   font-weight: 700;
   color: inherit;
   text-decoration: none;
+}
+/* Same decorative initials as the song title, one per word. */
+.brand-initial {
+  font-family: "Cinzel Decorative", Georgia, serif;
+  font-size: 1.35em;
+  font-weight: 400;
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  color: var(--accent);
 }
 .brand-mark {
   display: block;
@@ -147,27 +157,30 @@ select {
   letter-spacing: 1.3px;
   text-transform: uppercase;
 }
-.device {
+.device-group {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.device-group select {
+  max-width: 220px;
+  font-size: var(--text-sm);
+}
+.device {
   display: flex;
   align-items: center;
   gap: 9px;
   font-size: var(--text-sm);
   background: #f7f6fa;
+  white-space: nowrap;
 }
-.device-chevron {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform 0.15s ease;
-}
-.device[aria-expanded="true"] .device-chevron {
-  transform: rotate(180deg);
+/* Connected is a status, not a button, but keeps the same pill. */
+span.device {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
 }
 .account {
   font-size: var(--text-sm);
@@ -228,26 +241,12 @@ select {
   background: #51b3a5;
 }
 .connection {
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
-  align-items: center;
+  margin: 0;
   padding: var(--space-3) 28px;
   background: #f0ebfb;
   border-bottom: 1px solid var(--line);
   font-size: var(--text-sm);
-}
-.connection strong {
-  font-weight: 600;
-}
-.connection p {
-  margin: 3px 0;
-  color: var(--muted);
-}
-.device-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+  color: var(--text-2);
 }
 .body {
   display: grid;
@@ -468,7 +467,7 @@ h1 {
 .practice-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px 24px;
+  gap: 12px 20px;
   flex: 0 0 auto;
   flex-wrap: wrap;
   margin-bottom: var(--space-3);
@@ -632,8 +631,16 @@ h1 {
 .transport-buttons .play:hover {
   background: #6446c0;
 }
-.playback-status {
+/* Speed and Full screen wrap together at the end of the toolbar. */
+.playback-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
   margin-left: auto;
+  min-width: 0;
+}
+.playback-status {
   gap: var(--space-3);
   padding: 0 var(--space-3);
 }
@@ -1295,7 +1302,7 @@ footer a {
   main {
     padding: var(--space-5);
   }
-  .playback-status {
+  .playback-cluster {
     margin-left: auto;
   }
   .settings-row {
@@ -1320,13 +1327,6 @@ footer a {
   .lower-grid {
     grid-template-columns: 1fr;
   }
-  .connection {
-    align-items: flex-start;
-  }
-  .device-actions {
-    flex-direction: column;
-    max-width: 230px;
-  }
   .song-head {
     margin-bottom: 18px;
   }
@@ -1347,15 +1347,20 @@ footer a {
   .device {
     padding: 7px;
   }
+  /* Several MIDI inputs put a menu beside the pill; drop them under the
+     brand, then stack them, rather than clipping the header. */
+  .top {
+    flex-wrap: wrap;
+  }
+  .device-group {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .device-group select {
+    max-width: 100%;
+  }
   .connection {
     padding: 12px 16px;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .device-actions {
-    flex-direction: row;
-    max-width: 100%;
-    flex-wrap: wrap;
   }
   .body {
     display: block;
@@ -1411,7 +1416,7 @@ footer a {
   .hands button {
     padding: 0 var(--space-2);
   }
-  .playback-status {
+  .playback-cluster {
     margin-left: 0;
   }
   .settings-row {
@@ -1446,15 +1451,23 @@ footer a {
   margin-left: auto;
   white-space: nowrap;
 }
+/* Filled like Play: the other primary action in the toolbar. */
 .fullscreen-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--text-xs);
-  letter-spacing: 0;
-  color: var(--text-2);
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 500;
   white-space: nowrap;
+}
+.fullscreen-toggle:hover {
+  background: #6446c0;
 }
 .fullscreen-toggle > span {
   font-size: 16px;
@@ -1490,7 +1503,7 @@ footer a {
 .piano-expanded .transport-buttons {
   flex-shrink: 0;
 }
-.piano-expanded .playback-status {
+.piano-expanded .playback-cluster {
   flex-shrink: 0;
   margin-left: 0;
 }

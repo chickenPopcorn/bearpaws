@@ -196,11 +196,26 @@ describe("song library", () => {
     expect(titles()).toContain(fullPiano.title);
   });
 
-  it("hides collapsed collection contents and opens all collections when searching", async () => {
+  it("keeps the startup-restored song folded, then reveals a later song change", async () => {
+    await render({ selected: songs[0].id, savedSelection: songs[2].id });
+    // The saved song loads after the first render, as the library does.
+    await render({ selected: songs[2].id });
+    expect(groupContent("pops").hidden).toBe(true);
+    expect(groupContent("classes").hidden).toBe(true);
+    await render({ selected: songs[0].id });
+    expect(groupContent("classes").hidden).toBe(false);
+    expect(groupContent("pops").hidden).toBe(true);
+  });
+
+  it("starts with collections folded, toggles each one, and opens all when searching", async () => {
     await render();
     for (const group of ["classes", "songs", "pops"]) {
-      await click(groupToggle(group));
       expect(groupToggle(group).getAttribute("aria-expanded")).toBe("false");
+      expect(groupContent(group).hidden).toBe(true);
+      await click(groupToggle(group));
+      expect(groupToggle(group).getAttribute("aria-expanded")).toBe("true");
+      expect(groupContent(group).hidden).toBe(false);
+      await click(groupToggle(group));
       expect(groupContent(group).hidden).toBe(true);
     }
     await type("traditional");

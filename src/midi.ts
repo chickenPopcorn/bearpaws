@@ -55,7 +55,7 @@ export class MidiConnection {
         : undefined);
     this.status = this.source ? "disconnected" : "unsupported";
     this.message = this.source
-      ? "Connect your USB piano, then choose Connect piano."
+      ? "Plug in your USB piano, then choose Connect your piano."
       : "Web MIDI is unavailable. Use desktop Chrome or Edge over HTTPS. Import and Listen still work.";
   }
 
@@ -118,6 +118,13 @@ export class MidiConnection {
       this.detach();
       this.access = access;
       this.failedInput = undefined;
+      // One click connects whatever is plugged in if the chosen input is gone.
+      let available = false;
+      access.inputs.forEach((input) => {
+        if (input.id === this.selectedId && input.state === "connected")
+          available = true;
+      });
+      if (!available) this.selectedId = "";
       access.onstatechange = () => {
         if (!this.disposed) this.refresh();
       };
@@ -138,7 +145,7 @@ export class MidiConnection {
       this.message =
         this.status === "denied"
           ? "MIDI permission was denied or blocked. Allow MIDI in this site’s browser settings, then reconnect. Import and Listen still work."
-          : "Could not open MIDI access. Check your piano connection and try Connect piano again.";
+          : "Could not open MIDI access. Check your piano connection and try Connect your piano again.";
       this.callbacks.onChange();
     }
   }
