@@ -265,12 +265,8 @@ export class Studio {
     this.settings.mode = mode;
     this.rebuild();
   }
+  /** Each hand turns on and off on its own; both may be off. */
   hand(hand: "left" | "right") {
-    if (
-      this.settings[hand] &&
-      !this.settings[hand === "left" ? "right" : "left"]
-    )
-      return;
     this.pause();
     this.settings[hand] = !this.settings[hand];
     this.rebuild();
@@ -373,7 +369,10 @@ export class Studio {
     this.playbackPending = true;
     if (!this.notes.length) {
       this.playbackPending = false;
-      this.notice = "Assign at least one track to an enabled hand below.";
+      this.notice =
+        this.settings.left || this.settings.right
+          ? "Assign at least one track to an enabled hand below."
+          : "Turn on Left, Right, or both hands to play.";
       this.emit();
       return;
     }
