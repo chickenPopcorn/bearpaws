@@ -551,10 +551,18 @@ h1 {
 .tabs.has-indicator button[aria-pressed="true"] {
   background: transparent;
 }
+/* Inside a toolbar group the focus ring fits the group's 3 px padding
+   instead of spilling over its border. */
+.tabs button:focus-visible,
+.hands button:focus-visible,
+.transport-buttons button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .transport-buttons .play {
-  min-width: 88px;
   background: var(--accent);
   color: #fff;
+  width: 96px;
 }
 .transport-buttons .play:hover {
   background: #6446c0;
@@ -809,10 +817,6 @@ h1 {
 }
 .primary:hover {
   background: #6342bc;
-}
-.play {
-  min-width: 96px;
-  padding: 7px 15px;
 }
 .square[aria-pressed="true"] {
   color: var(--accent);

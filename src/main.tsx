@@ -712,11 +712,12 @@ function App() {
                   <button
                     className="primary play"
                     disabled={busy}
+                    aria-busy={busy}
                     title={playing ? "Pause (Space)" : "Play (Space)"}
                     aria-keyshortcuts="Space"
                     onClick={() => void toggle()}
                   >
-                    {busy ? "Loading piano…" : playing ? "Ⅱ Pause" : "▷ Play"}
+                    {busy ? "Loading…" : playing ? "Ⅱ Pause" : "▷ Play"}
                   </button>
                   <button
                     className="square"
