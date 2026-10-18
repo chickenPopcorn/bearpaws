@@ -25,16 +25,14 @@ Escape, focus restoration, tab trapping and audio-before-fullscreen ordering.
 Imported 3/4, 6/8 and changing meters are verified through parsing, score layout,
 displayed signatures, keyboard seeking and the waterfall beat grid.
 The library checks cover collection search and selection, native keyboard
-activation, score-slider shortcuts, loop preference persistence, all 26 MIDI
-exports and catalog entries, and search casing remains consistent across
-browser locales.
-Exported pieces use a full-bar count-in to retain musical bar alignment.
-The full An Jing arrangement preserves all 1,369 source notes and original
-timing/velocities, with suggested hands split at middle C. Tests cover saved
-selection, separate-hand practice, all score notes, and seeking across the
-99-measure arrangement. A real export in a temporary workspace verifies the
-original MIDI download and byte-identical regeneration of the 26-song starter
-pack; full arrangements remain outside that pack.
+activation, score-slider shortcuts, loop preference persistence, and search
+casing remains consistent across browser locales.
+The 27 library songs live in the Supabase `library` bucket. Tests check the
+library index and song validation, loading with content hashes, collections,
+and clear failures for missing files, using three fixture songs. `npm run
+library:push` validates every song before uploading; a round trip through
+`library:pull` returned identical files, and adding a song from a MIDI file
+converted, uploaded and later removed it.
 
 The sample bank contains 641 lossless FLACs, about 753 MiB compressed: 480 note
 recordings and 161 for the optional voices (69 release harmonics, 88 key

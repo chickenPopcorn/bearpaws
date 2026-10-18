@@ -23,16 +23,22 @@ import { LoopBoundInput } from "./LoopBoundInput";
 import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
-import { isBuiltInSong } from "./lessons";
 import { collectionForSong, songsInCollection } from "./collections";
 import { CloudSync } from "./cloud";
 import { OpeningStudio, SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
+import { LIBRARY_BUCKET, loadLibrary } from "./library";
 import "./style.css";
 // One studio per signed-in session, created once the account's songs and
 // progress are on this browser. App only renders while it exists.
 let studio!: Studio;
 let cloud: CloudSync | null = null;
+/** Storage serves `?download=` as an attachment, which cross-origin links need. */
+const downloadUrl = (midi: string, id: string) => {
+  const url = new URL(midi);
+  url.searchParams.set("download", `${id}.mid`);
+  return url.toString();
+};
 const stamp = (t: number) =>
   `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 // The studio is a singleton, so these stay stable and let memoized views skip
@@ -301,7 +307,7 @@ const PassagePanel = memo(function PassagePanel({
           {w}
         </p>
       ))}
-      {!isBuiltInSong(song.id) && (
+      {!song.library && (
         <button className="text-button" onClick={() => void studio.remove()}>
           Remove this local song
         </button>
@@ -447,7 +453,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
     p = studio.practice,
     playing = studio.transport.playing;
   const connected = studio.midi.status === "connected";
-  const collection = collectionForSong(studio.song.id);
+  const collection = collectionForSong(studio.song);
   const collectionSongs = songsInCollection(studio.songs, collection.id);
   const songIndex = collectionSongs.findIndex(
     (song) => song.id === studio.song.id,
@@ -673,14 +679,14 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
             </div>
             <div className="song-tools">
               <span className="chip">
-                {isBuiltInSong(studio.song.id)
-                  ? "Built-in song"
+                {studio.song.library
+                  ? "Shared library"
                   : "Saved on this browser"}
               </span>
-              {isBuiltInSong(studio.song.id) && (
+              {studio.song.library?.midi && (
                 <a
                   className="song-midi-download"
-                  href={`${import.meta.env.BASE_URL}midi/${studio.song.id}.mid`}
+                  href={downloadUrl(studio.song.library.midi, studio.song.id)}
                   download
                   aria-label={`Download ${studio.song.title} MIDI`}
                 >
@@ -998,8 +1004,16 @@ function Root() {
       }
       setGate({ status: "loading" });
       const sync = new CloudSync(client, userId);
+      let library: Song[];
       try {
-        await sync.pull();
+        [library] = await Promise.all([
+          loadLibrary(
+            (path) =>
+              client.storage.from(LIBRARY_BUCKET).getPublicUrl(path).data
+                .publicUrl,
+          ),
+          sync.pull(),
+        ]);
       } catch {
         if (user.current !== userId) return;
         // Still signed in: offer a retry, not another Google sign-in.
@@ -1012,7 +1026,7 @@ function Root() {
       }
       if (user.current !== userId) return;
       cloud = sync;
-      studio = new Studio(sync);
+      studio = new Studio(library, sync);
       sync.onChange = () => studio.emit();
       setGate({ status: "ready", userId, email });
     };

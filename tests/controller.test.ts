@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
 import type { Song } from "../src/song";
 import { deleteSong, library, saveSong } from "../src/storage";
-import { builtInSongs } from "../src/lessons";
+import { fixtureLibrary } from "./fixtures/library";
 
 const env = vi.hoisted(() => ({
   now: 100,
@@ -117,7 +117,7 @@ function song(pitches: [number, number][], id = "controller-fixture"): Song {
 }
 const active: Studio[] = [];
 function create(fixture?: Song) {
-  const studio = new Studio();
+  const studio = new Studio(fixtureLibrary());
   active.push(studio);
   if (fixture) studio.load(fixture);
   studio.speed(1);
@@ -182,7 +182,7 @@ describe("practice studio integration", () => {
       voices: studio.settings.pianoVoices,
     });
     studio.sound(0.31);
-    studio.load(builtInSongs()[1]);
+    studio.load(fixtureLibrary()[1]);
     expect(studio.settings).toMatchObject({
       ambience: 0.31,
     });
@@ -827,7 +827,7 @@ describe("practice studio integration", () => {
   });
 
   it("keeps every built-in piece and restores the selected one after library loading", async () => {
-    const builtIns = builtInSongs();
+    const builtIns = fixtureLibrary();
     env.values.set("settings", { selected: builtIns[1].id });
     env.songs = [song([[60, 1]], "saved-import")];
     const studio = create();
@@ -843,39 +843,6 @@ describe("practice studio integration", () => {
       expect(studio.songs.some((s) => s.id === piece.id)).toBe(true);
     }
     expect(deleteSong).not.toHaveBeenCalled();
-  });
-
-  it("restores the full An Jing arrangement and practices each suggested hand independently", async () => {
-    const arrangement = builtInSongs().find(
-      (piece) => piece.id === "bearpaws-an-jing-v1",
-    )!;
-    env.values.set("settings", { selected: arrangement.id });
-    const studio = create();
-    await studio.init();
-
-    expect(studio.song.id).toBe(arrangement.id);
-    expect(studio.song.source).toEqual(arrangement.source);
-    expect(studio.song.lesson).toBeUndefined();
-    expect(studio.notes).toHaveLength(1369);
-    expect(studio.practice.notes).toEqual(studio.notes);
-
-    studio.hand("left");
-    expect(studio.notes).toHaveLength(761);
-    expect(studio.notes.every((note) => note.pitch >= 60)).toBe(true);
-    expect(studio.scoringNotes).toEqual(studio.notes);
-    expect(studio.practice.notes).toEqual(studio.notes);
-
-    studio.hand("left");
-    studio.hand("right");
-    expect(studio.notes).toHaveLength(608);
-    expect(studio.notes.every((note) => note.pitch < 60)).toBe(true);
-    expect(studio.scoringNotes).toEqual(studio.notes);
-    expect(studio.practice.notes).toEqual(studio.notes);
-
-    studio.hand("right");
-    expect(studio.notes).toHaveLength(1369);
-    expect(studio.practice.notes).toEqual(studio.notes);
-    expect(studio.song.source).toEqual(arrangement.source);
   });
 
   it("turns each hand on and off on its own, including both off", async () => {
@@ -1381,7 +1348,7 @@ describe("practice studio integration", () => {
     studio.loop(false);
     studio.seek(3);
     studio.save();
-    const restored = new Studio();
+    const restored = new Studio(fixtureLibrary());
     active.push(restored);
     restored.load(fixture);
     expect(restored.loopEnabled).toBe(false);
@@ -1434,7 +1401,7 @@ describe("practice studio integration", () => {
     studio.loop(true);
     studio.seek(1.5);
     studio.save();
-    const restored = new Studio();
+    const restored = new Studio(fixtureLibrary());
     active.push(restored);
     restored.load(fixture);
     expect(restored.position).toBe(1.5);
@@ -1445,7 +1412,7 @@ describe("practice studio integration", () => {
   });
 
   it("does not restart practice on the saved built-in song when the library loads late", async () => {
-    const saved = builtInSongs()[2];
+    const saved = fixtureLibrary()[2];
     env.values.set("settings", { selected: saved.id });
     let finish!: (songs: Song[]) => void;
     vi.mocked(library).mockImplementationOnce(
@@ -1467,9 +1434,9 @@ describe("practice studio integration", () => {
   });
 
   it("keeps the saved built-in song when the local library is unavailable", async () => {
-    const saved = builtInSongs()[2];
+    const saved = fixtureLibrary()[2];
     env.values.set("settings", { selected: saved.id });
-    const studio = new Studio();
+    const studio = new Studio(fixtureLibrary());
     active.push(studio);
     expect(studio.song.id).toBe(saved.id);
     expect(env.values.get("settings")).toMatchObject({ selected: saved.id });
@@ -1484,7 +1451,7 @@ describe("practice studio integration", () => {
     const imported = song([[60, 1]], "imported");
     env.values.set("settings", { selected: "imported" });
     env.songs = [imported];
-    const studio = new Studio();
+    const studio = new Studio(fixtureLibrary());
     active.push(studio);
     await studio.init();
     expect(studio.song.id).toBe("imported");
@@ -1511,7 +1478,7 @@ describe("account sync hooks", () => {
 
   it("reports saved settings and progress to the account", () => {
     const sync = hooks();
-    const studio = new Studio(sync);
+    const studio = new Studio(fixtureLibrary(), sync);
     active.push(studio);
     studio.load(song([[60, 1]]));
     expect(sync.settings).toHaveBeenLastCalledWith(
@@ -1526,7 +1493,7 @@ describe("account sync hooks", () => {
 
   it("keeps an imported file on this browser only", async () => {
     const sync = hooks();
-    const studio = new Studio(sync);
+    const studio = new Studio(fixtureLibrary(), sync);
     active.push(studio);
     vi.mocked(saveSong).mockClear();
     await studio.import(midiFile());
@@ -1546,7 +1513,7 @@ describe("account sync hooks", () => {
   it("forgets an imported song's progress in the account when it is removed", async () => {
     const sync = hooks();
     const imported = song([[60, 1]], "local-song");
-    const studio = new Studio(sync);
+    const studio = new Studio(fixtureLibrary(), sync);
     active.push(studio);
     studio.songs.push(imported);
     studio.load(imported);

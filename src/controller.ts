@@ -14,7 +14,6 @@ import {
   type Song,
   type Hand,
 } from "./song";
-import { builtInSongs, isBuiltInSong } from "./lessons";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
 import {
   settings,
@@ -46,15 +45,14 @@ export class Studio {
   // Where the current loop pass began. Earlier presses in this scoring
   // session belong to the previous pass.
   private passEpoch = -Infinity;
-  songs = builtInSongs();
-  // Loading writes the selection, so start on the saved built-in song (if
-  // any) rather than overwrite it before the library loads, or fails to.
-  song =
-    this.songs.find((song) => song.id === this.savedSelection) ?? this.songs[0];
+  /** The shared song library, in library order. */
+  readonly library: Song[];
+  songs: Song[];
+  song: Song;
   audio = new ReferenceAudio();
   input = new MidiState();
-  transport = new Transport(this.song.duration);
-  practice = new Practice(this.song.notes);
+  transport: Transport;
+  practice: Practice;
   midi: MidiConnection;
   position = 0;
   notice = "";
@@ -74,10 +72,27 @@ export class Studio {
   };
   loopEnabled = true;
   loopStart = 0;
-  loopEnd = this.song.duration;
+  loopEnd: number;
   timer: ReturnType<typeof setInterval> | null = null;
-  /** `sync` copies saved changes to the signed-in account. */
-  constructor(private sync?: SyncHooks) {
+  /**
+   * `library` holds the shared songs (see src/library.ts). `sync` copies
+   * saved changes to the signed-in account.
+   */
+  constructor(
+    library: readonly Song[],
+    private sync?: SyncHooks,
+  ) {
+    if (!library.length) throw new Error("The song library is empty.");
+    this.library = [...library];
+    this.songs = [...library];
+    // Loading writes the selection, so start on the saved library song (if
+    // any) rather than overwrite it before imported songs load, or fail to.
+    this.song =
+      this.songs.find((song) => song.id === this.savedSelection) ??
+      this.songs[0];
+    this.transport = new Transport(this.song.duration);
+    this.practice = new Practice(this.song.notes);
+    this.loopEnd = this.song.duration;
     this.audio.setSound({
       ambience: this.settings.ambience,
       voices: this.settings.pianoVoices,
@@ -183,9 +198,10 @@ export class Studio {
     try {
       const songs = await library();
       if (generation !== this.lifecycleGeneration) return;
+      const shared = new Set(this.library.map((song) => song.id));
       this.songs = [
-        ...builtInSongs(),
-        ...songs.filter((song) => !isBuiltInSong(song.id)),
+        ...this.library,
+        ...songs.filter((song) => !shared.has(song.id)),
       ];
       const selected = this.songs.find((s) => s.id === this.savedSelection);
       // A saved built-in song is already active; reloading it would stop any
@@ -645,7 +661,7 @@ export class Studio {
   }
   async remove() {
     const id = this.song.id;
-    if (isBuiltInSong(id)) return;
+    if (this.song.library) return;
     this.pause();
     try {
       await deleteSong(id);

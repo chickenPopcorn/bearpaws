@@ -71,6 +71,12 @@ export interface Song {
     bpm: number;
     handPositions: { left: string; right: string };
   };
+  /** Set on songs from the shared library bucket; imported songs have none. */
+  library?: {
+    collection: "classes" | "songs" | "pops";
+    /** Public URL of the song's MIDI file, for its Download button. */
+    midi?: string;
+  };
 }
 export const fingerNames = ["", "thumb", "index", "middle", "ring", "little"];
 export const suggestedFinger = (note: Note, hand: Hand) =>

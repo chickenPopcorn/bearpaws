@@ -11,7 +11,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "format": "prettier --write src tests scripts *.json *.ts index.html README.md docs/verification.md",
     "example": "node scripts/create-example.mjs",
-    "midi:build": "node scripts/create-library.mjs"
+    "library:pull": "node scripts/library.mjs pull",
+    "library:push": "node scripts/library.mjs push"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",

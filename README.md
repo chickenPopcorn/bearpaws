@@ -20,13 +20,14 @@ npm run test:watch     # Watch tests
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173
 npm run example        # Regenerate the original downloadable MIDI exercise
-npm run midi:build     # Regenerate the beginner MIDI collection
+npm run library:pull   # Download the shared song library into ./library
+npm run library:push   # Check ./library and upload it to the library bucket
 npm run format         # Format source, tests and documentation
 ```
 
 ## Practice
 
-The library includes **26 beginner arrangements**, keeping **Ode to Joy** and
+The shared library has 27 songs, including **26 beginner arrangements** with **Ode to Joy** and
 **Dancing Raindrops** and adding familiar melodies such as Mary Had a Little Lamb,
 Twinkle, Twinkle, Little Star, London Bridge, Frère Jacques, and Jingle Bells.
 Each includes suggested finger numbers on the score, falling notes, active keys
@@ -43,18 +44,36 @@ in C major, with suggested finger numbers and a simple left-hand accompaniment.
 It also includes **安静 · 周杰伦 (Silence / An Jing)** as a complete piano MIDI
 from [Shaivan’s Online Sequencer upload](https://onlinesequencer.net/1677315).
 Its original notes and timing are preserved, with suggested hands split at middle
-C and no added finger numbers. The source MIDI is kept in `src/assets/an-jing.mid`
-and is available through the song’s individual download.
+C and no added finger numbers. Its download is the original MIDI file.
 
 Search the library by title or composer. **Download MIDI** saves the selected
 arrangement as a standard MIDI file.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
-with barlines. `public/midi/catalog.json` is a fingering manifest with `countInBeats`.
-General MIDI players may ignore these text events; the built-in lessons retain their fingering,
-but reimporting a MIDI treats it as an ordinary import without lesson metadata.
-The generated collection lives in `public/midi/`; melody references are recorded
-in `src/starterPieces.ts` and `src/popsPieces.ts`.
+with barlines. General MIDI players may ignore these text events; the library
+songs retain their fingering, but reimporting a MIDI treats it as an ordinary
+import without lesson metadata.
+
+### The song library
+
+The songs live in the public Supabase bucket `library`, not in this repository.
+The app loads them after sign-in:
+
+- `index.json` lists the songs in order, with each one's title, collection
+  (`classes`, `songs` or `pops`) and content hashes.
+- `songs/<id>.json` is each song in the app's format: notes, tracks, tempo,
+  suggested fingering and lesson text.
+- `songs/<id>.mid` is each song's MIDI file, for its Download button.
+
+To change the library, run `npm run library:pull`, edit `./library` (ignored by
+git), then run `npm run library:push`. To add a song, put its MIDI file at
+`library/songs/<id>.mid` and add an entry to `library/index.json` with its `id`,
+`title`, `collection`, `song: "songs/<id>.json"` and `midi: "songs/<id>.mid"`;
+push converts the MIDI into the song file. Push checks every song before it
+uploads anything, uploads the index last, and removes files no song lists.
+Uploading needs the project's secret key, in `SUPABASE_SECRET_KEY`, or a
+Supabase account token in `MUSIC_API_KEY` to look it up. The app itself only
+reads the bucket. A copy of three songs in `tests/fixtures/` serves the tests.
 The sheet-music timeline above the waterfall follows the current bar. Accepted
 notes fade to 50% opacity in practice modes; Listen marks the notes played by
 the reference audio. Disabled hands remain visible at half opacity. Written
@@ -117,7 +136,7 @@ Sign-in with Google is required. Supabase (project `pawpal`) holds each user's s
 - `settings`: one row per user, the studio settings.
 - `progress`: per song, the position, track assignments, passage, number of starts, and best matched-note proportion.
 
-MIDI files you import are stored only in this browser (IndexedDB, normalized and keyed by a SHA-256 hash of their contents); they are never uploaded and do not appear on other devices. Removing an imported song removes it from the browser and its progress from your account. Signing out keeps imported songs.
+The songs themselves come from the shared library (see above), which is the same for everyone and read-only. MIDI files you import are stored only in this browser (IndexedDB, normalized and keyed by a SHA-256 hash of their contents); they are never uploaded and do not appear on other devices. Removing an imported song removes it from the browser and its progress from your account. Signing out keeps imported songs.
 
 The browser keeps the working copy of settings and progress in localStorage. At sign-in the app downloads the account's copy; changes upload about two seconds after they happen, and failed uploads retry. For progress, the more recently updated copy wins. Signing out uploads waiting changes, then clears this browser's copy of the account's settings and progress. Best proportion uses all eligible notes in the current passage, including upcoming notes.
 
@@ -137,6 +156,7 @@ Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, in
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings/progress and IndexedDB song library.
 - `src/cloud.ts`, `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in and account sync.
+- `src/library.ts`, `scripts/library.mjs`: the shared song library and its pull/push script.
 - `src/main.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.

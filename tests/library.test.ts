@@ -1,0 +1,116 @@
+import { describe, expect, it, vi } from "vitest";
+import { loadLibrary, validateIndex, validateSong } from "../src/library";
+import { collectionForSong } from "../src/collections";
+import data from "./fixtures/library-songs.json";
+import type { Song } from "../src/song";
+
+const fixtures = data as unknown as { collection: string; song: Song }[];
+const ode = () => structuredClone(fixtures[0].song);
+const index = () => ({
+  version: 1,
+  songs: fixtures.map(({ collection, song }) => ({
+    id: song.id,
+    title: song.title,
+    collection,
+    song: `songs/${song.id}.json`,
+    midi: `songs/${song.id}.mid`,
+    hash: `h-${song.id}`,
+    midiHash: `m-${song.id}`,
+  })),
+});
+const url = (path: string) => `https://cdn.example/library/${path}`;
+
+describe("song library", () => {
+  it("accepts the library index and the app's song format", () => {
+    expect(validateIndex(index()).songs).toHaveLength(3);
+    for (const { song } of fixtures)
+      expect(validateSong(structuredClone(song), song.id).id).toBe(song.id);
+  });
+
+  it.each([
+    [{ version: 2, songs: [] }, /version: 1/],
+    [{ version: 1, songs: [] }, /no songs/],
+    [{ ...index(), songs: [index().songs[0], index().songs[0]] }, /duplicate/],
+    [
+      { version: 1, songs: [{ ...index().songs[0], collection: "jazz" }] },
+      /collection must be one of/,
+    ],
+    [
+      { version: 1, songs: [{ ...index().songs[0], id: "../escape" }] },
+      /id must use/,
+    ],
+  ])("rejects a broken index %#", (value, problem) => {
+    expect(() => validateIndex(value)).toThrow(problem);
+  });
+
+  it.each([
+    ["the wrong id", (song: Song) => ({ ...song, id: "other" }), /its id/],
+    ["no notes", (song: Song) => ({ ...song, notes: [] }), /missing notes/],
+    [
+      "a note on a missing track",
+      (song: Song) => ({
+        ...song,
+        notes: [{ ...song.notes[0], track: 99 }],
+      }),
+      /bad note/,
+    ],
+    [
+      "an out-of-range pitch",
+      (song: Song) => ({
+        ...song,
+        notes: [{ ...song.notes[0], pitch: 200 }],
+      }),
+      /bad note/,
+    ],
+    ["no duration", (song: Song) => ({ ...song, duration: 0 }), /duration/],
+  ])("rejects a song with %s", (_, change, problem) => {
+    expect(() => validateSong(change(ode()), ode().id)).toThrow(problem);
+  });
+
+  it("loads every song with its title, collection and download", async () => {
+    const files = new Map<string, unknown>([
+      [url("index.json"), index()],
+      ...fixtures.map(
+        ({ song }) =>
+          [url(`songs/${song.id}.json?v=h-${song.id}`), song] as const,
+      ),
+    ]);
+    const fetcher = vi.fn(async (input: string | URL | Request) => {
+      const body = files.get(String(input));
+      return new Response(JSON.stringify(body), {
+        status: body ? 200 : 404,
+      });
+    });
+    const songs = await loadLibrary(url, fetcher as typeof fetch);
+    expect(songs.map((song) => song.id)).toEqual(
+      fixtures.map(({ song }) => song.id),
+    );
+    expect(songs[1].library).toEqual({
+      collection: "classes",
+      midi: url(`songs/${fixtures[1].song.id}.mid?v=m-${fixtures[1].song.id}`),
+    });
+    expect(collectionForSong(songs[1]).id).toBe("classes");
+    // The index is always revalidated; songs are cached by their hash.
+    expect(fetcher).toHaveBeenCalledWith(url("index.json"), {
+      cache: "no-cache",
+    });
+  });
+
+  it("fails clearly when a song file is missing", async () => {
+    const fetcher = vi.fn(async (input: string | URL | Request) =>
+      String(input) === url("index.json")
+        ? new Response(JSON.stringify(index()))
+        : new Response("", { status: 404 }),
+    );
+    await expect(loadLibrary(url, fetcher as typeof fetch)).rejects.toThrow(
+      /HTTP 404/,
+    );
+  });
+
+  it("puts imported songs in Papa Bear's Collections", () => {
+    expect(collectionForSong({ ...ode(), library: undefined }).id).toBe(
+      "songs",
+    );
+    expect(collectionForSong(undefined).id).toBe("songs");
+  });
+});

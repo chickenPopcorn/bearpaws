@@ -3,27 +3,36 @@ import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SongLibrary } from "../src/SongLibrary";
-import { builtInSongs } from "../src/lessons";
-import { midiPieces } from "../src/midiPieces";
-import { popsPieces } from "../src/popsPieces";
 import type { Song } from "../src/song";
+import { fixtureLibrary } from "./fixtures/library";
 
 type LibraryProps = ComponentProps<typeof SongLibrary>;
-const base = builtInSongs()[0];
-const song = (id: string, title: string, composer?: string): Song => ({
+const base = fixtureLibrary()[0];
+const song = (
+  id: string,
+  title: string,
+  composer?: string,
+  collection?: "classes" | "songs" | "pops",
+): Song => ({
   ...base,
   id,
   title,
   lesson: composer ? { ...base.lesson!, composer } : undefined,
+  library: collection ? { collection } : undefined,
 });
 const songs = [
-  song("cadence-dancing-raindrops-v1", "Dancing Raindrops", "Émile Example"),
-  song("cadence-ode-to-joy-v1", "Frère Jacques", "Traditional"),
-  song(popsPieces[0].id, "Jasmine Flower", "Traditional"),
+  song(
+    "cadence-dancing-raindrops-v1",
+    "Dancing Raindrops",
+    "Émile Example",
+    "classes",
+  ),
+  song("cadence-ode-to-joy-v1", "Frère Jacques", "Traditional", "songs"),
+  song("bearpaws-jasmine-flower-v1", "Jasmine Flower", "Traditional", "pops"),
   song("imported-waltz", "My Waltz"),
 ];
 const fullPiano: Song = {
-  ...song(midiPieces[0].id, "安静 · 周杰伦"),
+  ...song("bearpaws-an-jing-v1", "安静 · 周杰伦", undefined, "pops"),
   source: {
     composer: "周杰伦 · Jay Chou",
     description: "Full piano arrangement without suggested finger numbers.",

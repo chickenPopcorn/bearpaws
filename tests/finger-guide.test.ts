@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BearPaw } from "../src/BearPaw";
 import { FingerGuide } from "../src/FingerGuide";
-import { builtInSongs } from "../src/lessons";
+import { fixtureLibrary } from "./fixtures/library";
 
-const lesson = () => builtInSongs()[0];
+const lesson = () => fixtureLibrary()[0];
 const renderGuide = (piece = lesson(), left = true, right = true) =>
   renderToStaticMarkup(
     createElement(FingerGuide, { song: piece, left, right }),

@@ -33,9 +33,9 @@ export const SongLibrary = memo(function SongLibrary({
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(allExpanded);
   const revealSelection = useEffectEvent(() => {
-    const group = collectionForSong(selected).id;
-    setExpanded((current) => ({ ...current, [group]: true }));
     const song = songs.find((song) => song.id === selected);
+    const group = collectionForSong(song).id;
+    setExpanded((current) => ({ ...current, [group]: true }));
     setQuery((current) =>
       song && !songMatches(song, searchText(current.trim())) ? "" : current,
     );

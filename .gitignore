@@ -10,3 +10,5 @@ work/
 *.tsbuildinfo
 *.log
 __pycache__/
+# Working copy of the Supabase song library (npm run library:pull)
+/library/
