@@ -2,6 +2,7 @@ import React, {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -123,6 +124,30 @@ const Piano = memo(function Piano() {
     />
   );
 });
+/** Where the mode switcher's highlight sits, measured from the active button. */
+function useActiveIndicator(
+  group: React.RefObject<HTMLElement | null>,
+  active: string,
+) {
+  const [indicator, setIndicator] = useState<{ left: number; width: number }>();
+  useLayoutEffect(() => {
+    const element = group.current;
+    if (!element) return;
+    const measure = () => {
+      const button = element.querySelector<HTMLElement>(
+        '[aria-pressed="true"]',
+      );
+      if (button)
+        setIndicator({ left: button.offsetLeft, width: button.offsetWidth });
+    };
+    measure();
+    // Labels change width when fonts load or the layout wraps.
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [group, active]);
+  return indicator;
+}
 const PracticeControls = memo(function PracticeControls({
   mode,
   left,
@@ -132,9 +157,26 @@ const PracticeControls = memo(function PracticeControls({
   left: boolean;
   right: boolean;
 }) {
+  const tabs = useRef<HTMLDivElement>(null);
+  const indicator = useActiveIndicator(tabs, mode);
   return (
     <div className="toolbar-preferences">
-      <div className="tabs" role="group" aria-label="Practice mode">
+      <div
+        ref={tabs}
+        className={`tabs${indicator ? " has-indicator" : ""}`}
+        role="group"
+        aria-label="Practice mode"
+      >
+        {indicator && (
+          <span
+            className="tabs-indicator"
+            aria-hidden="true"
+            style={{
+              transform: `translateX(${indicator.left}px)`,
+              width: indicator.width,
+            }}
+          />
+        )}
         {(["listen", "wait", "rhythm"] as const).map((option) => (
           <button
             key={option}
@@ -670,11 +712,12 @@ function App() {
                   <button
                     className="primary play"
                     disabled={busy}
+                    aria-busy={busy}
                     title={playing ? "Pause (Space)" : "Play (Space)"}
                     aria-keyshortcuts="Space"
                     onClick={() => void toggle()}
                   >
-                    {busy ? "Loading piano…" : playing ? "Ⅱ Pause" : "▷ Play"}
+                    {busy ? "Loading…" : playing ? "Ⅱ Pause" : "▷ Play"}
                   </button>
                   <button
                     className="square"
@@ -686,22 +729,30 @@ function App() {
                     ⇄
                   </button>
                 </div>
-                <label className="speed">
-                  Speed
-                  <input
-                    aria-label="Playback speed"
-                    type="range"
-                    min="25"
-                    max="150"
-                    step="5"
-                    value={s.speed * 100}
-                    onChange={(e) => studio.speed(Number(e.target.value) / 100)}
-                  />
-                  <output>{Math.round(s.speed * 100)}%</output>
-                </label>
-                <span className="time">
-                  {stamp(studio.position)} / {stamp(studio.song.duration)}
-                </span>
+                <div
+                  className="playback-status"
+                  role="group"
+                  aria-label="Speed and position"
+                >
+                  <label className="speed">
+                    Speed
+                    <input
+                      aria-label="Playback speed"
+                      type="range"
+                      min="25"
+                      max="150"
+                      step="5"
+                      value={s.speed * 100}
+                      onChange={(e) =>
+                        studio.speed(Number(e.target.value) / 100)
+                      }
+                    />
+                    <output>{Math.round(s.speed * 100)}%</output>
+                  </label>
+                  <span className="time">
+                    {stamp(studio.position)} / {stamp(studio.song.duration)}
+                  </span>
+                </div>
                 <PianoSoundControls
                   ambience={s.ambience}
                   onChange={setAmbience}
@@ -836,8 +887,12 @@ function App() {
               Note names
             </label>
             <span className="pedal">
-              Pedal <b>{studio.input.sustain ? "down" : "up"}</b> · Velocity{" "}
-              <b>{studio.lastVelocity || "—"}</b>
+              <span>
+                Pedal <b>{studio.input.sustain ? "Down" : "Up"}</b>
+              </span>
+              <span>
+                Velocity <b>{studio.lastVelocity || "—"}</b>
+              </span>
             </span>
           </div>
           <section className="lower-grid">

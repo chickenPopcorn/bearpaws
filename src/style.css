@@ -97,12 +97,15 @@ input {
 }
 select {
   color: var(--text-2);
-  background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 6px var(--space-2);
+  padding: 6px 32px 6px var(--space-3);
   min-height: 32px;
   max-width: 100%;
+  appearance: none;
+  background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m2.5 4.5 3.5 3.5 3.5-3.5' fill='none' stroke='%23625c70' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 12px center / 12px 12px;
 }
 .app {
   max-width: 1600px;
@@ -439,8 +442,10 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 0 var(--space-3);
-  background: #faf9fd;
+  background: #fff;
   min-height: 40px;
+  color: var(--text-2);
+  font-weight: 500;
 }
 .piano-sound-panel {
   position: fixed;
@@ -481,18 +486,97 @@ h1 {
 .toolbar-preferences {
   display: contents;
 }
-.practice-toolbar .tabs button {
-  padding: 0 var(--space-3);
-  font-size: var(--text-sm);
-  min-height: 32px;
+/* Every toolbar group has one shape: a 40 px white pill around 32 px
+   controls, with one "on" state for toggles and Play as the only filled
+   button. */
+.tabs,
+.hands,
+.transport-buttons,
+.playback-status {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 40px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
 }
-.practice-toolbar .hands button {
-  padding: 0 var(--space-3);
-  font-size: var(--text-sm);
+.tabs button,
+.hands button,
+.transport-buttons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.tabs button:hover,
+.hands button:hover,
+.transport-buttons button:hover {
+  background: #f4f1fa;
+}
+.tabs button[aria-pressed="true"],
+.hands button[aria-pressed="true"],
+.transport-buttons button[aria-pressed="true"] {
+  background: var(--soft);
+  color: var(--accent-text);
+}
+/* The mode switcher's highlight slides to the chosen mode. Until it is
+   measured, the pressed button keeps the static highlight above. */
+.tabs {
+  position: relative;
+}
+.tabs button {
+  position: relative;
+  transition: color 0.2s ease;
+}
+.tabs-indicator {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  border-radius: 7px;
+  background: var(--soft);
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0, 0, 1),
+    width 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+.tabs.has-indicator button[aria-pressed="true"] {
+  background: transparent;
+}
+/* Inside a toolbar group the focus ring fits the group's 3 px padding
+   instead of spilling over its border. */
+.tabs button:focus-visible,
+.hands button:focus-visible,
+.transport-buttons button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.transport-buttons .play {
+  background: var(--accent);
+  color: #fff;
+  width: 96px;
+}
+.transport-buttons .play:hover {
+  background: #6446c0;
+}
+.playback-status {
+  margin-left: auto;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+}
+.playback-status .time {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--line);
 }
 .practice-toolbar .speed {
-  margin-left: auto;
   gap: 6px;
 }
 .practice-toolbar .speed input {
@@ -544,48 +628,10 @@ h1 {
   color: var(--accent-text);
   font-size: var(--text-sm);
 }
-.tabs {
-  display: flex;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  background: #fff;
-  border-radius: 10px;
-}
-.tabs button {
-  border: 0;
-  background: transparent;
-  font-size: var(--text-sm);
-  color: var(--muted);
-  padding: 0 var(--space-3);
-  min-height: 32px;
-}
-.tabs button[aria-pressed="true"] {
-  background: #282635;
-  color: white;
-  border-radius: 7px;
-}
-.hands {
-  display: flex;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fff;
-}
 .hands button {
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  font-size: var(--text-sm);
-  padding: 0 var(--space-3);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
-}
-.hands button[aria-pressed="true"] {
-  background: var(--soft);
 }
 .hands button[aria-pressed="false"] {
   opacity: 0.5;
@@ -751,27 +797,11 @@ h1 {
   display: block;
   touch-action: none;
 }
-.transport-buttons {
-  display: flex;
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fff;
-}
-.transport-buttons button {
-  border: 0;
-  border-radius: 7px;
-}
 .transport-buttons .square {
   width: 32px;
   height: 32px;
-}
-.transport-buttons .play {
-  min-width: 88px;
-  min-height: 32px;
-  padding: 0 var(--space-3);
-  font-size: var(--text-sm);
+  padding: 0;
+  font-size: 18px;
 }
 .square {
   font-size: 20px;
@@ -788,14 +818,9 @@ h1 {
 .primary:hover {
   background: #6342bc;
 }
-.play {
-  min-width: 96px;
-  padding: 7px 15px;
-}
 .square[aria-pressed="true"] {
   color: var(--accent);
   background: var(--soft);
-  border-color: #aa8ee4;
 }
 .speed {
   font-size: var(--text-sm);
@@ -975,21 +1000,26 @@ h1 {
   font-size: var(--text-sm);
   color: var(--muted);
   border-bottom: 1px solid var(--line);
+  padding-bottom: var(--space-4);
 }
 .settings-row label {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
 }
 .settings-row select {
   font-size: var(--text-sm);
 }
 .pedal {
   margin-left: auto;
+  display: flex;
+  gap: var(--space-4);
+  font-variant-numeric: tabular-nums;
 }
 .pedal b {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-2);
+  margin-left: var(--space-1);
 }
 .lower-grid {
   display: grid;
@@ -1035,7 +1065,8 @@ h1 {
 }
 .assignments select {
   font-size: var(--text-sm);
-  min-width: 100px;
+  width: 136px;
+  flex: 0 0 auto;
 }
 .small {
   color: var(--muted);
@@ -1057,7 +1088,7 @@ h1 {
   color: var(--muted);
 }
 .loop-fields input {
-  width: 64px;
+  width: 84px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 6px var(--space-2);
@@ -1198,10 +1229,7 @@ footer a {
   main {
     padding: var(--space-5);
   }
-  .speed {
-    margin-left: auto;
-  }
-  .time {
+  .playback-status {
     margin-left: auto;
   }
   .settings-row {
@@ -1317,11 +1345,8 @@ footer a {
   .hands button {
     padding: 0 var(--space-2);
   }
-  .speed {
+  .playback-status {
     margin-left: 0;
-  }
-  .time {
-    margin-left: auto;
   }
   .settings-row {
     align-items: flex-start;
@@ -1335,6 +1360,10 @@ footer a {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .tabs-indicator,
+  .tabs button {
+    transition: none;
+  }
   button {
     transition: none;
   }
@@ -1357,6 +1386,7 @@ footer a {
   font-size: var(--text-xs);
   letter-spacing: 0;
   color: var(--text-2);
+  white-space: nowrap;
 }
 .fullscreen-toggle > span {
   font-size: 16px;
@@ -1389,12 +1419,11 @@ footer a {
 }
 .piano-expanded .practice-toolbar .tabs,
 .piano-expanded .practice-toolbar .hands,
-.piano-expanded .transport-buttons,
-.piano-expanded .practice-toolbar .speed,
-.piano-expanded .practice-toolbar .time {
+.piano-expanded .transport-buttons {
   flex-shrink: 0;
 }
-.piano-expanded .practice-toolbar .speed {
+.piano-expanded .playback-status {
+  flex-shrink: 0;
   margin-left: 0;
 }
 .piano-expanded .roll {

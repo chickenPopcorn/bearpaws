@@ -68,7 +68,7 @@ export function settings(): Settings {
     tolerance: Number.isFinite(s.tolerance)
       ? Math.max(0.08, Math.min(0.35, s.tolerance))
       : 0.22,
-    left: !!s.left || !s.right,
+    left: !!s.left,
     right: !!s.right,
     reference: !!s.reference,
     names: !!s.names,

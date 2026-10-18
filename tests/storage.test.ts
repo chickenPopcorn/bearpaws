@@ -78,6 +78,10 @@ it("recovers corrupt or invalid storage shapes without crashing", () => {
   values.set("cadence:progress:broken", "null");
   expect(progress("broken", 5).position).toBe(0);
 });
+it("keeps both hands off when that was the saved choice", () => {
+  write("settings", { left: false, right: false });
+  expect(settings()).toMatchObject({ left: false, right: false });
+});
 it("migrates the removed 500ms tolerance to the widest available setting", () => {
   write("settings", { tolerance: 0.5 });
   expect(settings().tolerance).toBe(0.35);

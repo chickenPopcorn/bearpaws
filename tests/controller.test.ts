@@ -802,6 +802,25 @@ describe("practice studio integration", () => {
     expect(studio.song.source).toEqual(arrangement.source);
   });
 
+  it("turns each hand on and off on its own, including both off", async () => {
+    const studio = create(
+      song([
+        [60, 1],
+        [64, 2],
+      ]),
+    );
+    studio.hand("right");
+    studio.hand("left");
+    expect(studio.settings).toMatchObject({ left: false, right: false });
+    expect(studio.notes).toHaveLength(0);
+    await studio.play();
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.notice).toMatch(/Turn on Left, Right, or both hands/);
+    studio.hand("right");
+    expect(studio.settings).toMatchObject({ left: false, right: true });
+    expect(studio.notes).toHaveLength(2);
+  });
+
   it.each([false, true])(
     "accepts Wait input within the early tolerance even when delivered after the gate (already held: %s)",
     async (held) => {
