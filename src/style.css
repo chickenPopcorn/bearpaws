@@ -701,10 +701,12 @@ h1 {
   font-size: var(--text-md);
   font-weight: 600;
 }
+/* The score's text is sized in SVG units. At 250 px tall the score draws
+   at roughly 0.9x, so 13-unit labels land near 12 px on screen. */
 .sheet-timeline-svg {
   display: block;
   width: 100%;
-  height: 210px;
+  height: 250px;
 }
 .sheet-timeline-svg.is-seekable {
   cursor: pointer;
@@ -718,11 +720,11 @@ h1 {
   border-radius: 5px;
 }
 .sheet-staff-line {
-  stroke: #b9b3c0;
+  stroke: #8f88a0;
   stroke-width: 0.8;
 }
 .sheet-bar-line {
-  stroke: #aaa1b5;
+  stroke: #7f7891;
   stroke-width: 1;
 }
 .sheet-clef,
@@ -751,23 +753,21 @@ h1 {
   fill: #62576e;
   stroke: none;
   font-family: var(--score-font);
-}
-.sheet-note-label {
-  font-size: 11px;
+  font-size: 13px;
 }
 .sheet-bar-number {
-  fill: #82778d;
+  fill: var(--muted);
   font-family: var(--score-font);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 .sheet-bar-number.is-current {
-  fill: #7354cf;
+  fill: var(--accent);
 }
 .sheet-beat-number {
-  fill: #a399ae;
+  fill: var(--muted);
   font-family: var(--score-font);
-  font-size: 9px;
+  font-size: 12px;
 }
 .sheet-note-halo {
   fill: currentColor;
@@ -781,7 +781,7 @@ h1 {
   font-size: var(--text-xs);
 }
 .sheet-beat-tick {
-  stroke: #eeebf2;
+  stroke: #c9c3d4;
   stroke-width: 1;
 }
 .sheet-playhead {
@@ -800,8 +800,9 @@ h1 {
 }
 .roll-caption {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-2) var(--space-3);
   font-size: var(--text-xs);
   padding: var(--space-3) var(--space-4);
   color: var(--muted);
@@ -1399,13 +1400,15 @@ footer a {
 .roll-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--space-3);
+  margin-left: auto;
+  white-space: nowrap;
 }
 .fullscreen-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   font-size: var(--text-xs);
   letter-spacing: 0;
   color: var(--text-2);
@@ -1456,7 +1459,7 @@ footer a {
   flex-direction: column;
 }
 .piano-expanded .sheet-timeline-svg {
-  height: clamp(140px, 21vh, 210px);
+  height: clamp(160px, 28vh, 250px);
 }
 .piano-expanded .roll-caption {
   flex: 0 0 auto;
