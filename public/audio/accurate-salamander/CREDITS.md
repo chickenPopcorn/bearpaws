@@ -13,7 +13,7 @@ Licensed under [Creative Commons Attribution 3.0 Unported](https://creativecommo
 The [license and adaptation notes](./LICENSE.md) and
 [original README](./source/README-upstream.txt) are included with the app.
 
-This browser version uses eight of the original sixteen playing-intensity
-layers. It preserves the original lossless, 24-bit stereo FLAC files, their
+This browser version uses all sixteen original playing-intensity layers. It
+preserves the original lossless, 24-bit stereo FLAC files, their
 tuning, and the recommended live preset's per-key mapping. Optional mechanical
 noise, sampled release, and SFZ pedal-resonance voices are not included.
