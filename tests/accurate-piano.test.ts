@@ -54,9 +54,16 @@ describe("Accurate-Salamander instrument", () => {
     const filenames = Object.keys(assets)
       .map((path) => path.split("/").at(-1)!)
       .sort();
-    const expected = [
-      ...new Set(PIANO_REGIONS.map((region) => region.file)),
-    ].sort();
+    type Recorded = { file: string; offset: number; offsetFrames: number };
+    const regions: Recorded[] = [
+      ...manifest.regions,
+      ...Object.values(manifest.optionalVoices).flatMap(
+        (group): Recorded[] => group.regions,
+      ),
+    ];
+    const expected = [...new Set(regions.map((region) => region.file))].sort();
+    // The optional voices add 161 recordings; resonance reuses note ones.
+    expect(expected).toHaveLength(480 + 161);
     expect(filenames).toEqual(expected);
     expect(Object.keys(manifest.files).sort()).toEqual(expected);
     expect(Object.keys(checksums).sort()).toEqual(expected);
@@ -75,7 +82,7 @@ describe("Accurate-Salamander instrument", () => {
         /^[a-f0-9]{64}$/,
       );
     }
-    for (const region of manifest.regions) {
+    for (const region of regions) {
       const info = manifest.files[region.file as keyof typeof manifest.files];
       expect(region.offset).toBeLessThan(info.duration);
       expect(region.offset).toBeCloseTo(

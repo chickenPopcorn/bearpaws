@@ -1,6 +1,10 @@
 import type { Song } from "./song";
 import type { Mode } from "./engine";
-import { DEFAULT_PIANO_SOUND, normalizePianoSound } from "./pianoSound";
+import {
+  DEFAULT_PIANO_SOUND,
+  normalizePianoSound,
+  type PianoVoices,
+} from "./pianoSound";
 export interface Settings {
   mode: Mode;
   speed: number;
@@ -11,6 +15,8 @@ export interface Settings {
   names: boolean;
   selected: string;
   ambience: number;
+  /** The optional Accurate-Salamander voices that play. */
+  pianoVoices: PianoVoices;
 }
 export interface Progress {
   position: number;
@@ -31,6 +37,7 @@ export const defaults: Settings = {
   names: true,
   selected: "cadence-ode-to-joy-v1",
   ambience: DEFAULT_PIANO_SOUND.ambience,
+  pianoVoices: { ...DEFAULT_PIANO_SOUND.voices },
 };
 const storageKey = (key: string) => `cadence:${key}`;
 export function read<T>(key: string, fallback: T): T {
@@ -59,6 +66,7 @@ export function settings(): Settings {
     s = { ...defaults, ...(saved && typeof saved === "object" ? saved : {}) };
   const sound = normalizePianoSound({
     ambience: s.ambience,
+    voices: s.pianoVoices,
   });
   return {
     mode: ["listen", "wait", "rhythm"].includes(s.mode) ? s.mode : "wait",
@@ -74,6 +82,7 @@ export function settings(): Settings {
     names: !!s.names,
     selected: typeof s.selected === "string" ? s.selected : defaults.selected,
     ambience: sound.ambience,
+    pianoVoices: sound.voices,
   };
 }
 export function progress(id: string, duration: number): Progress {

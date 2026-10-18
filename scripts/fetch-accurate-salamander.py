@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Fetch a pinned, lossless sixteen-layer Accurate-Salamander browser bank.
 
+Includes the preset's optional voices: sampled release, hammer (key release)
+noise, pedal noise and pseudo pedal resonance.
+
 Uses HTTP ranges to extract only selected ZIP members. The archive is never
 downloaded in full. Python 3 standard library only; reruns verify/reuse files.
 """
@@ -26,6 +29,14 @@ SFZ_MEMBER = "sfz_live/Accurate-SalamanderGrandPiano_flat.Recommended.sfz"
 # Every recorded attack layer, with the live preset's own velocity bands.
 # MIDI velocity 1 is silent in that preset.
 SOURCE_LAYERS = list(range(1, 17))
+# Voices the preset leaves off (set_cc=0), keyed by the controller that
+# enables each one: (manifest name, SFZ label, expected region count).
+OPTIONAL_VOICES = {
+    20: ("release", "Sampled Release", 69),
+    21: ("keyNoise", "Hammer Noise", 88),
+    22: ("pedalNoise", "Pedal Noise", 4),
+    23: ("resonance", "Pedal Resonance", 135),
+}
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "public/audio/accurate-salamander"
 
 
@@ -119,18 +130,59 @@ def flac_info(data):
             "sampleRate": sample_rate, "bitDepth": bit_depth, "bytes": len(data)}
 
 
+def optional_region(voice, merged, file):
+    """One region of a voice the preset leaves off by default (see OPTIONAL_VOICES)."""
+    trigger = merged.get("trigger", "attack")
+    if "on_locc64" in merged:
+        # Pedal noise starts on a pedal change rather than on a key.
+        trigger = "pedalDown" if int(merged["on_locc64"]) >= 64 else "pedalUp"
+    # The CC64 range a key-triggered region needs: resonance only sounds with
+    # the pedal down (locc64=22), sampled release only with it up (hicc64=32).
+    key_triggered = trigger in ("attack", "release", "release_key")
+    pedal = None
+    if key_triggered:
+        if int(merged.get("locc64", 0)) > 0:
+            pedal = "down"
+        elif int(merged.get("hicc64", 127)) < 64:
+            pedal = "up"
+    # Pedal noise has no key to track.
+    keytrack = float(merged.get("pitch_keytrack", 100)) if key_triggered else 0
+    if keytrack not in (0, 100):
+        raise ValueError(f"Unsupported pitch_keytrack={keytrack}: {file}")
+    return {
+        "voice": voice, "group": int(merged.get("group", 0)), "trigger": trigger,
+        "pedal": pedal,
+        "pitchMin": int(merged.get("lokey", 0)), "pitchMax": int(merged.get("hikey", 127)),
+        "velocityMin": int(merged.get("lovel", 0)), "velocityMax": int(merged.get("hivel", 127)),
+        "randomMin": float(merged.get("lorand", 0)), "randomMax": float(merged.get("hirand", 1)),
+        "file": file,
+        # Without key tracking the recording plays at its own pitch.
+        "rootPitch": int(merged.get("pitch_keycenter", 60)) if keytrack else None,
+        "tune": float(merged.get("tune", 0)),
+        "offsetFrames": int(merged.get("offset", 0)),
+        "offset": int(merged.get("offset", 0)) / 48000,
+        # SFZ adds a group's group_volume to the region's own volume.
+        "gainDb": float(merged.get("volume", 0)) + float(merged.get("group_volume", 0)),
+        "attackSeconds": float(merged.get("ampeg_attack", 0)),
+        "releaseSeconds": float(merged.get("ampeg_release", .5)),
+        # off_time: how fast off_by silences the other pedal noise.
+        "cutSeconds": float(merged.get("off_time", .5)),
+        "decayDbPerSecond": float(merged.get("rt_decay", 0)),
+    }
+
+
 def build_manifest(sfz):
-    # Stop before pedal-resonance and release/noise groups. These auxiliary
-    # voices are disabled by default in the official preset.
-    sfz = sfz.split("//Pseudo pedal resonance", 1)[0]
-    sfz = sfz.split("<master> ampeg_attack=0.05", 1)[0]
     # Strip comments before reading opcodes, especially commented offset maths.
     sfz = re.sub(r"//[^\n]*", "", sfz)
     global_opcodes, master, group = {}, {}, {}
     regions = []
+    optional = {voice: [] for voice, *_ in OPTIONAL_VOICES.values()}
+    controls, controller_gain = {}, {}
     for section, body in re.findall(r"<(\w+)>([^<]*)", sfz):
         values = dict(re.findall(r"(\w+)=([^\s]+)", body))
-        if section == "global":
+        if section == "control":
+            controls = values
+        elif section == "global":
             global_opcodes = values
         elif section == "master":
             master, group = values, {}
@@ -139,6 +191,19 @@ def build_manifest(sfz):
         elif section == "region":
             merged = {**global_opcodes, **master, **group, **values}
             source_name = merged.get("sample", "").replace("\\", "/").removeprefix("../")
+            # The release, noise and resonance groups are each enabled by
+            # their own controller (locc20..23); the notes need none.
+            enabled_by = [cc for cc in OPTIONAL_VOICES if f"locc{cc}" in merged]
+            if enabled_by:
+                cc = enabled_by[0]
+                voice = OPTIONAL_VOICES[cc][0]
+                if merged.get(f"volume_curvecc{cc}") != "2":
+                    raise ValueError(f"Expected a 1-to-0 level curve on CC{cc}")
+                gain = float(merged[f"volume_oncc{cc}"])
+                if controller_gain.setdefault(voice, gain) != gain:
+                    raise ValueError(f"Inconsistent CC{cc} level")
+                optional[voice].append(optional_region(voice, merged, browser_filename(source_name)))
+                continue
             match = re.search(r"v(\d+)\.flac$", source_name)
             if not match or int(match[1]) not in SOURCE_LAYERS:
                 continue
@@ -162,6 +227,21 @@ def build_manifest(sfz):
     for pitch in range(21, 109):
         if [r["sourceLayer"] for r in regions if r["pitch"] == pitch] != SOURCE_LAYERS:
             raise ValueError(f"Incomplete key: {pitch}")
+    voices = {}
+    note_files = {r["file"] for r in regions}
+    for cc, (voice, label, count) in OPTIONAL_VOICES.items():
+        if len(optional[voice]) != count:
+            raise ValueError(f"Expected {count} {voice} regions, got {len(optional[voice])}")
+        if voice == "resonance" and not {r["file"] for r in optional[voice]} <= note_files:
+            raise ValueError("Pedal resonance must reuse the note recordings")
+        voices[voice] = {
+            "label": label, "controller": cc,
+            # Off by default upstream (set_cc=0). Any value 1..127 enables the
+            # voice; volume_oncc/curve 2 then lowers it from 0 dB at 127.
+            "defaultController": int(controls.get(f"set_cc{cc}", 0)),
+            "controllerGainDb": controller_gain[voice],
+            "regions": optional[voice],
+        }
     return {
         "name": "Accurate-Salamander Grand Piano", "version": "6.2a",
         "sampleRate": 48000, "bitDepth": 24, "format": "FLAC",
@@ -170,7 +250,15 @@ def build_manifest(sfz):
         "license": "CC-BY-3.0",
         "amplitudeVelocityTracking": 98.5,
         "sourceLayers": SOURCE_LAYERS, "regions": regions,
+        "optionalVoices": voices,
     }
+
+
+def all_regions(manifest):
+    """The note regions, then every optional voice's regions."""
+    return manifest["regions"] + [
+        region for voice in manifest["optionalVoices"].values() for region in voice["regions"]
+    ]
 
 
 def main():
@@ -190,7 +278,7 @@ def main():
     index = read_index(url)
     sfz = extract_member(url, SFZ_MEMBER, index[SFZ_MEMBER])
     manifest = build_manifest(sfz.decode("utf-8"))
-    wanted = {r["file"] for r in manifest["regions"]}
+    wanted = {r["file"] for r in all_regions(manifest)}
     sample_entries = {name: entry for name, entry in index.items()
                       if name.startswith("48khz24bit/") and browser_filename(name) in wanted}
     if len(sample_entries) != len(wanted):
@@ -246,7 +334,7 @@ def main():
                 print(f"Verified {number}/{len(futures)} samples", flush=True)
     (source / "sha256.json").write_text(json.dumps(dict(sorted(checksums.items())), indent=2) + "\n")
     manifest["files"] = dict(sorted(file_info.items()))
-    for region in manifest["regions"]:
+    for region in all_regions(manifest):
         region["offset"] = region["offsetFrames"] / file_info[region["file"]]["sampleRate"]
     # Publish only a completely verified bank. A failed or interrupted import
     # must not replace a working manifest with nominal offsets or missing sizes.

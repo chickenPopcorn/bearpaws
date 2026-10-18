@@ -7,9 +7,15 @@ import {
 } from "./engine";
 import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
-import { checkMidiSize, parseSong, type Song, type Hand } from "./song";
+import {
+  checkMidiSize,
+  parseSong,
+  type PedalSpan,
+  type Song,
+  type Hand,
+} from "./song";
 import { builtInSongs, isBuiltInSong } from "./lessons";
-import { normalizePianoSound } from "./pianoSound";
+import { normalizePianoSound, type PianoVoice } from "./pianoSound";
 import {
   settings,
   write,
@@ -22,6 +28,7 @@ import {
   type Progress,
 } from "./storage";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
+const NO_PEDALS: readonly PedalSpan[] = [];
 export class Studio {
   settings = settings();
   savedSelection = this.settings.selected;
@@ -71,6 +78,7 @@ export class Studio {
   constructor() {
     this.audio.setSound({
       ambience: this.settings.ambience,
+      voices: this.settings.pianoVoices,
     });
     this.midi = this.createMidi();
     this.load(this.song);
@@ -317,9 +325,27 @@ export class Studio {
   sound(ambience: number) {
     const sound = normalizePianoSound({ ambience });
     this.settings.ambience = sound.ambience;
-    this.audio.setSound(sound);
+    this.audio.setSound({ ambience: sound.ambience });
     this.persist();
     this.emit();
+  }
+  pianoVoice(voice: PianoVoice, enabled: boolean) {
+    if (this.settings.pianoVoices[voice] === enabled) return;
+    // A voice turned on mid-passage needs its recordings: play on from here
+    // once they load, as for the Rhythm reference.
+    const resume =
+      enabled &&
+      this.referenceAudible &&
+      (this.transport.playing || this.playbackPending);
+    if (resume) this.pause();
+    this.settings.pianoVoices = {
+      ...this.settings.pianoVoices,
+      [voice]: enabled,
+    };
+    this.audio.setSound({ voices: this.settings.pianoVoices });
+    this.persist();
+    this.emit();
+    if (resume) void this.play();
   }
   seek(position: number) {
     this.cancelPlaybackPreparation();
@@ -346,15 +372,21 @@ export class Studio {
     this.save();
     this.emit();
   }
+  /** The song's pedal, which the reference's optional voices follow. */
+  private get pedals(): readonly PedalSpan[] {
+    return this.song.pedals ?? NO_PEDALS;
+  }
+  /** With `pedals`, `notes` are a passage to play, with its optional voices. */
   private async prepareAudio(
     notes: Pick<Song["notes"][number], "pitch" | "velocity">[],
     generation: number,
+    pedals?: readonly PedalSpan[],
   ) {
     await this.audio.unlock();
     if (generation !== this.playGeneration || !notes.length) return;
     const controller = new AbortController();
     this.audioPreparations.add(controller);
-    const preparation = this.audio.prepare(notes, controller.signal);
+    const preparation = this.audio.prepare(notes, controller.signal, pedals);
     this.emit();
     try {
       await preparation;
@@ -380,7 +412,7 @@ export class Studio {
       const p = this.position;
       const referenceNotes = this.referenceNotes;
       this.audio.stop();
-      await this.prepareAudio(referenceNotes, generation);
+      await this.prepareAudio(referenceNotes, generation, this.pedals);
       if (generation !== this.playGeneration) return;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
@@ -391,7 +423,7 @@ export class Studio {
         (this.position < this.loopStart || this.position >= this.loopEnd)
       )
         this.seek(this.loopStart);
-      this.audio.setPlaybackNotes(referenceNotes);
+      this.audio.setPlaybackNotes(referenceNotes, this.pedals);
       this.transport.play(this.audio.now());
       this.progress.attempts++;
       this.notice = "";
@@ -459,7 +491,12 @@ export class Studio {
           this.settings.tolerance,
           this.settings.speed,
         );
-      this.audio.schedule(this.notes, this.transport, this.referenceAudible);
+      this.audio.schedule(
+        this.notes,
+        this.transport,
+        this.referenceAudible,
+        this.pedals,
+      );
       if (this.audio.error) this.notice = this.audio.error;
       const total = this.practice.notes.filter(
         (n) => n.start >= this.practice.from - 0.001,

@@ -15,5 +15,7 @@ The [license and adaptation notes](./LICENSE.md) and
 
 This browser version uses all sixteen original playing-intensity layers. It
 preserves the original lossless, 24-bit stereo FLAC files, their
-tuning, and the recommended live preset's per-key mapping. Optional mechanical
-noise, sampled release, and SFZ pedal-resonance voices are not included.
+tuning, and the recommended live preset's per-key mapping. It also includes the
+preset's optional voices: sampled release (string harmonics as a damper
+falls), key release noise, pedal noise, and pseudo pedal resonance. Each can be
+turned off under **Piano sound**.

@@ -35,12 +35,22 @@ export function selectPianoRegion(pitch: number, velocity: number) {
     );
 }
 
-export const pianoPlaybackRate = (region: PianoRegion, pitch: number) =>
-  2 ** ((pitch - region.rootPitch + region.tune / 100) / 12);
+/** A recording without a root pitch plays at its own pitch, whatever the key. */
+export const pianoPlaybackRate = (
+  region: { rootPitch: number | null; tune: number },
+  pitch: number,
+) =>
+  2 **
+  (((region.rootPitch === null ? 0 : pitch - region.rootPitch) +
+    region.tune / 100) /
+    12);
 
 // The source WAVs are normalized; retain the preset's velocity response and
 // per-key compensation rather than applying an unrelated second gain curve.
-export const pianoLevel = (region: PianoRegion, velocity: number) =>
+export const pianoLevel = (
+  region: Pick<PianoRegion, "gainDb">,
+  velocity: number,
+) =>
   0.7 *
   Math.max(0, Math.min(1, velocity)) **
     ((2 * data.amplitudeVelocityTracking) / 100) *

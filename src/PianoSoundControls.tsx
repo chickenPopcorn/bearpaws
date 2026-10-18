@@ -1,11 +1,23 @@
 import { memo, useId, useRef, useState } from "react";
+import { PIANO_VOICES, type PianoVoice, type PianoVoices } from "./pianoSound";
+
+const VOICE_LABELS: Record<PianoVoice, string> = {
+  release: "Release harmonics",
+  keyNoise: "Key release noise",
+  pedalNoise: "Pedal noise",
+  resonance: "Pedal resonance",
+};
 
 export const PianoSoundControls = memo(function PianoSoundControls({
   ambience,
   onChange,
+  voices,
+  onVoiceChange,
 }: {
   ambience: number;
   onChange(ambience: number): void;
+  voices: PianoVoices;
+  onVoiceChange(voice: PianoVoice, enabled: boolean): void;
 }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -21,7 +33,7 @@ export const PianoSoundControls = memo(function PianoSoundControls({
           setPosition({
             top: Math.max(
               16,
-              Math.min(bounds.bottom + 8, window.innerHeight - 240),
+              Math.min(bounds.bottom + 8, window.innerHeight - 400),
             ),
             left: Math.max(
               16,
@@ -59,6 +71,19 @@ export const PianoSoundControls = memo(function PianoSoundControls({
           onChange={(event) => onChange(Number(event.target.value) / 100)}
         />
         <p>Gentle dynamics with a little room around each note.</p>
+        <fieldset className="piano-sound-voices">
+          <legend>Recorded details</legend>
+          {PIANO_VOICES.map((voice) => (
+            <label key={voice}>
+              <input
+                type="checkbox"
+                checked={voices[voice]}
+                onChange={(event) => onVoiceChange(voice, event.target.checked)}
+              />{" "}
+              {VOICE_LABELS[voice]}
+            </label>
+          ))}
+        </fieldset>
       </div>
     </div>
   );

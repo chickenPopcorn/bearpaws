@@ -16,6 +16,7 @@ import type { Feedback, Mode } from "./engine";
 import { FingerGuide } from "./FingerGuide";
 import { SongLibrary } from "./SongLibrary";
 import { PianoSoundControls } from "./PianoSoundControls";
+import type { PianoVoice } from "./pianoSound";
 import { SheetTimeline } from "./SheetTimeline";
 import { LoopBoundInput } from "./LoopBoundInput";
 import { describeWaitTarget } from "./waitTarget";
@@ -36,6 +37,8 @@ const selectSong = (song: Song | undefined) => {
 };
 const seek = (position: number) => studio.seek(position);
 const setAmbience = (ambience: number) => studio.sound(ambience);
+const setPianoVoice = (voice: PianoVoice, enabled: boolean) =>
+  studio.pianoVoice(voice, enabled);
 
 function SongTitle({ title }: { title: string }) {
   const letter = /\p{L}/u.exec(title);
@@ -756,6 +759,8 @@ function App() {
                 <PianoSoundControls
                   ambience={s.ambience}
                   onChange={setAmbience}
+                  voices={s.pianoVoices}
+                  onVoiceChange={setPianoVoice}
                 />
                 {fullscreen.expanded && (
                   <div

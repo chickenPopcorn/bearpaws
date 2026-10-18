@@ -1,11 +1,12 @@
 # Verification record
 
-Updated October 17, 2026 for the Paw Pal library, practice controls, full An Jing arrangement, and Natural piano sound.
+Updated October 18, 2026 for the Accurate-Salamander optional voices: sampled
+release, key release noise, pedal noise and pseudo pedal resonance.
 
 ## Automated checks
 
-- `npm test`: 462 tests across 26 suites passed.
-- `python3 -m unittest discover -s tests -p 'test_*.py'`: 6 offline importer and ZIP tests passed.
+- `npm test`: 758 tests across 31 suites passed.
+- `python3 -m unittest discover -s tests -p 'test_*.py'`: 10 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
 - `npm audit --audit-level=moderate`: no known vulnerabilities reported after updating the test runner.
@@ -36,10 +37,26 @@ selection, separate-hand practice, all score notes, and seeking across the
 original MIDI download and byte-identical regeneration of the 26-song starter
 pack; full arrangements remain outside that pack.
 
-The sample bank contains 480 lossless FLACs, about 723 MiB compressed. Checks
-verify all hashes against the recorded source metadata. Runtime loading remains
-selective, with a 512 MiB decoded cache limit; a full-bank download is not needed
-to open the page. The CI artifact includes the complete bank.
+The sample bank contains 641 lossless FLACs, about 753 MiB compressed: 480 note
+recordings and 161 for the optional voices (69 release harmonics, 88 key
+release noises and 4 pedal noises, about 30 MiB). The importer fetched them with
+the same ZIP CRC and SHA-256 checks, and the tests verify every hash against the
+recorded source metadata. Runtime loading remains selective, with a 512 MiB
+decoded cache limit; a full-bank download is not needed to open the page. The
+CI artifact includes the complete bank, and the built site is about 792 MB.
+
+The optional voice tests cover the manifest's regions for each voice (key and
+velocity ranges, sample roots, volumes, `rt_decay`, pedal conditions and the
+pedal-noise random split) and the SFZ trigger rules: release harmonics only for
+a key released with the pedal up, key noise at every key-up, resonance only for
+notes struck with the pedal down and damped with them, and pedal noise at each
+press and lift, cut by the next change. Player tests cover each voice's start
+time, level and damping, turning each voice off, speed changes, a voice due
+where playback starts, and the voice budget: optional voices take at most half
+of the 64 voices, never a note's voice, and give up theirs first to a note.
+Loading tests cover lazy loading of only the enabled voices' recordings, none
+for previews, a failed optional download, and optional recordings that do not
+fit the memory limit leaving playback unaffected.
 
 The sound tests cover preference migration and validation, live updates without
 restarting playback or cancelling sample preparation, one shared sound bus,
@@ -49,6 +66,18 @@ and recovery after allocation failures. Legacy sound-profile selections are
 discarded while their room amount is preserved. Natural is the only sound path.
 
 ## Local browser checks
+
+The optional voices were checked in the in-app browser on the Vite development
+server. **Piano sound** lists the four **Recorded details**, all on. Listening
+to Ode to Joy fetched only its notes' recordings and their key-noise and
+release-harmonic files. A generated MIDI with four pedalled chords also fetched
+the pedal noises and the softest-layer recordings that resonance uses.
+Instrumenting `AudioBufferSourceNode.start` showed resonance copies at plus and
+minus three semitones with each pedalled note, key noise at each key-up,
+harmonics only at the pedal-up release, and alternating pedal press and lift
+noises. The console showed no errors. This confirms scheduling, not subjective
+sound quality, which still needs a listening check through speakers or
+headphones.
 
 The Natural sound development build was checked at `http://127.0.0.1:4189/`:
 Room adjustments kept playback running; the room preference is global; the native sound popover remains visible in fullscreen; Escape

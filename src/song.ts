@@ -17,6 +17,12 @@ export interface Note {
   notatedBeats?: number;
   staccato?: boolean;
 }
+/** A sustain-pedal press on one MIDI channel: down at `start`, up at `end`. */
+export interface PedalSpan {
+  channel: number;
+  start: number;
+  end: number;
+}
 export interface Track {
   id: number;
   name: string;
@@ -41,6 +47,11 @@ export interface Song {
   tempos: Tempo[];
   ppq: number;
   timeSignatures?: TimeSignature[];
+  /**
+   * Sustain-pedal presses (CC64 at or above 64), in time order. Missing for
+   * songs without pedal data, including songs saved before it was recorded.
+   */
+  pedals?: PedalSpan[];
   /** Legacy lesson bar length, in quarter-note beats. */
   beatsPerBar?: number;
   leadInBeats?: number;
@@ -346,6 +357,13 @@ export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
     tempos,
     ppq,
     timeSignatures: timeSignatures.sort((a, b) => a.tick - b.tick),
+    pedals: [...intervals]
+      .flatMap(([channel, list]) =>
+        list
+          .filter((span) => span.end > span.start)
+          .map((span) => ({ channel, ...span })),
+      )
+      .sort((a, b) => a.start - b.start || a.channel - b.channel),
     warnings: [...new Set(warnings)],
   };
 }

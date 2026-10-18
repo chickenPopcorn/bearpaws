@@ -1,0 +1,255 @@
+import data from "../public/audio/accurate-salamander/manifest.json";
+import { pianoLevel } from "./piano";
+import type { PianoVoice, PianoVoices } from "./pianoSound";
+import type { Note, PedalSpan } from "./song";
+import { lastIndexAtOrBefore } from "./timeline";
+
+/** One region of a voice the preset leaves off, as the import script records it. */
+export interface PianoVoiceRegion {
+  voice: PianoVoice;
+  /** The SFZ group number. */
+  group: number;
+  /** "release" needs the pedal up at key-up; "release_key" sounds at every key-up. */
+  trigger: "attack" | "release" | "release_key" | "pedalDown" | "pedalUp";
+  /** The pedal a key-triggered region needs when it triggers, if any. */
+  pedal: "down" | "up" | null;
+  pitchMin: number;
+  pitchMax: number;
+  velocityMin: number;
+  velocityMax: number;
+  /** The share of random draws that pick this region (lorand/hirand). */
+  randomMin: number;
+  randomMax: number;
+  file: string;
+  /** The key the recording sounds at; null plays it at its own pitch. */
+  rootPitch: number | null;
+  tune: number;
+  offset: number;
+  gainDb: number;
+  attackSeconds: number;
+  releaseSeconds: number;
+  /** How fast the next pedal change silences pedal noise (off_time). */
+  cutSeconds: number;
+  /** rt_decay: decibels lost per second the key was held. */
+  decayDbPerSecond: number;
+}
+interface PianoVoiceGroup {
+  label: string;
+  controller: number;
+  /** The level the controller removes at its lowest enabled value. */
+  controllerGainDb: number;
+  regions: PianoVoiceRegion[];
+}
+export const PIANO_VOICE_GROUPS = data.optionalVoices as unknown as Record<
+  PianoVoice,
+  PianoVoiceGroup
+>;
+/**
+ * The controller value each enabled voice plays at. Upstream, any value from
+ * 1 to 127 enables a voice, and volume_oncc lowers it by up to
+ * controllerGainDb below 127; 127 keeps each group's own SFZ volume.
+ */
+export const PIANO_VOICE_CONTROLLER = 127;
+/** Quieter voices are not worth a voice (-80 dB). */
+export const MIN_PIANO_VOICE_LEVEL = 1e-4;
+
+export interface PianoVoiceEvent {
+  /** Pass ids: one for each note, or pedal change, this voice sounds for. */
+  ids: string[];
+  region: PianoVoiceRegion;
+  pitch: number;
+  velocity: number;
+  /** Song time of the trigger. */
+  time: number;
+  /**
+   * Song time at which a resonance or pedal-noise voice is damped. Release
+   * and key noise play their recording to its end: Infinity.
+   */
+  songEnd: number;
+  /** How long the key was held, in song seconds, for rt_decay. */
+  held: number;
+}
+
+const midiVelocity = (velocity: number) =>
+  Math.round(Math.max(0, Math.min(1, velocity)) * 127);
+
+/** Every region of `voice` that a key at this pitch and velocity triggers. */
+export function pianoVoiceRegions(
+  voice: PianoVoice,
+  pitch: number,
+  velocity: number,
+) {
+  const value = midiVelocity(velocity);
+  return PIANO_VOICE_GROUPS[voice].regions.filter(
+    (region) =>
+      pitch >= region.pitchMin &&
+      pitch <= region.pitchMax &&
+      value >= region.velocityMin &&
+      value <= region.velocityMax,
+  );
+}
+
+/** The pedal noise for a pedal change, chosen by a draw in [0, 1). */
+export function pedalNoiseRegion(down: boolean, draw: number) {
+  const trigger = down ? "pedalDown" : "pedalUp";
+  return PIANO_VOICE_GROUPS.pedalNoise.regions.find(
+    (region) =>
+      region.trigger === trigger &&
+      draw >= region.randomMin &&
+      (draw < region.randomMax || region.randomMax >= 1),
+  )!;
+}
+
+/**
+ * Gain of an optional voice: the preset's velocity curve, the group's volume
+ * and, for release triggers, rt_decay over the time the key was held. Pedal
+ * noise has no key velocity, so it plays at its group volume.
+ */
+export function pianoVoiceLevel(event: PianoVoiceEvent, heldSeconds: number) {
+  const { region } = event;
+  const group = PIANO_VOICE_GROUPS[region.voice];
+  const controllerDb =
+    group.controllerGainDb * (1 - PIANO_VOICE_CONTROLLER / 127);
+  return pianoLevel(
+    {
+      gainDb:
+        region.gainDb +
+        controllerDb -
+        region.decayDbPerSecond * Math.max(0, heldSeconds),
+    },
+    region.voice === "pedalNoise" ? 1 : event.velocity,
+  );
+}
+
+/** Spread draws for pedal noise over [0, 1) without a random source. */
+const draw = (index: number) => (index * 0.6180339887498949) % 1;
+
+/** Merge every channel's pedal into one foot pedal. */
+function footPedal(spans: readonly PedalSpan[]) {
+  const merged: { start: number; end: number }[] = [];
+  for (const span of [...spans].sort((a, b) => a.start - b.start)) {
+    const last = merged.at(-1);
+    if (last && span.start <= last.end) last.end = Math.max(last.end, span.end);
+    else merged.push({ start: span.start, end: span.end });
+  }
+  return merged;
+}
+
+/**
+ * The optional voices a passage triggers, in time order, following the
+ * preset's rules:
+ * - sampled release sounds at key-up only while the pedal is up, which is
+ *   when a note's sound ends with its key;
+ * - key release noise sounds at every key-up, pedal or not (release_key);
+ * - pedal noise sounds at every pedal press and lift, and the next change
+ *   silences it (off_by);
+ * - resonance doubles a note struck with the pedal down, from neighbouring
+ *   strings' recordings, and is damped with the note.
+ * Duplicate tracks that strike or release a key together trigger one voice.
+ */
+export function pianoVoiceEvents(
+  notes: readonly Note[],
+  pedals: readonly PedalSpan[] = [],
+): PianoVoiceEvent[] {
+  const byChannel = new Map<number, PedalSpan[]>();
+  for (const span of pedals) {
+    const list = byChannel.get(span.channel) ?? [];
+    list.push(span);
+    byChannel.set(span.channel, list);
+  }
+  const pedalDown = (channel: number, time: number) => {
+    const list = byChannel.get(channel) ?? [];
+    const span = list[lastIndexAtOrBefore(list, "start", time)];
+    return !!span && time < span.end;
+  };
+  const events = new Map<string, PianoVoiceEvent>();
+  const trigger = (
+    voice: PianoVoice,
+    note: Note,
+    time: number,
+    songEnd: number,
+  ) => {
+    const regions = pianoVoiceRegions(voice, note.pitch, note.velocity);
+    regions.forEach((region, index) => {
+      const key = `${voice}:${index}:${note.pitch}:${time}`;
+      const previous = events.get(key);
+      const id = `${note.id}~${voice}~${index}`;
+      if (!previous)
+        events.set(key, {
+          ids: [id],
+          region,
+          pitch: note.pitch,
+          velocity: note.velocity,
+          time,
+          songEnd,
+          held: note.end - note.start,
+        });
+      else {
+        previous.ids.push(id);
+        previous.songEnd = Math.max(previous.songEnd, songEnd);
+        // A louder duplicate picks the region, as for the note itself.
+        if (note.velocity > previous.velocity) {
+          previous.velocity = note.velocity;
+          previous.region = region;
+        }
+        previous.held = Math.min(previous.held, note.end - note.start);
+      }
+    });
+  };
+  for (const note of notes) {
+    if (note.velocity <= 0) continue;
+    trigger("keyNoise", note, note.end, Infinity);
+    if (note.soundEnd <= note.end) trigger("release", note, note.end, Infinity);
+    if (pedalDown(note.channel, note.start))
+      trigger("resonance", note, note.start, note.soundEnd);
+  }
+  const channels = new Set(notes.map((note) => note.channel));
+  const presses = footPedal(
+    pedals.filter((span) => channels.has(span.channel)),
+  );
+  presses.forEach((press, index) => {
+    const next = presses[index + 1]?.start ?? Infinity;
+    for (const [down, time, songEnd] of [
+      [true, press.start, press.end],
+      [false, press.end, next],
+    ] as const)
+      events.set(`pedal:${index}:${down}`, {
+        ids: [`pedal~${index}~${down ? "down" : "up"}`],
+        region: pedalNoiseRegion(down, draw(index)),
+        pitch: 60,
+        velocity: 1,
+        time,
+        songEnd,
+        held: 0,
+      });
+  });
+  return [...events.values()].sort((a, b) => a.time - b.time);
+}
+
+/**
+ * The recordings these events need for the enabled voices, smallest kinds
+ * first, so that the recordings that fit within the cache are the ones that
+ * serve the most voices.
+ */
+export function pianoVoiceFiles(
+  events: readonly PianoVoiceEvent[],
+  enabled: PianoVoices,
+) {
+  const order: PianoVoice[] = [
+    "keyNoise",
+    "pedalNoise",
+    "release",
+    "resonance",
+  ];
+  return [
+    ...new Set(
+      order.flatMap((voice) =>
+        enabled[voice]
+          ? events
+              .filter((event) => event.region.voice === voice)
+              .map((event) => event.region.file)
+          : [],
+      ),
+    ),
+  ];
+}

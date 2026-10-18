@@ -78,7 +78,8 @@ Imported songs, settings and progress remain local to each browser origin. Data
 saved on `localhost` or `chickenpopcorn.github.io` does not automatically move to
 `piano.pollos.us`; export any imported MIDI files you want to bring across.
 
-The sample bank makes the static output roughly **360 MiB**, within GitHub Pages’
+The sample bank makes the static output roughly **755 MiB** (about 792 MB),
+within GitHub Pages’
 [1 GB published-site limit](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
 Samples load as needed rather than all on page load. Keep the sample credits and
 licenses with the site. The public deployment exposes bundled files, including

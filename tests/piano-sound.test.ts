@@ -90,6 +90,7 @@ describe("piano sound settings", () => {
   it("clamps valid ambience", () => {
     expect(normalizePianoSound({ ambience: -2 })).toEqual({
       ambience: 0,
+      voices: DEFAULT_PIANO_SOUND.voices,
     });
     expect(normalizePianoSound({ ambience: 3 }).ambience).toBe(1);
     expect(normalizePianoSound({ ambience: 0 }).ambience).toBe(0);
@@ -97,7 +98,28 @@ describe("piano sound settings", () => {
   it("discards a legacy sound profile while retaining its room setting", () => {
     expect(
       normalizePianoSound({ profile: "original", ambience: 0.37 }),
-    ).toEqual({ ambience: 0.37 });
+    ).toEqual({ ambience: 0.37, voices: DEFAULT_PIANO_SOUND.voices });
+  });
+  it("plays every optional voice unless it was turned off", () => {
+    expect(DEFAULT_PIANO_SOUND.voices).toEqual({
+      release: true,
+      keyNoise: true,
+      pedalNoise: true,
+      resonance: true,
+    });
+    expect(
+      normalizePianoSound({
+        voices: { release: false, resonance: "no", pedalNoise: false },
+      }).voices,
+    ).toEqual({
+      release: false,
+      keyNoise: true,
+      pedalNoise: false,
+      resonance: true,
+    });
+    expect(normalizePianoSound({ voices: "off" }).voices).toEqual(
+      DEFAULT_PIANO_SOUND.voices,
+    );
   });
 });
 

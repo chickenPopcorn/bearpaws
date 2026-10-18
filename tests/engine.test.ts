@@ -258,6 +258,53 @@ describe("MIDI import and the musical timeline", () => {
     );
     expect(song.notes[0]).toMatchObject({ start: 0, end: 0.5, soundEnd: 1 });
     expect(song.duration).toBeGreaterThanOrEqual(1);
+    expect(song.pedals).toEqual([{ channel: 0, start: 0, end: 1 }]);
+  });
+
+  it("records each channel's sustain-pedal presses in time order", () => {
+    const pedal = (deltaTime: number, channel: number, value: number) => ({
+      deltaTime,
+      type: "controller" as const,
+      channel,
+      controllerType: 64,
+      value,
+    });
+    const song = parseSong(
+      midi([
+        [
+          {
+            deltaTime: 0,
+            type: "noteOn",
+            channel: 0,
+            noteNumber: 60,
+            velocity: 100,
+          },
+          // Half way or more is down; a repeated press changes nothing.
+          pedal(240, 0, 64),
+          pedal(120, 0, 127),
+          pedal(120, 0, 63),
+          // A press and lift at the same instant leaves no press.
+          pedal(0, 1, 127),
+          pedal(0, 1, 0),
+          pedal(240, 1, 100),
+          {
+            deltaTime: 240,
+            type: "noteOff",
+            channel: 0,
+            noteNumber: 60,
+            velocity: 0,
+          },
+          // Still down when the file ends.
+          { deltaTime: 480, type: "endOfTrack" },
+        ],
+      ]),
+      "Pedals",
+      "pedals",
+    );
+    expect(song.pedals).toEqual([
+      { channel: 0, start: 0.25, end: 0.5 },
+      { channel: 1, start: 0.75, end: 1.5 },
+    ]);
   });
 
   it("recovers unclosed notes at the track boundary and reports orphan releases", () => {
