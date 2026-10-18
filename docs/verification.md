@@ -5,7 +5,7 @@ release, key release noise, pedal noise and pseudo pedal resonance.
 
 ## Automated checks
 
-- `npm test`: 784 tests across 31 suites passed.
+- `npm test`: 785 tests across 31 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: 10 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
@@ -57,7 +57,8 @@ starts or a full lookahead after a stall, key and pedal lifts at the end of a
 loop pass but not at its start, lift noise cut by the next pass's press, a lift
 and press at one instant on one channel or across two, a press and lift at one
 instant, resonance damped after its attack when its note ends sooner, pitches
-beyond the piano, notes released together decayed by the shorter hold, voices
+beyond the piano, notes released together decayed by the shorter hold,
+duplicate tracks struck together released once at the last key-up, voices
 taken only from the prepared passage, the event cache released on stop, a
 press still down at the end ringing out, song length reaching the last pedal
 action,

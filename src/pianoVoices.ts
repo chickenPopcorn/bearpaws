@@ -243,11 +243,37 @@ export function pianoVoiceEvents(
       }
     });
   };
+  // Duplicate tracks that strike a key together sound as one note, as the
+  // player strikes them, so its key comes up only when the last does.
+  const strikes = new Map<
+    string,
+    { end: number; soundEnd: number; channels: number[] }
+  >();
   for (const note of notes) {
     if (note.velocity <= 0) continue;
-    trigger("keyNoise", note, note.end, Infinity);
-    if (note.soundEnd <= note.end && !pedalDown(note.channel, note.end))
-      trigger("release", note, note.end, Infinity);
+    const key = `${note.pitch}:${note.start}`,
+      strike = strikes.get(key);
+    if (!strike)
+      strikes.set(key, {
+        end: note.end,
+        soundEnd: note.soundEnd,
+        channels: [note.channel],
+      });
+    else {
+      strike.end = Math.max(strike.end, note.end);
+      strike.soundEnd = Math.max(strike.soundEnd, note.soundEnd);
+      strike.channels.push(note.channel);
+    }
+  }
+  for (const note of notes) {
+    if (note.velocity <= 0) continue;
+    const { end, soundEnd, channels } = strikes.get(
+        `${note.pitch}:${note.start}`,
+      )!,
+      released = { ...note, end };
+    trigger("keyNoise", released, end, Infinity);
+    if (soundEnd <= end && !channels.some((channel) => pedalDown(channel, end)))
+      trigger("release", released, end, Infinity);
     if (pedalDown(note.channel, note.start))
       trigger("resonance", note, note.start, note.soundEnd);
   }

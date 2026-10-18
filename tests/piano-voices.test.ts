@@ -323,6 +323,27 @@ describe("optional voice triggers", () => {
     ).toEqual([["keyNoise", 1, ["last~keyNoise~0"]]]);
   });
 
+  it("releases duplicate tracks struck together once, when the last key comes up", () => {
+    const events = pianoVoiceEvents([
+      note("short", 60, 0, 0.5, 0.5, 0),
+      note("long", 60, 0, 1, 1, 1),
+    ]);
+    expect(summary(events)).toEqual([
+      ["keyNoise", 1, ["short~keyNoise~0", "long~keyNoise~0"]],
+      ["release", 1, ["short~release~0", "long~release~0"]],
+    ]);
+    expect(events[0].held).toBe(1);
+    // The pedal holding either track at that key-up holds back harmonics.
+    expect(
+      summary(
+        pianoVoiceEvents(
+          [note("short", 60, 0, 0.5, 0.5, 0), note("long", 60, 0, 1, 2, 1)],
+          [{ channel: 1, start: 0.8, end: 2 }],
+        ).filter((event) => event.region.voice !== "pedalNoise"),
+      ),
+    ).toEqual([["keyNoise", 1, ["short~keyNoise~0", "long~keyNoise~0"]]]);
+  });
+
   it("triggers one voice for duplicate tracks, from the louder note", () => {
     const events = pianoVoiceEvents(
       [
