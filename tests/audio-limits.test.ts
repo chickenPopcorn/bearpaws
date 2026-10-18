@@ -1486,6 +1486,24 @@ describe("optional piano voices", () => {
     }
   });
 
+  it("damps resonance after its attack ramp when its note ends sooner", () => {
+    const { audio, transport, gain } = withVoices();
+    // Playback starts 20 ms before the pedal lifts and damps the note.
+    transport.seek(2.98, 0);
+    const notes = [{ ...note(1, 64, 3), start: 0.5, end: 2.5 }];
+    audio.schedule(notes, transport, true, [{ channel: 0, start: 0, end: 3 }]);
+    const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
+    expect(resonance).toBeGreaterThan(0);
+    for (let i = 0; i < resonance; i++) {
+      const envelope = gain(1 + i);
+      const [, rampEnd] = envelope.linearRampToValueAtTime.mock.calls[0];
+      expect(rampEnd).toBeCloseTo(0.05);
+      expect(envelope.setTargetAtTime.mock.calls[0][1]).toBeGreaterThanOrEqual(
+        rampEnd,
+      );
+    }
+  });
+
   it("stops a voice turned off, including sources waiting to start, but no note", () => {
     const { audio, context, gain, played, run } = withVoices();
     run(...passage(), 0.4);

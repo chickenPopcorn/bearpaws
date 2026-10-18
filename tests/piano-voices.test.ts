@@ -240,6 +240,20 @@ describe("optional voice triggers", () => {
     ]);
   });
 
+  it("keeps one foot pedal down when another channel takes it over at a lift", () => {
+    const events = pianoVoiceEvents(
+      [note("a", 60, 0, 0.5, 3), note("b", 48, 0, 0.5, 3, 1)],
+      [
+        { channel: 0, start: 1, end: 2 },
+        { channel: 1, start: 2, end: 3 },
+      ],
+    ).filter((event) => event.region.voice === "pedalNoise");
+    expect(events.map((event) => [event.region.trigger, event.time])).toEqual([
+      ["pedalDown", 1],
+      ["pedalUp", 3],
+    ]);
+  });
+
   it("gives a pitch beyond the piano its nearest key's voices, as its note", () => {
     const [low, high] = pianoVoiceEvents([
       note("low", 15, 0, 0.5),

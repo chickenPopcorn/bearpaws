@@ -684,8 +684,10 @@ export class ReferenceAudio {
     const optional = request.layer !== null;
     if (!this.admit(request.when, context.currentTime, optional))
       return optional;
-    const { when, attack, level, releaseAt, releaseTime, rate, offset } =
-      request;
+    const { when, attack, level, releaseTime, rate, offset } = request;
+    // Damping never starts before the attack ramp ends, which would then
+    // raise the level again.
+    const releaseAt = Math.max(request.releaseAt, when + attack);
     let source: AudioBufferSourceNode | undefined, gain: GainNode | undefined;
     try {
       source = context.createBufferSource();

@@ -141,16 +141,40 @@ const draw = (index: number) => (index * 0.6180339887498949) % 1;
 
 /** Merge every channel's pedal into one foot pedal. */
 function footPedal(spans: readonly PedalSpan[]) {
-  const merged: { start: number; end: number; open: boolean }[] = [];
+  const merged: {
+    start: number;
+    end: number;
+    open: boolean;
+    /** The channels whose presses end where this one does. */
+    lifting: Set<number>;
+  }[] = [];
   for (const span of [...spans].sort((a, b) => a.start - b.start)) {
     const last = merged.at(-1),
       open = !!span.open;
-    // A lift and press at one instant on one channel are both kept.
-    if (!last || span.start >= last.end)
-      merged.push({ start: span.start, end: span.end, open });
-    else if (span.end > last.end) Object.assign(last, { end: span.end, open });
-    // Any channel that lifts there makes it a lift.
-    else if (span.end === last.end) last.open &&= open;
+    // One channel's lift and press at one instant are both kept, but a
+    // press that another channel takes over at that instant is not lifted.
+    if (
+      !last ||
+      span.start > last.end ||
+      (span.start === last.end && last.lifting.has(span.channel))
+    )
+      merged.push({
+        start: span.start,
+        end: span.end,
+        open,
+        lifting: new Set([span.channel]),
+      });
+    else if (span.end > last.end)
+      Object.assign(last, {
+        end: span.end,
+        open,
+        lifting: new Set([span.channel]),
+      });
+    else if (span.end === last.end) {
+      // Any channel that lifts there makes it a lift.
+      last.open &&= open;
+      last.lifting.add(span.channel);
+    }
   }
   return merged;
 }
