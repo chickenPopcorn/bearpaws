@@ -20,6 +20,8 @@ const selections = new WeakMap<Note[], Set<string>>();
 export const MAX_VISIBLE_NOTES = 4096;
 export const KEYBOARD_HEIGHT = 132;
 export const BLACK_KEY_HEIGHT = 88;
+/** Smallest finger number drawn on a note bar narrower than its usual label. */
+const MIN_NARROW_LABEL = 9;
 export const rightColor = "#a086e9",
   leftColor = "#51b3a5";
 /** Darker hand colours for text on white keys, which the fills fail (2.5-3:1). */
@@ -203,6 +205,7 @@ export function draw(
       : initialBar.start +
         Math.floor(initialBar.offset / initialBar.beatUnit) *
           initialBar.beatUnit;
+  const beatLabels: { text: string; y: number }[] = [];
   // Keep the work bounded even at extreme tempos or small written note units.
   for (let i = 0; i < 128; i++) {
     const t = clock.time(beat + leadIn);
@@ -216,12 +219,9 @@ export function draw(
     c.lineTo(width, y);
     c.stroke();
     if (barStart) {
-      c.fillStyle = labelColor;
-      c.font = `12px ${scoreFont}`;
-      c.textAlign = "left";
       const writtenBeat =
         bar.writtenBeat + (bar.start - bar.beat) / bar.beatUnit;
-      c.fillText("beat " + String(writtenBeat + 1), 7, y - 5);
+      beatLabels.push({ text: "beat " + String(writtenBeat + 1), y: y - 5 });
     }
     beat =
       beat < 0 ? Math.min(0, beat + 1) : Math.min(bar.end, beat + bar.beatUnit);
@@ -283,6 +283,7 @@ export function draw(
   c.clip();
   // Avoid thousands of blur operations on densely overlapping imported notes.
   const noteShadows = activeNotes.length + dimmedNotes.length <= 256;
+  const noteRects: [number, number, number, number][] = [];
   const drawNote = (n: Note, active: boolean) => {
     const k = geometry.get(n.pitch)!;
     const hand = hands.get(n.track);
@@ -318,16 +319,17 @@ export function draw(
       c.stroke();
     }
     if (active) c.globalAlpha = 1;
+    noteRects.push([x, y, w, h]);
     const finger = suggestedFinger(n, hand ?? "off");
-    if ((names || finger) && w > 18) {
+    const top = Math.max(0, y);
+    const bottom = Math.min(fall, y + h);
+    const visibleHeight = bottom - top;
+    const centerX = x + w / 2;
+    const centerY = (top + bottom) / 2;
+    if ((names || finger) && visibleHeight >= 7) {
       c.fillStyle = "#262232";
       c.textAlign = "center";
-      const top = Math.max(0, y);
-      const bottom = Math.min(fall, y + h);
-      const visibleHeight = bottom - top;
-      if (visibleHeight >= 7) {
-        const centerX = x + w / 2;
-        const centerY = (top + bottom) / 2;
+      if (w > 18) {
         const maxWidth = w - 6;
         const pitchLabel = names
           ? noteLabel(c, noteName(n.pitch), 12, 400)
@@ -366,6 +368,24 @@ export function draw(
             maxWidth,
           );
         }
+      } else if (finger) {
+        // Narrow bars (tablet and phone widths) show only the finger number,
+        // shrunk to fit the bar but never below a legible size.
+        const digit = String(finger);
+        const full = noteLabel(c, digit, 13, 700);
+        const size = Math.min(
+          13,
+          visibleHeight - 2,
+          (13 * (w - 2)) / full.width,
+        );
+        if (size >= MIN_NARROW_LABEL) {
+          const label = noteLabel(c, digit, size, 700);
+          c.fillText(
+            digit,
+            centerX,
+            centerY + (label.ascent - label.descent) / 2,
+          );
+        }
       }
     }
     c.globalAlpha = 1;
@@ -373,6 +393,34 @@ export function draw(
   // Context goes behind the selected hand, including at shared-pitch onsets.
   for (const note of dimmedNotes) drawNote(note, false);
   for (const note of activeNotes) drawNote(note, true);
+  // Bar labels follow the notes so they can move clear of them: the left edge,
+  // else the right edge, else the left edge on a backing chip.
+  for (const { text, y } of beatLabels) {
+    const label = noteLabel(c, text, 12, 400);
+    const top = y - label.ascent - 2,
+      bottom = y + label.descent + 2;
+    const clear = (left: number) =>
+      !noteRects.some(
+        ([nx, ny, nw, nh]) =>
+          nx < left + label.width + 3 &&
+          nx + nw > left - 3 &&
+          ny < bottom &&
+          ny + nh > top,
+      );
+    const right = width - 7 - label.width;
+    const left = clear(7) ? 7 : clear(right) ? right : undefined;
+    if (left === undefined) {
+      c.fillStyle = "#eeedf5";
+      c.globalAlpha = 0.9;
+      c.beginPath();
+      c.roundRect(4, top, label.width + 6, bottom - top, 4);
+      c.fill();
+      c.globalAlpha = 1;
+    }
+    c.fillStyle = labelColor;
+    c.textAlign = "left";
+    c.fillText(text, left ?? 7, y);
+  }
   c.restore();
   const paints = keyboardColors(c, fall, dpr);
   c.fillStyle = "#24252c";
