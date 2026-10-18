@@ -21,7 +21,7 @@ if (command !== "pull" && command !== "push") {
 }
 const env = { ...loadEnv("", process.cwd(), "VITE_"), ...process.env };
 const url = env.VITE_SUPABASE_URL;
-if (!url) throw new Error("Set VITE_SUPABASE_URL (see .env.example).");
+if (!url) throw new Error("Set VITE_SUPABASE_URL in .env.local (see README).");
 const ref = new URL(url).hostname.split(".")[0];
 
 const server = await createServer({
