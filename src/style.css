@@ -592,9 +592,11 @@ h1 {
 /* Speed and Full screen wrap together at the end of the toolbar. */
 .playback-cluster {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin-left: auto;
+  min-width: 0;
 }
 .playback-status {
   gap: var(--space-3);
@@ -1303,8 +1305,17 @@ footer a {
   .device {
     padding: 7px;
   }
+  /* Several MIDI inputs put a menu beside the pill; drop them under the
+     brand, then stack them, rather than clipping the header. */
+  .top {
+    flex-wrap: wrap;
+  }
+  .device-group {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
   .device-group select {
-    max-width: 140px;
+    max-width: 100%;
   }
   .connection {
     padding: 12px 16px;
