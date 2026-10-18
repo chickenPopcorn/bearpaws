@@ -182,6 +182,23 @@ describe("USB MIDI connection lifecycle", () => {
     );
   });
 
+  it("connects any available input on an explicit connect after the chosen one is unplugged", async () => {
+    const first = input("piano"),
+      other = input("other");
+    const { midi, change } = setup([first, other]);
+    await midi.connect();
+    Object.defineProperty(first, "state", {
+      value: "disconnected",
+      configurable: true,
+    });
+    change();
+    expect(midi.status).toBe("disconnected");
+    await midi.connect();
+    expect(midi.selectedId).toBe("other");
+    await Promise.resolve();
+    expect(midi.status).toBe("connected");
+  });
+
   it("shows no-device and automatically notices a newly connected piano", async () => {
     const { midi, access, change } = setup();
     await midi.connect();

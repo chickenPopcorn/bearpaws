@@ -1,5 +1,5 @@
 import type { Song } from "./song";
-import type { Mode } from "./engine";
+import { SPEED_PERCENT, type Mode } from "./engine";
 import {
   DEFAULT_PIANO_SOUND,
   normalizePianoSound,
@@ -70,8 +70,16 @@ export function settings(): Settings {
   });
   return {
     mode: ["listen", "wait", "rhythm"].includes(s.mode) ? s.mode : "wait",
+    // Older saves used 5% steps; snap them onto the slider's steps.
     speed: Number.isFinite(s.speed)
-      ? Math.max(0.25, Math.min(1.5, s.speed))
+      ? (Math.round(
+          Math.max(
+            SPEED_PERCENT.min,
+            Math.min(SPEED_PERCENT.max, s.speed * 100),
+          ) / SPEED_PERCENT.step,
+        ) *
+          SPEED_PERCENT.step) /
+        100
       : defaults.speed,
     tolerance: Number.isFinite(s.tolerance)
       ? Math.max(0.08, Math.min(0.35, s.tolerance))

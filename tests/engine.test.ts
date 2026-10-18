@@ -599,9 +599,9 @@ describe("clock-driven transport", () => {
   it("stops at the song end and clamps supported playback speeds", () => {
     const t = new Transport(3);
     t.setSpeed(100, 0);
-    expect(t.speed).toBe(1.5);
+    expect(t.speed).toBe(1.4);
     t.setSpeed(0.01, 0);
-    expect(t.speed).toBe(0.25);
+    expect(t.speed).toBe(0.2);
     t.play(0);
     expect(t.update(20)).toBe(3);
     expect(t.playing).toBe(false);
@@ -627,19 +627,19 @@ describe("clock-driven transport", () => {
     const t = new Transport(30);
     t.play(100);
     t.setSpeed(0.5, 102);
-    t.setSpeed(1.5, 106);
+    t.setSpeed(1.25, 106);
     expect(t.eventAt(101)).toEqual({ position: 1, speed: 1 });
     expect(t.eventAt(102)).toEqual({ position: 2, speed: 0.5 });
     expect(t.eventAt(104)).toEqual({ position: 3, speed: 0.5 });
-    expect(t.eventAt(107)).toEqual({ position: 5.5, speed: 1.5 });
+    expect(t.eventAt(107)).toEqual({ position: 5.25, speed: 1.25 });
     // A later pause or seek must not rewrite earlier event positions.
     t.pause(108);
     t.seek(12, 110);
     expect(t.eventAt(104)).toEqual({ position: 3, speed: 0.5 });
-    expect(t.eventAt(109)).toEqual({ position: 7, speed: 1.5 });
-    expect(t.eventAt(111)).toEqual({ position: 12, speed: 1.5 });
+    expect(t.eventAt(109)).toEqual({ position: 6.5, speed: 1.25 });
+    expect(t.eventAt(111)).toEqual({ position: 12, speed: 1.25 });
     t.play(112);
-    expect(t.eventAt(113)).toEqual({ position: 13.5, speed: 1.5 });
+    expect(t.eventAt(113)).toEqual({ position: 13.25, speed: 1.25 });
   });
 
   it("preserves timestamp positions on both sides of a loop wrap after the transport anchor moves", () => {
@@ -676,7 +676,7 @@ describe("clock-driven transport", () => {
 });
 
 describe("Rhythm matching and feedback", () => {
-  it.each([0.25, 0.5, 0.75, 1, 1.25, 1.5])(
+  it.each([0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4])(
     "includes the exact timing boundaries at %sx speed without accepting a millisecond outside",
     (speed) => {
       for (const tolerance of [0.12, 0.22, 0.35]) {

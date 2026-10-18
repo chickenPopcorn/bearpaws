@@ -12,7 +12,7 @@ import { Studio } from "./controller";
 import { draw, pianoKeyAt } from "./render";
 import { watchCanvasRedraws } from "./canvasRedraw";
 import { noteName, type Hand, type Song } from "./song";
-import type { Feedback, Mode } from "./engine";
+import { SPEED_PERCENT, type Feedback, type Mode } from "./engine";
 import { FingerGuide } from "./FingerGuide";
 import { SongLibrary } from "./SongLibrary";
 import { PianoSoundControls } from "./PianoSoundControls";
@@ -428,7 +428,7 @@ const KeyboardHelp = memo(function KeyboardHelp() {
 });
 function App() {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
-  const [deviceOpen, setDeviceOpen] = useState(false),
+  const [connectTried, setConnectTried] = useState(false),
     [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const openImport = useCallback(() => file.current?.click(), []);
@@ -438,7 +438,11 @@ function App() {
   const s = studio.settings,
     p = studio.practice,
     playing = studio.transport.playing;
-  const connected = studio.midi.status === "connected";
+  const connected = studio.midi.status === "connected",
+    connecting = studio.midi.status === "opening",
+    selectedDevice = studio.midi.devices.find(
+      (d) => d.id === studio.midi.selectedId,
+    );
   const collection = collectionForSong(studio.song.id);
   const collectionSongs = songsInCollection(studio.songs, collection.id);
   const songIndex = collectionSongs.findIndex(
@@ -541,60 +545,52 @@ function App() {
           Paw Pal
         </a>
         <span className="eyebrow">A little practice. Every day.</span>
-        <button
-          className="device"
-          aria-expanded={deviceOpen}
-          onClick={() => setDeviceOpen(!deviceOpen)}
-        >
-          <span className={`dot ${connected ? "connected" : ""}`} />
-          {connected ? "Piano connected" : "Connect your piano"}
-          <svg
-            className="device-chevron"
-            viewBox="0 0 12 12"
-            aria-hidden="true"
-          >
-            <path d="m2.5 7.5 3.5-3.5 3.5 3.5" />
-          </svg>
-        </button>
+        <div className="device-group">
+          {/* Several inputs (a piano plus a controller or virtual port) need a choice. */}
+          {studio.midi.devices.length > 1 && (
+            <select
+              aria-label="MIDI input device"
+              value={studio.midi.selectedId}
+              onChange={(e) => studio.midi.select(e.target.value)}
+            >
+              {!selectedDevice && (
+                <option value={studio.midi.selectedId}>
+                  Disconnected input
+                </option>
+              )}
+              {studio.midi.devices.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {connected ? (
+            <span className="device" title={selectedDevice?.name}>
+              <span className="dot connected" />
+              Piano connected
+            </span>
+          ) : (
+            <button
+              className="device"
+              disabled={connecting}
+              onClick={() => {
+                setConnectTried(true);
+                void studio.midi.connect();
+              }}
+            >
+              <span className="dot" />
+              {connecting ? "Connecting…" : "Connect your piano"}
+            </button>
+          )}
+        </div>
       </header>
-      {/* Connection changes are announced even while the panel is folded. */}
       <p className="sr-only" role="status">
         {studio.midi.message}
       </p>
-      {deviceOpen && (
-        <section className="connection" aria-label="Piano connection">
-          <div>
-            <strong>
-              {connected ? "Your piano is ready" : "Make room for music"}
-            </strong>
-            <p>{studio.midi.message}</p>
-          </div>
-          <div className="device-actions">
-            {studio.midi.devices.length > 0 && (
-              <select
-                aria-label="MIDI input device"
-                value={studio.midi.selectedId}
-                onChange={(e) => studio.midi.select(e.target.value)}
-              >
-                {!studio.midi.devices.some(
-                  (d) => d.id === studio.midi.selectedId,
-                ) && (
-                  <option value={studio.midi.selectedId}>
-                    Disconnected input
-                  </option>
-                )}
-                {studio.midi.devices.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button onClick={() => void studio.midi.connect()}>
-              Connect piano
-            </button>
-          </div>
-        </section>
+      {/* After a click, say why the piano is not connected yet. */}
+      {connectTried && !connected && !connecting && (
+        <p className="connection">{studio.midi.message}</p>
       )}
       <div className="body">
         <aside className="sidebar">
@@ -735,16 +731,16 @@ function App() {
                 <div
                   className="playback-status"
                   role="group"
-                  aria-label="Speed and position"
+                  aria-label="Speed, position and full screen"
                 >
                   <label className="speed">
                     Speed
                     <input
                       aria-label="Playback speed"
                       type="range"
-                      min="25"
-                      max="150"
-                      step="5"
+                      min={SPEED_PERCENT.min}
+                      max={SPEED_PERCENT.max}
+                      step={SPEED_PERCENT.step}
                       value={s.speed * 100}
                       onChange={(e) =>
                         studio.speed(Number(e.target.value) / 100)
@@ -755,13 +751,29 @@ function App() {
                   <span className="time">
                     {stamp(studio.position)} / {stamp(studio.song.duration)}
                   </span>
+                  <button
+                    className="fullscreen-toggle"
+                    aria-label={
+                      fullscreen.expanded
+                        ? "Exit full screen"
+                        : "Full screen piano"
+                    }
+                    aria-expanded={fullscreen.expanded}
+                    aria-controls="piano-stage"
+                    aria-keyshortcuts={fullscreen.expanded ? "Escape" : "Enter"}
+                    title={
+                      fullscreen.expanded
+                        ? "Exit full screen (Esc)"
+                        : "Full screen and play (Enter)"
+                    }
+                    onClick={() => void fullscreen.toggle()}
+                  >
+                    <span aria-hidden="true">
+                      {fullscreen.expanded ? "↙" : "⛶"}
+                    </span>
+                    {fullscreen.expanded ? "Exit full screen" : "Full screen"}
+                  </button>
                 </div>
-                <PianoSoundControls
-                  ambience={s.ambience}
-                  onChange={setAmbience}
-                  voices={s.pianoVoices}
-                  onVoiceChange={setPianoVoice}
-                />
                 {fullscreen.expanded && (
                   <div
                     className="song-navigation"
@@ -832,30 +844,6 @@ function App() {
                   </span>
                   <div className="roll-actions">
                     <span>5 seconds ahead</span>
-                    <button
-                      className="fullscreen-toggle"
-                      aria-label={
-                        fullscreen.expanded
-                          ? "Exit full screen"
-                          : "Full screen piano"
-                      }
-                      aria-expanded={fullscreen.expanded}
-                      aria-controls="piano-stage"
-                      aria-keyshortcuts={
-                        fullscreen.expanded ? "Escape" : "Enter"
-                      }
-                      title={
-                        fullscreen.expanded
-                          ? "Exit full screen (Esc)"
-                          : "Full screen and play (Enter)"
-                      }
-                      onClick={() => void fullscreen.toggle()}
-                    >
-                      <span aria-hidden="true">
-                        {fullscreen.expanded ? "↙" : "⛶"}
-                      </span>
-                      {fullscreen.expanded ? "Exit full screen" : "Full screen"}
-                    </button>
                   </div>
                 </div>
                 <Piano />
@@ -891,6 +879,12 @@ function App() {
               />{" "}
               Note names
             </label>
+            <PianoSoundControls
+              ambience={s.ambience}
+              onChange={setAmbience}
+              voices={s.pianoVoices}
+              onVoiceChange={setPianoVoice}
+            />
             <span className="pedal">
               <span>
                 Pedal <b>{studio.input.sustain ? "Down" : "Up"}</b>

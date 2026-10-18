@@ -2,6 +2,8 @@ import type { Note } from "./song";
 export type Mode = "listen" | "wait" | "rhythm";
 // Keep inclusive timing windows stable after converting song time to wall time.
 export const TIMING_EPSILON = 1e-6;
+/** Speed slider range and step, in percent of the written tempo. */
+export const SPEED_PERCENT = { min: 20, max: 140, step: 20 };
 export interface Group {
   start: number;
   notes: Note[];
@@ -97,7 +99,10 @@ export class Transport {
     if (this.playing) this.update(now, this.held ? this.position : undefined);
     this.position = this.at(now);
     this.anchor = now;
-    this.speed = Math.min(1.5, Math.max(0.25, speed));
+    this.speed = Math.min(
+      SPEED_PERCENT.max / 100,
+      Math.max(SPEED_PERCENT.min / 100, speed),
+    );
     this.record(now);
   }
   update(now: number, gate?: number) {

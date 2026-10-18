@@ -64,7 +64,8 @@ Click a note or drag across the score to change playback position. The focused
 score also supports Shift+arrow for a bar and Home/End. Left/Right arrow keys
 select the previous/next song in the current collection and start playback,
 as do the Previous/Next buttons in full screen. Mode,
-restart, playback, speed and time controls share the row above the score.
+restart, playback, speed, time and full-screen controls share the row above the
+score.
 Full screen expands the score and waterfall and starts the selected practice
 mode. Enter opens full screen and starts playback; it also resumes a paused
 full-screen session. Space pauses or resumes in either view. These
@@ -77,10 +78,10 @@ opposite hand hides its original fingering; imported MIDI is not assigned
 guessed finger numbers.
 
 1. Choose a beginner piece from the library; use **Find a song** to filter it.
-2. Click **Connect piano** to grant MIDI permission the first time. On later visits, saved browser permission automatically connects the first available MIDI input. You can choose a different input when more than one is available. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
+2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. On later visits, saved browser permission automatically connects the first available MIDI input. When more than one input is available, a menu beside it chooses one. If the chosen input is unplugged, clicking Connect your piano picks any available input. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
 3. Import `.mid` / `.midi` files. Assign each note-bearing track to **Left**, **Right**, or **Skip** under _Make it yours_. Multiple-track imports start unassigned. A single-track import starts assigned to Right; a single track cannot be split by pitch in this MVP.
 4. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Import and Listen work without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
-5. Slow down (25–150%), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
+5. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
 **Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.
 
@@ -92,7 +93,7 @@ Your physical piano supplies live piano sound. The browser does not echo incomin
 
 ### Piano sound
 
-Open **Piano sound** above the score in either normal or fullscreen view.
+Open **Piano sound** in the settings row below the keyboard, beside Note names.
 **Natural** is the only piano sound, with gentler compression and subtle stereo
 room ambience. Adjust **Room** while listening; its level is remembered in this
 browser, across songs.
