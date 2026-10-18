@@ -686,22 +686,30 @@ function App() {
                     ⇄
                   </button>
                 </div>
-                <label className="speed">
-                  Speed
-                  <input
-                    aria-label="Playback speed"
-                    type="range"
-                    min="25"
-                    max="150"
-                    step="5"
-                    value={s.speed * 100}
-                    onChange={(e) => studio.speed(Number(e.target.value) / 100)}
-                  />
-                  <output>{Math.round(s.speed * 100)}%</output>
-                </label>
-                <span className="time">
-                  {stamp(studio.position)} / {stamp(studio.song.duration)}
-                </span>
+                <div
+                  className="playback-status"
+                  role="group"
+                  aria-label="Speed and position"
+                >
+                  <label className="speed">
+                    Speed
+                    <input
+                      aria-label="Playback speed"
+                      type="range"
+                      min="25"
+                      max="150"
+                      step="5"
+                      value={s.speed * 100}
+                      onChange={(e) =>
+                        studio.speed(Number(e.target.value) / 100)
+                      }
+                    />
+                    <output>{Math.round(s.speed * 100)}%</output>
+                  </label>
+                  <span className="time">
+                    {stamp(studio.position)} / {stamp(studio.song.duration)}
+                  </span>
+                </div>
                 <PianoSoundControls
                   ambience={s.ambience}
                   onChange={setAmbience}
@@ -836,8 +844,12 @@ function App() {
               Note names
             </label>
             <span className="pedal">
-              Pedal <b>{studio.input.sustain ? "down" : "up"}</b> · Velocity{" "}
-              <b>{studio.lastVelocity || "—"}</b>
+              <span>
+                Pedal <b>{studio.input.sustain ? "Down" : "Up"}</b>
+              </span>
+              <span>
+                Velocity <b>{studio.lastVelocity || "—"}</b>
+              </span>
             </span>
           </div>
           <section className="lower-grid">
