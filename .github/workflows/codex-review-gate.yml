@@ -31,9 +31,13 @@ jobs:
         ((contains(github.event.comment.body, '@codex') ||
           contains(github.event.changes.body.from, '@codex')) &&
          contains(fromJSON('["OWNER", "COLLABORATOR", "MEMBER"]'), github.event.comment.author_association))))
+    # One run per PR at a time, so the newest run always publishes last.
+    # Only pull_request_target runs show as a check on the PR head, and a
+    # cancelled one stays there as a failure. So only those runs cancel an
+    # in-progress run; comment and manual runs wait their turn instead.
     concurrency:
       group: codex-review-gate-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_request_number }}
-      cancel-in-progress: true
+      cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
     runs-on: ubuntu-latest
     steps:
       # Never check out a PR head: this workflow has permission to publish statuses.
