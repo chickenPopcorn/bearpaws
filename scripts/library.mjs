@@ -6,6 +6,8 @@
 // ./library holds index.json and songs/<id>.json + songs/<id>.mid. To add a
 // song, put its MIDI file at songs/<id>.mid and list it in index.json with an
 // id, title and collection: push converts the MIDI into songs/<id>.json.
+// The bucket names each file after its content hash (songs/<id>.<hash>.json),
+// so browsers can keep it for a year: a changed song gets a new name.
 // Uploading needs the project's secret key: SUPABASE_SECRET_KEY, or a Supabase
 // account token in MUSIC_API_KEY to look it up. Neither ever reaches the app.
 import { createClient } from "@supabase/supabase-js";
@@ -14,6 +16,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, loadEnv } from "vite";
 
 const FOLDER = "library";
+/** Hashed files never change, so browsers and the CDN may keep them this long. */
+const FOREVER = "31536000";
+/** The index changes on every push. */
+const BRIEF = "60";
+/** songs/<id>.<hash>.json -> songs/<id>.json */
+const plainName = (path) => path.replace(/\.[0-9a-f]{16}(\.\w+)$/, "$1");
 const command = process.argv[2];
 if (command !== "pull" && command !== "push") {
   console.error("Usage: node scripts/library.mjs pull|push");
@@ -46,13 +54,22 @@ async function pull(publicUrl, validateIndex) {
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
     return new Uint8Array(await response.arrayBuffer());
   };
-  const indexBytes = await download("index.json");
-  const index = validateIndex(JSON.parse(new TextDecoder().decode(indexBytes)));
+  const index = validateIndex(
+    JSON.parse(new TextDecoder().decode(await download("index.json"))),
+  );
   mkdirSync(`${FOLDER}/songs`, { recursive: true });
-  for (const entry of index.songs)
-    for (const path of [entry.song, entry.midi].filter(Boolean))
-      writeFileSync(`${FOLDER}/${path}`, await download(path));
-  writeFileSync(`${FOLDER}/index.json`, indexBytes);
+  // The working copy uses plain names; push adds the hashes again.
+  for (const entry of index.songs) {
+    for (const key of ["song", "midi"]) {
+      if (!entry[key]) continue;
+      const bytes = await download(entry[key]);
+      entry[key] = plainName(entry[key]);
+      writeFileSync(`${FOLDER}/${entry[key]}`, bytes);
+    }
+    delete entry.hash;
+    delete entry.midiHash;
+  }
+  writeFileSync(`${FOLDER}/index.json`, JSON.stringify(index, null, 2) + "\n");
   console.log(`Pulled ${index.songs.length} songs into ./${FOLDER}`);
 }
 
@@ -63,7 +80,10 @@ async function push(bucket, validateIndex, validateSong) {
   );
   const hash = (bytes) =>
     createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+  const hashed = (path, bytes) => path.replace(/(\.\w+)$/, `.${hash(bytes)}$1`);
   const files = [];
+  /** The index as published: every path carries its file's hash. */
+  const published = structuredClone(index);
   // Check every song before uploading anything.
   for (const entry of index.songs) {
     const songPath = `${FOLDER}/${entry.song}`;
@@ -82,12 +102,15 @@ async function push(bucket, validateIndex, validateSong) {
     }
     const songBytes = readFileSync(songPath);
     validateSong(JSON.parse(songBytes.toString("utf8")), entry.id);
-    entry.hash = hash(songBytes);
-    files.push([entry.song, songBytes, "application/json"]);
+    const out = published.songs.find((song) => song.id === entry.id);
+    delete out.hash;
+    delete out.midiHash;
+    out.song = hashed(entry.song, songBytes);
+    files.push([out.song, songBytes, "application/json"]);
     if (midiPath) {
       const midiBytes = readFileSync(midiPath);
-      entry.midiHash = hash(midiBytes);
-      files.push([entry.midi, midiBytes, "audio/midi"]);
+      out.midi = hashed(entry.midi, midiBytes);
+      files.push([out.midi, midiBytes, "audio/midi"]);
     }
   }
 
@@ -95,22 +118,36 @@ async function push(bucket, validateIndex, validateSong) {
     auth: { persistSession: false },
   });
   const storage = client.storage.from(bucket);
-  const upload = async (path, bytes, contentType) => {
+  const upload = async (path, bytes, contentType, cacheControl) => {
     const { error } = await storage.upload(path, bytes, {
       contentType,
       upsert: true,
-      cacheControl: "60",
+      cacheControl,
     });
     if (error) throw new Error(`Upload ${path}: ${error.message}`);
   };
-  for (const [path, bytes, type] of files) await upload(path, bytes, type);
+  // A browser may hold the previous index for up to BRIEF seconds, so the
+  // files it lists stay until the next push.
+  const previous = await fetch(
+    `${url}/storage/v1/object/public/${bucket}/index.json?t=${Date.now()}`,
+  )
+    .then((response) => (response.ok ? response.json() : { songs: [] }))
+    .catch(() => ({ songs: [] }));
+  for (const [path, bytes, type] of files)
+    await upload(path, bytes, type, FOREVER);
   // The index goes last, so it never lists a file that is not there yet.
-  const indexBytes = Buffer.from(JSON.stringify(index, null, 2) + "\n");
-  await upload("index.json", indexBytes, "application/json");
-  writeFileSync(`${FOLDER}/index.json`, indexBytes);
+  await upload(
+    "index.json",
+    Buffer.from(JSON.stringify(published, null, 2) + "\n"),
+    "application/json",
+    BRIEF,
+  );
 
-  // Remove files that no song lists any more.
-  const kept = new Set(files.map(([path]) => path));
+  // Remove files that neither the new nor the previous index lists.
+  const kept = new Set([
+    ...files.map(([path]) => path),
+    ...(previous.songs ?? []).flatMap((song) => [song.song, song.midi]),
+  ]);
   const { data: listed, error } = await storage.list("songs", { limit: 1000 });
   if (error) throw new Error(`List songs/: ${error.message}`);
   const stale = listed

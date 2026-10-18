@@ -60,17 +60,23 @@ The songs live in the public Supabase bucket `library`, not in this repository.
 The app loads them after sign-in:
 
 - `index.json` lists the songs in order, with each one's title, collection
-  (`classes`, `songs` or `pops`) and content hashes.
-- `songs/<id>.json` is each song in the app's format: notes, tracks, tempo,
-  suggested fingering and lesson text.
-- `songs/<id>.mid` is each song's MIDI file, for its Download button.
+  (`classes`, `songs` or `pops`) and file names. Browsers check it on every
+  load; it is cached for 60 seconds.
+- `songs/<id>.<hash>.json` is each song in the app's format: notes, tracks,
+  tempo, suggested fingering and lesson text.
+- `songs/<id>.<hash>.mid` is each song's MIDI file, for its Download button.
+
+Each file is named after its content hash and cached for a year, so a repeat
+visit downloads only `index.json`; a changed song gets a new name.
 
 To change the library, run `npm run library:pull`, edit `./library` (ignored by
 git), then run `npm run library:push`. To add a song, put its MIDI file at
 `library/songs/<id>.mid` and add an entry to `library/index.json` with its `id`,
 `title`, `collection`, `song: "songs/<id>.json"` and `midi: "songs/<id>.mid"`;
-push converts the MIDI into the song file. Push checks every song before it
-uploads anything, uploads the index last, and removes files no song lists.
+push converts the MIDI into the song file. `./library` uses plain names; push
+adds the hashes. Push checks every song before it uploads anything, uploads the
+index last, and removes files that neither the new nor the previous index lists
+(a browser may hold the previous index for a minute).
 Uploading needs the project's secret key, in `SUPABASE_SECRET_KEY`, or a
 Supabase account token in `MUSIC_API_KEY` to look it up. The app itself only
 reads the bucket. A copy of three songs in `tests/fixtures/` serves the tests.

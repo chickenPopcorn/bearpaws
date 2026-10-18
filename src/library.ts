@@ -13,13 +13,13 @@ export interface LibraryEntry {
   id: string;
   title: string;
   collection: LibraryCollection;
-  /** The song in the app's format, as JSON. */
+  /**
+   * The song in the app's format, as JSON. Published paths end in the file's
+   * content hash (songs/<id>.<hash>.json), so a changed song gets a new name.
+   */
   song: string;
-  /** Its MIDI file, for downloads. */
+  /** Its MIDI file, for downloads, named the same way. */
   midi?: string;
-  /** Content hashes, so browsers fetch a file again only when it changes. */
-  hash?: string;
-  midiHash?: string;
 }
 export interface LibraryIndex {
   version: 1;
@@ -53,9 +53,8 @@ export function validateIndex(value: unknown): LibraryIndex {
     if (!COLLECTION_IDS.includes(entry.collection as LibraryCollection))
       fail(where, `collection must be one of ${COLLECTION_IDS.join(", ")}`);
     if (!text(entry.song)) fail(where, "missing song path");
-    for (const key of ["midi", "hash", "midiHash"])
-      if (entry[key] !== undefined && !text(entry[key]))
-        fail(where, `${key} must be a non-empty string`);
+    if (entry.midi !== undefined && !text(entry.midi))
+      fail(where, "midi must be a non-empty string");
   });
   if (!value.songs.length) fail("index.json", "the library has no songs");
   return value as unknown as LibraryIndex;
@@ -194,23 +193,24 @@ export function validateSong(value: unknown, id: string): Song {
 
 /**
  * Load every library song. `url` turns a bucket path into its public URL.
- * The index is always revalidated; song files carry their hash, so a browser
- * reuses its cached copy until the song changes.
+ * The index is revalidated on every load. Song files are named after their
+ * content hash and served with a one-year cache, so the browser reuses them
+ * without asking until a song changes and gets a new name.
  */
 export async function loadLibrary(
   url: (path: string) => string,
   fetcher: typeof fetch = fetch,
 ): Promise<Song[]> {
-  const get = async (path: string, hash?: string) => {
+  const get = async (path: string, revalidate = false) => {
     // A stalled request must not hold the studio's loading screen forever.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
       const response = await fetcher(
-        hash ? `${url(path)}?v=${hash}` : url(path),
-        hash
-          ? { signal: controller.signal }
-          : { cache: "no-cache", signal: controller.signal },
+        url(path),
+        revalidate
+          ? { cache: "no-cache", signal: controller.signal }
+          : { signal: controller.signal },
       );
       if (!response.ok)
         throw new Error(`Library file ${path}: HTTP ${response.status}`);
@@ -223,18 +223,16 @@ export async function loadLibrary(
       clearTimeout(timer);
     }
   };
-  const index = validateIndex(await get("index.json"));
+  const index = validateIndex(await get("index.json", true));
   return Promise.all(
     index.songs.map(async (entry) => {
-      const song = validateSong(await get(entry.song, entry.hash), entry.id);
+      const song = validateSong(await get(entry.song), entry.id);
       return {
         ...song,
         title: entry.title,
         library: {
           collection: entry.collection,
-          midi: entry.midi
-            ? `${url(entry.midi)}${entry.midiHash ? `?v=${entry.midiHash}` : ""}`
-            : undefined,
+          midi: entry.midi ? url(entry.midi) : undefined,
         },
       };
     }),

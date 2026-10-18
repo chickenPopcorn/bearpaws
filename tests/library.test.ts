@@ -12,10 +12,9 @@ const index = () => ({
     id: song.id,
     title: song.title,
     collection,
-    song: `songs/${song.id}.json`,
-    midi: `songs/${song.id}.mid`,
-    hash: `h-${song.id}`,
-    midiHash: `m-${song.id}`,
+    // Published names carry each file's content hash.
+    song: `songs/${song.id}.0123456789abcdef.json`,
+    midi: `songs/${song.id}.fedcba9876543210.mid`,
   })),
 });
 const url = (path: string) => `https://cdn.example/library/${path}`;
@@ -106,7 +105,7 @@ describe("song library", () => {
       [url("index.json"), index()],
       ...fixtures.map(
         ({ song }) =>
-          [url(`songs/${song.id}.json?v=h-${song.id}`), song] as const,
+          [url(`songs/${song.id}.0123456789abcdef.json`), song] as const,
       ),
     ]);
     const fetcher = vi.fn(async (input: string | URL | Request) => {
@@ -121,14 +120,19 @@ describe("song library", () => {
     );
     expect(songs[1].library).toEqual({
       collection: "classes",
-      midi: url(`songs/${fixtures[1].song.id}.mid?v=m-${fixtures[1].song.id}`),
+      midi: url(`songs/${fixtures[1].song.id}.fedcba9876543210.mid`),
     });
     expect(collectionForSong(songs[1]).id).toBe("classes");
-    // The index is always revalidated; songs are cached by their hash.
+    // The index is always revalidated. Hashed song files use the browser's
+    // normal cache, which keeps them for the year the bucket allows.
     expect(fetcher).toHaveBeenCalledWith(
       url("index.json"),
       expect.objectContaining({ cache: "no-cache" }),
     );
+    const songCall = fetcher.mock.calls.find(([input]) =>
+      String(input).endsWith(".0123456789abcdef.json"),
+    ) as unknown as [string, RequestInit];
+    expect(songCall[1].cache).toBeUndefined();
   });
 
   it("fails clearly when a song file is missing", async () => {
