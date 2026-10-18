@@ -981,118 +981,150 @@ type Gate =
   | { status: "signed-out"; error: string }
   | { status: "ready"; userId: string; email: string };
 
-/** Signs the user in, loads their account, then opens the studio. */
-function Root() {
-  const [gate, setGate] = useState<Gate>({ status: "loading" });
-  // The user whose studio is open or opening: null until the first auth
-  // event says whether anyone is signed in, and "" once nobody is.
-  const user = useRef<string | null>(null);
-  /** The open studio's session, to return to if sign-out fails. */
-  const ready = useRef<Extract<Gate, { status: "ready" }> | null>(null);
-  useEffect(() => {
-    const client = supabase;
-    if (!client) {
-      setGate({
-        status: "signed-out",
-        error: "Sign-in is not set up for this site.",
-      });
-      return;
-    }
-    // The sign-in still loading, so a newer auth event can stop it.
-    let loading: CloudSync | null = null;
-    const open = async (userId: string, email: string) => {
-      if (userId === user.current) return;
-      user.current = userId;
-      loading?.stop();
-      loading = null;
-      // The session ended or changed outside this page's Sign out button, such
-      // as in another tab: close the studio and stop its sync, so nothing more
-      // is sent for the old session. Supabase has already signed out.
-      if (cloud) {
-        studio.destroy();
-        cloud.stop();
-        cloud = null;
-      }
-      if (!userId) {
-        setGate({ status: "signed-out", error: "" });
-        return;
-      }
-      setGate({ status: "loading" });
-      const sync = new CloudSync(client, userId);
-      loading = sync;
-      let library: Song[];
-      try {
-        [library] = await Promise.all([
-          loadLibrary(
-            (path) =>
-              client.storage.from(LIBRARY_BUCKET).getPublicUrl(path).data
-                .publicUrl,
-          ),
-          sync.pull(),
-        ]);
-      } catch (error) {
-        if (user.current !== userId) return;
-        // Still signed in: offer a retry, not another Google sign-in.
-        setGate({
-          status: "failed",
-          error:
-            error instanceof BrowserStorageError
-              ? error.message
-              : "Your songs could not be loaded. Check your connection and try again.",
-        });
-        return;
-      }
-      if (user.current !== userId) return;
-      loading = null;
-      cloud = sync;
-      studio = new Studio(library, sync);
-      sync.onChange = () => studio.emit();
-      ready.current = { status: "ready", userId, email };
-      setGate(ready.current);
-    };
-    // Supabase asks that auth callbacks not await its own calls directly.
-    const { data } = client.auth.onAuthStateChange((_event, session) => {
-      setTimeout(
-        () => void open(session?.user.id ?? "", session?.user.email ?? ""),
-        0,
-      );
-    });
-    return () => data.subscription.unsubscribe();
-  }, []);
-  const signOut = useCallback(async () => {
-    if (!cloud) return;
-    const sync = cloud;
-    // Close the studio first: its final save joins the upload, and nothing
-    // can change while signing out.
+// Sign-in runs outside React, from the moment the page loads, so a refresh
+// can keep the page as it was left on screen until the studio is ready.
+const container = document.getElementById("root")!;
+/** After a refresh, src/reloadSnapshot.ts has put the page as it was left back. */
+const snapshotOnScreen = container.hasChildNodes();
+let gate: Gate = { status: "loading" };
+const gateListeners = new Set<() => void>();
+let settle!: () => void;
+/** Resolves once sign-in has decided what to show first. */
+const settled = new Promise<void>((resolve) => (settle = resolve));
+function setGate(next: Gate) {
+  gate = next;
+  if (next.status !== "loading") settle();
+  for (const listener of gateListeners) listener();
+}
+const subscribeGate = (listener: () => void) => {
+  gateListeners.add(listener);
+  return () => gateListeners.delete(listener);
+};
+// The user whose studio is open or opening: null until the first auth event
+// says whether anyone is signed in, and "" once nobody is.
+let currentUser: string | null = null;
+/** The open studio's session, to return to if sign-out fails. */
+let readyGate: Extract<Gate, { status: "ready" }> | null = null;
+/** The sign-in still loading, so a newer auth event can stop it. */
+let loading: CloudSync | null = null;
+
+async function openSession(userId: string, email: string) {
+  const client = supabase!;
+  if (userId === currentUser) return;
+  currentUser = userId;
+  loading?.stop();
+  loading = null;
+  // The session ended or changed outside this page's Sign out button, such as
+  // in another tab: close the studio and stop its sync, so nothing more is
+  // sent for the old session. Supabase has already signed out.
+  if (cloud) {
     studio.destroy();
-    setGate({ status: "signing-out" });
-    try {
-      await sync.signOut();
-    } catch {
-      // Supabase still holds the session: reopen the studio, and say so.
-      studio.notice = "Sign-out failed. Check your connection and try again.";
-      if (ready.current) setGate(ready.current);
-      return;
-    }
+    cloud.stop();
     cloud = null;
-    user.current = "";
+  }
+  if (!userId) {
     setGate({ status: "signed-out", error: "" });
-  }, []);
-  if (gate.status === "ready")
+    return;
+  }
+  setGate({ status: "loading" });
+  const sync = new CloudSync(client, userId);
+  loading = sync;
+  let library: Song[];
+  try {
+    [library] = await Promise.all([
+      loadLibrary(
+        (path) =>
+          client.storage.from(LIBRARY_BUCKET).getPublicUrl(path).data.publicUrl,
+      ),
+      sync.pull(),
+    ]);
+  } catch (error) {
+    if (currentUser !== userId) return;
+    // Still signed in: offer a retry, not another Google sign-in.
+    setGate({
+      status: "failed",
+      error:
+        error instanceof BrowserStorageError
+          ? error.message
+          : "Your songs could not be loaded. Check your connection and try again.",
+    });
+    return;
+  }
+  if (currentUser !== userId) return;
+  loading = null;
+  cloud = sync;
+  studio = new Studio(library, sync);
+  sync.onChange = () => studio.emit();
+  // A saved import loads from browser storage. While the page as it was left
+  // is on screen, wait briefly for it, so the first render does not show
+  // another song.
+  if (
+    snapshotOnScreen &&
+    !library.some((song) => song.id === studio.savedSelection)
+  )
+    await Promise.race([
+      studio.init(),
+      new Promise((resolve) => setTimeout(resolve, 1000)),
+    ]);
+  if (currentUser !== userId) return;
+  readyGate = { status: "ready", userId, email };
+  setGate(readyGate);
+}
+
+async function signOut() {
+  if (!cloud) return;
+  const sync = cloud;
+  // Close the studio first: its final save joins the upload, and nothing can
+  // change while signing out.
+  studio.destroy();
+  setGate({ status: "signing-out" });
+  try {
+    await sync.signOut();
+  } catch {
+    // Supabase still holds the session: reopen the studio, and say so.
+    studio.notice = "Sign-out failed. Check your connection and try again.";
+    if (readyGate) setGate(readyGate);
+    return;
+  }
+  cloud = null;
+  currentUser = "";
+  setGate({ status: "signed-out", error: "" });
+}
+
+if (supabase) {
+  // Supabase asks that auth callbacks not await its own calls directly.
+  supabase.auth.onAuthStateChange((_event, session) => {
+    setTimeout(
+      () => void openSession(session?.user.id ?? "", session?.user.email ?? ""),
+      0,
+    );
+  });
+} else {
+  setGate({
+    status: "signed-out",
+    error: "Sign-in is not set up for this site.",
+  });
+}
+
+/** Shows sign-in, loading and errors, then the studio. */
+function Root() {
+  const current = useSyncExternalStore(subscribeGate, () => gate);
+  if (current.status === "ready")
     return (
       <App
-        key={gate.userId}
-        email={gate.email}
+        key={current.userId}
+        email={current.email}
         onSignOut={() => void signOut()}
       />
     );
-  if (gate.status === "loading") return <OpeningStudio error="" />;
-  if (gate.status === "signing-out")
+  if (current.status === "loading") return <OpeningStudio error="" />;
+  if (current.status === "signing-out")
     return <OpeningStudio error="" message="Signing out…" />;
-  if (gate.status === "failed") return <OpeningStudio error={gate.error} />;
+  if (current.status === "failed")
+    return <OpeningStudio error={current.error} />;
   return (
     <SignIn
-      error={gate.error}
+      error={current.error}
       onSignIn={async () => {
         const { error } = await signInWithGoogle();
         if (error) throw error;
@@ -1101,4 +1133,14 @@ function Root() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<Root />);
+const root = createRoot(container);
+const render = () => root.render(<Root />);
+// While the page as it was left is on screen, keep it there until sign-in
+// settles (briefly), so the first render shows the studio rather than a
+// loading screen. With nothing on screen, rendering now beats a blank wait.
+if (!snapshotOnScreen) render();
+else
+  void Promise.race([
+    settled,
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ]).then(render);
