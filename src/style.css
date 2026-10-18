@@ -302,13 +302,6 @@ select {
   color: var(--muted);
   font-size: var(--text-sm);
 }
-.library-download {
-  display: block;
-  color: var(--accent-text);
-  padding: 6px var(--space-2);
-  font-size: var(--text-sm);
-  text-underline-offset: 3px;
-}
 .song {
   border: none;
   text-align: left;

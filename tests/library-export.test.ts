@@ -44,8 +44,7 @@ it("regenerates the unchanged starter pack and separate original MIDI reproducib
 
     generate();
     verify();
-    // A second generation must replace stale individual downloads and produce
-    // the same starter ZIP even with a full arrangement beside its contents.
+    // A second generation must replace stale individual downloads.
     writeFileSync(join(output, "bearpaws-an-jing-v1.mid"), "stale full MIDI");
     writeFileSync(
       join(output, "cadence-ode-to-joy-v1.mid"),

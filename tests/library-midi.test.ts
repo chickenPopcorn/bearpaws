@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseMidi } from "midi-file";
@@ -198,37 +197,6 @@ describe("downloadable beginner MIDI collection", () => {
         (piece.beatsPerBar + openingRest) * midi.header.ticksPerBeat!,
       );
     }
-  });
-
-  it("includes exactly the current MIDI files, catalog and readme in a valid ZIP", () => {
-    // The generator also uses Python's standard library. Reading actual entries
-    // catches stale compressed content, duplicate names, and damaged CRCs.
-    const archive = JSON.parse(
-      execFileSync(
-        "python3",
-        [
-          "-c",
-          "import base64,json,sys,zipfile\nwith zipfile.ZipFile(sys.argv[1]) as z:\n print(json.dumps({'badEntry':z.testzip(),'entries':[{'name':i.filename,'content':base64.b64encode(z.read(i)).decode('ascii')} for i in z.infolist()]}))",
-          "public/midi/cadence-starter-library.zip",
-        ],
-        { encoding: "utf8" },
-      ),
-    ) as {
-      badEntry: string | null;
-      entries: { name: string; content: string }[];
-    };
-    expect(archive.badEntry).toBeNull();
-    expect(archive.entries.map((entry) => entry.name).sort()).toEqual(
-      [
-        "README.txt",
-        "catalog.json",
-        ...songs.map((song) => `${song.id}.mid`),
-      ].sort(),
-    );
-    for (const entry of archive.entries)
-      expect(Buffer.from(entry.content, "base64")).toEqual(
-        readFileSync(`public/midi/${entry.name}`),
-      );
   });
 });
 

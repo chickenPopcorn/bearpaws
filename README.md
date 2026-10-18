@@ -15,12 +15,12 @@ Open the printed local URL, normally `http://localhost:5173`. Desktop Chrome or 
 
 ```sh
 npm test               # Deterministic engine, MIDI lifecycle, controller, storage, audio/Canvas checks
-python3 -m unittest discover -s tests -p 'test_*.py' # Offline importer and ZIP checks
+python3 -m unittest discover -s tests -p 'test_*.py' # Offline sample importer checks
 npm run test:watch     # Watch tests
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173
 npm run example        # Regenerate the original downloadable MIDI exercise
-npm run midi:build     # Regenerate the beginner MIDI collection (Python 3 for ZIP)
+npm run midi:build     # Regenerate the beginner MIDI collection
 npm run format         # Format source, tests and documentation
 ```
 
@@ -44,13 +44,13 @@ It also includes **安静 · 周杰伦 (Silence / An Jing)** as a complete piano
 from [Shaivan’s Online Sequencer upload](https://onlinesequencer.net/1677315).
 Its original notes and timing are preserved, with suggested hands split at middle
 C and no added finger numbers. The source MIDI is kept in `src/assets/an-jing.mid`
-and is available through the song’s individual download, outside the starter pack.
+and is available through the song’s individual download.
 
-Search the library by title or composer. **Download starter MIDI pack** saves the
-26 standard MIDI files as a ZIP; **Download MIDI** saves the selected arrangement.
+Search the library by title or composer. **Download MIDI** saves the selected
+arrangement as a standard MIDI file.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
-with barlines. The ZIP also includes a fingering manifest with `countInBeats`.
+with barlines. `public/midi/catalog.json` is a fingering manifest with `countInBeats`.
 General MIDI players may ignore these text events; the built-in lessons retain their fingering,
 but reimporting a MIDI treats it as an ordinary import without lesson metadata.
 The generated collection lives in `public/midi/`; melody references are recorded

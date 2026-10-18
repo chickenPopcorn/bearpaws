@@ -127,13 +127,6 @@ export const SongLibrary = memo(function SongLibrary({
           </section>
         );
       })}
-      <a
-        className="library-download"
-        href={`${import.meta.env.BASE_URL}midi/cadence-starter-library.zip`}
-        download
-      >
-        Download starter MIDI pack
-      </a>
     </>
   );
 });

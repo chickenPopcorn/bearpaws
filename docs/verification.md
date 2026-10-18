@@ -6,7 +6,7 @@ release, key release noise, pedal noise and pseudo pedal resonance.
 ## Automated checks
 
 - `npm test`: 787 tests across 31 suites passed.
-- `python3 -m unittest discover -s tests -p 'test_*.py'`: 10 offline importer and ZIP tests passed.
+- `python3 -m unittest discover -s tests -p 'test_*.py'`: the offline importer tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
 - `npm audit --audit-level=moderate`: no known vulnerabilities reported after updating the test runner.
@@ -26,9 +26,8 @@ Imported 3/4, 6/8 and changing meters are verified through parsing, score layout
 displayed signatures, keyboard seeking and the waterfall beat grid.
 The library checks cover collection search and selection, native keyboard
 activation, score-slider shortcuts, loop preference persistence, all 26 MIDI
-exports and catalog entries, and exact ZIP contents with CRC verification.
-ZIP bytes remain identical when source timestamps, permissions or file creation
-order change, and search casing remains consistent across browser locales.
+exports and catalog entries, and search casing remains consistent across
+browser locales.
 Exported pieces use a full-bar count-in to retain musical bar alignment.
 The full An Jing arrangement preserves all 1,369 source notes and original
 timing/velocities, with suggested hands split at middle C. Tests cover saved
@@ -117,7 +116,7 @@ The preceding production build was checked at
 the deployment path; accent-insensitive search finds Frère Jacques; Enter
 activates library controls; score arrows seek without changing songs; and the
 fullscreen controls remain visible. HTTP checks returned 200 for the logo,
-individual MIDI files and ZIP.
+individual MIDI files.
 
 Earlier desktop Chrome checks at `http://127.0.0.1:5173/` covered:
 

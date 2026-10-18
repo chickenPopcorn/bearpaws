@@ -1,7 +1,6 @@
 import { createServer } from "vite";
 import { writeMidi } from "midi-file";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 
 // Load the same typed arrangements used by the app, without starting a server.
@@ -150,10 +149,8 @@ try {
       "Dancing Raindrops and the other George Bear's Classes pieces are\n" +
       "personal-practice transcriptions of the student parts supplied by the user.\n",
   );
-  // Python's standard library packages fixed entry metadata for reproducible ZIPs.
-  execFileSync("python3", ["scripts/create-library-zip.py", directory]);
   console.log(
-    `Exported ${songs.length} starter MIDI files, ${midiPieces.length} full arrangements and cadence-starter-library.zip`,
+    `Exported ${songs.length} starter MIDI files and ${midiPieces.length} full arrangements`,
   );
 } finally {
   await server.close();

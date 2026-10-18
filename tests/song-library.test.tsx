@@ -262,18 +262,4 @@ describe("song library", () => {
     await click(container.querySelector<HTMLButtonElement>(".import")!);
     expect(props.onImport).toHaveBeenCalledOnce();
   });
-
-  it.each(["./", "/practice/"])(
-    "downloads the ZIP using the deployment base %s",
-    async (baseUrl) => {
-      vi.stubEnv("BASE_URL", baseUrl);
-      await render();
-      const link =
-        container.querySelector<HTMLAnchorElement>(".library-download")!;
-      expect(link.getAttribute("href")).toBe(
-        `${baseUrl}midi/cadence-starter-library.zip`,
-      );
-      expect(link.hasAttribute("download")).toBe(true);
-    },
-  );
 });
