@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { SPEED_PERCENT } from "../src/engine";
 import { MidiDuet } from "../src/midiDuet";
-import type { Note, Song } from "../src/song";
-import data from "./fixtures/library-songs.json";
+import type { Note } from "../src/song";
 const note = (id: string, pitch: number, start: number, end: number): Note => ({
   id,
   pitch,
@@ -27,17 +25,6 @@ function setup() {
   return { duet, send, failed, port };
 }
 describe("teacher MIDI output", () => {
-  it("relies on every teacher note lasting longer than a tick at top speed", () => {
-    // The scheduler strikes a note only when a 20 ms tick lands inside it.
-    // All 5,552 teacher notes in the library pass this (shortest: 48 ms);
-    // these fixtures are copies of library songs.
-    const tick = 0.02 * (SPEED_PERCENT.max / 100);
-    const duets = (data as unknown as { song: Song }[]).flatMap(
-      ({ song }) => song.duet?.notes ?? [],
-    );
-    expect(duets.length).toBeGreaterThan(0);
-    for (const n of duets) expect(n.soundEnd - n.start).toBeGreaterThan(tick);
-  });
   it("sends velocity-scaled teacher notes on channel 1 by default and releases only its notes", () => {
     const { duet, send } = setup();
     const notes = [note("a", 48, 1, 2), note("b", 55, 1, 3)];
@@ -158,6 +145,40 @@ describe("teacher MIDI output", () => {
     duet.schedule(notes, 0.06, 1, false);
     expect(send).toHaveBeenCalledTimes(4);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+  });
+
+  it("releases a note that ended before a Wait gate, but holds one ending at it", () => {
+    const { duet, send } = setup();
+    const notes = [note("early", 48, 0, 0.99), note("through", 52, 0, 1)];
+    duet.schedule(notes, 0.98, 1, false);
+    // This tick reaches the gate at 1 s, past the end of "early".
+    duet.schedule(notes, 1, 1, true);
+    duet.schedule(notes, 1, 1, true);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x90, 52, 64]],
+      [[0x80, 48, 0]],
+    ]);
+    duet.schedule(notes, 1.02, 1, false);
+    expect(send).toHaveBeenLastCalledWith([0x80, 52, 0]);
+  });
+
+  it("plays a note a late tick passed whole, for one tick, but not after a seek", () => {
+    const { duet, send } = setup();
+    const notes = [note("short", 48, 0.03, 0.08), note("old", 50, 0.1, 0.2)];
+    duet.schedule(notes, 0.02, 1, false);
+    // The main thread stalls from 0.02 s to 0.25 s.
+    duet.schedule(notes, 0.25, 1, false);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x90, 50, 64]]]);
+    duet.schedule(notes, 0.27, 1, false);
+    expect(send.mock.calls.slice(2)).toEqual([
+      [[0x80, 48, 0]],
+      [[0x80, 50, 0]],
+    ]);
+    // After a seek past them, finished notes are not replayed.
+    duet.stop();
+    duet.schedule(notes, 0.5, 2, false);
+    expect(send).toHaveBeenCalledTimes(4);
   });
 
   it("does not leave a zero-duration event sounding", () => {

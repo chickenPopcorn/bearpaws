@@ -9,10 +9,9 @@ export function closeOutput(port: MIDIOutput) {
  * Teacher-only output, on the student piano’s MIDI channel; never echoes or
  * scores student input.
  *
- * It follows the 20 ms practice clock: each tick strikes the teacher notes
- * the clock is inside and releases the ones it has passed. Every teacher note
- * in the library lasts longer than a tick even at the fastest speed, so the
- * clock lands inside each one.
+ * It follows the 20 ms practice clock: each tick releases the teacher notes
+ * the clock has passed and strikes the ones it has reached. A tick that runs
+ * late still strikes the notes it passed, so they sound for a tick.
  */
 export class MidiDuet {
   private port?: MIDIOutput;
@@ -20,6 +19,8 @@ export class MidiDuet {
   private active = new Map<string, Note>();
   /** The notes struck this pass, so none is struck twice. */
   private played = new Set<string>();
+  /** This pass's last tick, or undefined before its first. */
+  private position: number | undefined;
   private cycle = -1;
   private channel = 0;
   private outputGeneration = 0;
@@ -93,6 +94,7 @@ export class MidiDuet {
   stop() {
     this.silence();
     this.played.clear();
+    this.position = undefined;
     this.cycle = -1;
   }
   /**
@@ -110,19 +112,24 @@ export class MidiDuet {
       this.stop();
       this.cycle = cycle;
     }
-    // At a gate the teacher holds what is sounding until the student plays.
-    // Releases come before this tick's attacks, so a note always sounds for
-    // at least one tick.
-    if (!held)
-      for (const [id, note] of this.active) {
-        if (note.soundEnd > position) continue;
-        this.active.delete(id);
-        if (!this.sounding(note.pitch).length) this.noteOff(note.pitch);
-      }
+    // At a gate the teacher holds what sounds through it until the student
+    // plays; a note that ended before the gate still ends. Releases come
+    // before this tick's attacks, so a note always sounds for a tick.
+    for (const [id, note] of this.active) {
+      if (note.soundEnd > position || (held && note.soundEnd > position - 1e-6))
+        continue;
+      this.active.delete(id);
+      if (!this.sounding(note.pitch).length) this.noteOff(note.pitch);
+    }
+    const from = this.position;
+    this.position = position;
     for (const note of notes) {
       if (!this.port) return;
-      if (this.played.has(note.id)) continue;
-      if (note.start > position || note.soundEnd <= position) continue;
+      if (this.played.has(note.id) || note.start > position) continue;
+      // Play notes the clock is inside, and notes a late tick passed whole.
+      // A seek or new pass (no last tick) does not replay finished notes.
+      const passed = from !== undefined && note.start > from;
+      if (note.soundEnd <= position && !passed) continue;
       this.played.add(note.id);
       const others = this.sounding(note.pitch);
       this.active.set(note.id, note);
