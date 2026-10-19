@@ -568,7 +568,9 @@ export class Studio {
       this.midiRouted = this.midi.player.connected && played.length > 0;
       this.midi.player.stop();
       this.audio.stop();
-      await this.prepareAudio(laptop, generation, this.pedals);
+      // Browser audio is not needed at all then, and may be unavailable.
+      if (!this.midi.player.connected)
+        await this.prepareAudio(laptop, generation, this.pedals);
       if (generation !== this.playGeneration) return;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());

@@ -1491,6 +1491,20 @@ describe("practice studio integration", () => {
   });
 });
 
+describe("sound through a MIDI output", () => {
+  it("plays through the piano without starting browser audio, even when it cannot start", async () => {
+    const studio = create(song([[60, 1]]));
+    studio.mode("listen");
+    output(studio);
+    vi.mocked(studio.audio.unlock).mockRejectedValue(new Error("No audio"));
+    await studio.play();
+    expect(studio.audio.unlock).not.toHaveBeenCalled();
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.notice).toBe("");
+  });
+});
+
 describe("teacher duet", () => {
   const ids = (notes: readonly { id: string }[]) => notes.map((n) => n.id);
   /**

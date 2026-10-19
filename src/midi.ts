@@ -50,6 +50,8 @@ export class MidiConnection {
   private outputGeneration = 0;
   /** The user chose Laptop, so the app does not choose an output itself. */
   private laptopChosen = false;
+  /** Whether the app, not the user, picked the current output. */
+  private outputPicked = false;
   /** An output that failed: the app does not choose it again until it reconnects. */
   private failedOutputId = "";
   player = new MidiPlayer(() => {
@@ -183,6 +185,7 @@ export class MidiConnection {
   /** The user's choice of output for all sound, or "" for the laptop. */
   selectOutput(id: string): Promise<void> {
     this.laptopChosen = !id;
+    this.outputPicked = false;
     return this.openOutput(id);
   }
 
@@ -221,6 +224,7 @@ export class MidiConnection {
    */
   private loseOutput(message: string) {
     this.failedOutputId = this.selectedOutputId;
+    this.outputPicked = false;
     this.outputGeneration++;
     this.player.setOutput();
     this.selectedOutputId = "";
@@ -275,11 +279,15 @@ export class MidiConnection {
    * input, or else the only output. The user can still choose Laptop.
    */
   private chooseOutput(input: MIDIInput): void {
-    if (this.selectedOutputId || this.laptopChosen) return;
+    // A choice the user made stands; one the app made follows the input.
+    if (this.laptopChosen || (this.selectedOutputId && !this.outputPicked))
+      return;
     const output =
       this.outputs.find((port) => port.name === input.name) ??
       (this.outputs.length === 1 ? this.outputs[0] : undefined);
     if (!output || output.id === this.failedOutputId) return;
+    if (output.id === this.selectedOutputId) return;
+    this.outputPicked = true;
     this.callbacks.onOutputChosen(output.id, this.openOutput(output.id));
   }
 
@@ -342,6 +350,7 @@ export class MidiConnection {
 
   private releaseAccess(notifyOutputLoss = false): void {
     const hadOutput = !!this.selectedOutputId || this.player.connected;
+    this.outputPicked = false;
     this.outputGeneration++;
     this.player.setOutput();
     this.selectedOutputId = "";
