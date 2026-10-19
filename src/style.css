@@ -330,10 +330,13 @@ span.device {
   border-radius: var(--radius-md);
   background: #fbfaff;
 }
+/* The streak drops below the month when the sidebar is narrow. */
 .practice-calendar-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
+  column-gap: var(--space-2);
   margin-bottom: var(--space-2);
   font-size: var(--text-md);
 }
@@ -350,6 +353,7 @@ span.device {
   align-items: center;
   gap: 4px;
   font-size: var(--text-xs);
+  white-space: nowrap;
   color: #8a5a0b;
 }
 .practice-streak .practice-star {
