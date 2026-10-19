@@ -129,6 +129,8 @@ export class ReferenceAudio {
   private playbackFiles = new Set<string>();
   /** When each note of a pass was struck, in context time, for rt_decay. */
   private struck = new WeakMap<Set<string>, Map<string, number>>();
+  /** The ids of the notes in each list schedule() was given. */
+  private noteIds = new WeakMap<readonly Note[], Set<string>>();
   /** The passage that playback prepared, which its optional voices follow. */
   private playback?: { notes: readonly Note[]; pedals: readonly PedalSpan[] };
   private voiceEventCache?: {
@@ -870,6 +872,12 @@ export class ReferenceAudio {
     const { events, resonance } = this.playback
       ? this.voiceEvents(this.playback.notes, this.playback.pedals)
       : this.voiceEvents(notes, pedals);
+    // The prepared passage can hold notes this pass may not play yet, such as
+    // a duet waiting at a Wait gate: their optional voices wait with them.
+    let ids = this.noteIds.get(notes);
+    if (!ids) this.noteIds.set(notes, (ids = new Set(notes.map((n) => n.id))));
+    const playable = (event: PianoVoiceEvent) =>
+      event.notes.every((id) => ids.has(id));
     /** Where the next pass's first pedal press falls, after this pass. */
     const wrappedPress = () => {
       if (!Number.isFinite(to)) return Infinity;
@@ -956,7 +964,8 @@ export class ReferenceAudio {
         (event.time === to && !lift) ||
         (event.time === boundary && lift) ||
         !this.sound.voices[event.region.voice] ||
-        pass.has(event.ids[0])
+        pass.has(event.ids[0]) ||
+        !playable(event)
       )
         continue;
       sound(event, event.time);
