@@ -15,8 +15,9 @@ function setup() {
   const send = vi.fn();
   const failed = vi.fn();
   const duet = new MidiDuet(failed);
-  duet.setOutput({ send } as unknown as MIDIOutput);
-  return { duet, send, failed };
+  const close = vi.fn().mockResolvedValue(undefined);
+  duet.setOutput({ send, close } as unknown as MIDIOutput);
+  return { duet, send, failed, close };
 }
 describe("teacher MIDI output", () => {
   it("sends velocity-scaled teacher notes on channel 1 by default and releases only its notes", () => {
@@ -68,20 +69,37 @@ describe("teacher MIDI output", () => {
       [[0x90, 48, 64]],
     ]);
   });
-  it("does not cut off an overlapping note of the same pitch", () => {
+  it("retriggers overlapping repeated pitches without cutting off their remaining tail", () => {
     const { duet, send } = setup();
     const notes = [note("a", 48, 0, 2), note("b", 48, 1, 3)];
     for (const position of [0, 1, 2]) duet.schedule(notes, position, 1, false);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+      [[0x90, 48, 64]],
+    ]);
+    duet.schedule(notes, 3, 1, false);
+    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+  });
+  it("coalesces simultaneous unisons without retriggering each timer tick", () => {
+    const { duet, send } = setup();
+    const notes = [note("a", 48, 0, 2), note("b", 48, 0, 3)];
+    for (const p of [0, 1, 2]) duet.schedule(notes, p, 1, false);
     expect(send).toHaveBeenCalledTimes(1);
     duet.schedule(notes, 3, 1, false);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
   });
+
   it("silences the old output before switching and tolerates an unplugged output", () => {
-    const { duet, send, failed } = setup();
+    const { duet, send, failed, close } = setup();
     duet.schedule([note("a", 48, 0, 2)], 0, 1, false);
     const next = vi.fn();
     duet.setOutput({ send: next } as unknown as MIDIOutput);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+    expect(close).toHaveBeenCalledOnce();
+    expect(close.mock.invocationCallOrder[0]).toBeGreaterThan(
+      send.mock.invocationCallOrder.at(-1)!,
+    );
     next.mockImplementation(() => {
       throw new Error("Disconnected");
     });

@@ -348,6 +348,7 @@ describe("USB MIDI output selection", () => {
       state: "connected",
       open: vi.fn().mockResolvedValue(undefined),
       send: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[port.id, port]]),
@@ -382,10 +383,13 @@ describe("USB MIDI output selection", () => {
     expect(midi.duet.connected).toBe(false);
     expect(port.send).toHaveBeenLastCalledWith([0x80, 48, 0]);
     expect(midi.outputMessage).toContain("disconnected");
+    expect(midi.selectedOutputId).toBe("");
+    expect(port.close).toHaveBeenCalledOnce();
     Object.defineProperty(port, "state", { value: "connected" });
     vi.mocked(port.open).mockRejectedValueOnce(new Error("Cannot open"));
     await midi.selectOutput("out");
     expect(midi.outputMessage).toContain("Could not open");
+    expect(midi.selectedOutputId).toBe("");
     await midi.selectOutput("out");
     expect(midi.duet.connected).toBe(true);
     midi.dispose();
@@ -399,6 +403,7 @@ describe("USB MIDI output selection", () => {
       state: "connected",
       open: vi.fn().mockResolvedValue(undefined),
       send: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[output.id, output]]),
@@ -430,6 +435,37 @@ describe("USB MIDI output selection", () => {
     expect(output.send).toHaveBeenLastCalledWith([0x84, 48, 0]);
   });
 
+  it("does not close a newer selection of the same output when an old open resolves", async () => {
+    const { midi, access } = setup();
+    const old = deferred<MIDIPort>(),
+      current = deferred<MIDIPort>();
+    const port = {
+      id: "out",
+      state: "connected",
+      open: vi
+        .fn()
+        .mockReturnValueOnce(old.promise)
+        .mockReturnValueOnce(current.promise),
+      close: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn(),
+    } as unknown as MIDIOutput;
+    Object.defineProperty(access, "outputs", {
+      value: new Map([[port.id, port]]),
+    });
+    await midi.connect();
+    const first = midi.selectOutput("out");
+    await midi.selectOutput("");
+    const second = midi.selectOutput("out");
+    current.resolve(port);
+    await second;
+    old.resolve(port);
+    await first;
+    expect(midi.duet.connected).toBe(true);
+    expect(port.close).not.toHaveBeenCalled();
+    await midi.selectOutput("");
+    expect(port.close).toHaveBeenCalledOnce();
+  });
+
   it("ignores a late output open after the user returns to laptop sound", async () => {
     const { midi, access } = setup();
     const pending = deferred<MIDIPort>();
@@ -438,6 +474,7 @@ describe("USB MIDI output selection", () => {
       state: "connected",
       open: vi.fn(() => pending.promise),
       send: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[port.id, port]]),
@@ -449,5 +486,6 @@ describe("USB MIDI output selection", () => {
     await selecting;
     expect(midi.duet.connected).toBe(false);
     expect(midi.selectedOutputId).toBe("");
+    expect(port.close).toHaveBeenCalledOnce();
   });
 });

@@ -1,5 +1,14 @@
 import type { Note } from "./song";
 
+/** Release ports even when the device has disappeared or rejects close(). */
+export function closeMidiOutput(port?: MIDIOutput) {
+  try {
+    void port?.close?.().catch(() => {});
+  } catch {
+    /* Disconnected port. */
+  }
+}
+
 /** Teacher-only output, on the student piano’s MIDI channel; never echoes or scores student input. */
 export class MidiDuet {
   private port?: MIDIOutput;
@@ -24,8 +33,10 @@ export class MidiDuet {
   constructor(private failed: () => void = () => {}) {}
   setOutput(port?: MIDIOutput) {
     if (port === this.port) return;
+    const previous = this.port;
     this.stop();
     this.port = port;
+    closeMidiOutput(previous);
   }
   private send(data: number[]) {
     try {
@@ -42,6 +53,7 @@ export class MidiDuet {
         }
       }
       this.active.clear();
+      closeMidiOutput(port);
       this.failed();
     }
   }
@@ -79,16 +91,24 @@ export class MidiDuet {
     for (const [id, n] of wanted) {
       if (!this.port) break;
       if (this.active.has(id)) continue;
-      const sounding = [...this.active.values()].some(
+      const sounding = [...this.active.values()].filter(
         (other) => other.pitch === n.pitch,
       );
+      // Simultaneous unisons share one voice; a later attack must retrigger,
+      // even if a previous note is still sustained.
+      const simultaneous = sounding.some(
+        (other) => Math.abs(other.start - n.start) < 1e-6,
+      );
       this.active.set(id, n);
-      if (!sounding)
+      if (!simultaneous) {
+        if (sounding.length) this.send([0x80 | this.channel, n.pitch, 0]);
+        if (!this.port) break;
         this.send([
           0x90 | this.channel,
           n.pitch,
           Math.max(1, Math.min(127, Math.round(n.velocity * 127))),
         ]);
+      }
     }
   }
 }

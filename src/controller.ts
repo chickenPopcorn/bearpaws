@@ -127,15 +127,11 @@ export class Studio {
       },
       onChange: () => {
         this.emit();
-        if (
-          this.midi?.selectedOutputId &&
-          !this.midi.duet.connected &&
-          this.midi.outputMessage
-        ) {
+        if (this.midi && !this.midi.duet.connected && this.midi.outputMessage) {
           queueMicrotask(() => {
             if (
               !this.destroyed &&
-              this.transport.playing &&
+              (this.transport.playing || this.playbackPending) &&
               !this.midi.duet.connected
             ) {
               this.pause();

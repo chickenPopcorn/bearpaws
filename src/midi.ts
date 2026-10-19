@@ -1,4 +1,4 @@
-import { MidiDuet } from "./midiDuet";
+import { MidiDuet, closeMidiOutput } from "./midiDuet";
 /** New MIDI permission stays behind Connect; saved permission can reconnect at startup. */
 export type MidiConnectionStatus =
   | "unsupported"
@@ -39,7 +39,10 @@ export class MidiConnection {
   selectedOutputId = "";
   outputMessage = "";
   private outputGeneration = 0;
+  private desiredOutput?: MIDIOutput;
   duet = new MidiDuet(() => {
+    this.selectedOutputId = "";
+    this.desiredOutput = undefined;
     this.outputMessage =
       "Piano output disconnected. Choose the output again to retry.";
     this.callbacks.onChange();
@@ -171,6 +174,7 @@ export class MidiConnection {
   /** An explicit choice keeps unrelated MIDI devices silent. */
   async selectOutput(id: string): Promise<void> {
     const generation = ++this.outputGeneration;
+    this.desiredOutput = undefined;
     this.duet.setOutput();
     this.selectedOutputId = id;
     this.outputMessage = "";
@@ -178,19 +182,31 @@ export class MidiConnection {
     if (!id) return;
     const port = this.access?.outputs?.get(id);
     if (!port || port.state !== "connected") {
+      this.selectedOutputId = "";
       this.outputMessage =
         "Piano output is unavailable. Reconnect it and choose it again.";
       this.callbacks.onChange();
       return;
     }
+    this.desiredOutput = port;
     try {
       await port.open();
-      if (generation !== this.outputGeneration || this.disposed) return;
+      if (generation !== this.outputGeneration || this.disposed) {
+        // A newer selection of this exact port owns its open result.
+        if (this.desiredOutput !== port) closeMidiOutput(port);
+        return;
+      }
       if (port.state !== "connected") throw new Error("Disconnected");
       this.duet.setOutput(port);
       this.outputMessage = `Teacher duet plays on ${port.name || "MIDI output"} (same channel as your piano).`;
     } catch {
-      if (generation !== this.outputGeneration || this.disposed) return;
+      if (generation !== this.outputGeneration || this.disposed) {
+        if (this.desiredOutput !== port) closeMidiOutput(port);
+        return;
+      }
+      this.selectedOutputId = "";
+      this.desiredOutput = undefined;
+      closeMidiOutput(port);
       this.outputMessage =
         "Could not open piano output. Choose it again to retry.";
     }
@@ -212,6 +228,8 @@ export class MidiConnection {
       !this.outputs.some((p) => p.id === this.selectedOutputId)
     ) {
       this.outputGeneration++;
+      this.selectedOutputId = "";
+      this.desiredOutput = undefined;
       this.duet.setOutput();
       this.outputMessage =
         "Piano output disconnected. Choose its output again after reconnecting.";
@@ -300,6 +318,7 @@ export class MidiConnection {
 
   private releaseAccess(): void {
     this.outputGeneration++;
+    this.desiredOutput = undefined;
     this.duet.setOutput();
     this.selectedOutputId = "";
     this.outputs = [];

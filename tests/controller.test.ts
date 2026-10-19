@@ -7,6 +7,7 @@ const env = vi.hoisted(() => ({
   now: 100,
   values: new Map<string, unknown>(),
   resets: [] as (() => void)[],
+  changes: [] as (() => void)[],
   unlockWait: null as Promise<void> | null,
   prepareWait: null as Promise<void> | null,
   /** What each studio does when another tab changes stored practice. */
@@ -44,8 +45,9 @@ vi.mock("../src/midi", () => ({
     duet = { connected: false, stop: vi.fn(), schedule: vi.fn() };
     selectOutput = vi.fn(async () => {});
     selectedId = "";
-    constructor(callbacks: { onReset(): void }) {
+    constructor(callbacks: { onReset(): void; onChange(): void }) {
       env.resets.push(callbacks.onReset);
+      env.changes.push(callbacks.onChange);
     }
     connect = vi.fn(async () => {});
     autoConnect = vi.fn(async () => {});
@@ -193,6 +195,7 @@ function midi(studio: Studio, data: number[], delay = 0) {
 
 beforeEach(() => {
   env.now = 100;
+  env.changes.length = 0;
   env.values.clear();
   env.watchers.clear();
   env.resets = [];
@@ -389,6 +392,35 @@ describe("practice studio integration", () => {
       expect(studio.progress.attempts).toBe(0);
     },
   );
+
+  it("cancels a pending audio start when the selected MIDI output disconnects", async () => {
+    const studio = create(duetSong());
+    studio.duet();
+    studio.mode("listen");
+    Object.defineProperty(studio.midi.duet, "connected", {
+      value: true,
+      configurable: true,
+    });
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const starting = studio.play();
+    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
+    Object.defineProperty(studio.midi.duet, "connected", { value: false });
+    studio.midi.outputMessage = "Piano output disconnected.";
+    studio.midi.selectedOutputId = "";
+    env.changes.at(-1)!();
+    await Promise.resolve();
+    expect(vi.mocked(studio.audio.prepare).mock.calls[0][1]?.aborted).toBe(
+      true,
+    );
+    finish();
+    await starting;
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.progress.attempts).toBe(0);
+    expect(studio.notice).toContain("output disconnected");
+  });
 
   it("does not duplicate a virtual note released and re-pressed during sample loading", async () => {
     const studio = create(song([[60, 1]]));
