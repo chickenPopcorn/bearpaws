@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCodexReviewGate } from "../scripts/codex-review-gate.mjs";
 
 const HEAD = "1".repeat(40);
@@ -177,7 +177,8 @@ function setup(comments = [], events = [], statuses = []) {
   };
   const core = { info: vi.fn() };
   return {
-    run: () => runCodexReviewGate({ github, context, core }),
+    run: (options = {}) =>
+      runCodexReviewGate({ github, context, core, ...options }),
     context,
     github,
     get,
@@ -195,9 +196,9 @@ const findingComment = (overrides = {}) => ({
   ...overrides,
 });
 
-function setupFallback() {
+function setupFallback(state = nullCodeState()) {
   const fixture = setup(
-    [withTimes(nullCodeState())],
+    [withTimes(state)],
     [],
     [checkpoint({ rc: Date.parse(START) })],
   );
@@ -914,6 +915,135 @@ describe("Codex review merge gate", () => {
       },
     );
     expect(get).toHaveBeenCalledTimes(3);
+  });
+
+  describe("a clean Code Review that records no findings flag", () => {
+    // Some connector versions report has_any_findings and
+    // has_unresolved_findings as null, and publish no review, when the Code
+    // Review found nothing.
+    const silentState = () => {
+      const state = nullCodeState();
+      state.code_review.has_any_findings = null;
+      return state;
+    };
+
+    // Long enough after FINISH for GitHub's views to show a published review.
+    const SETTLED = Date.parse(FINISH) + 10 * 60 * 1000;
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("passes once every Codex thread is resolved and GitHub has settled", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED);
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "success" });
+    });
+
+    it("waits out the settle time itself, then passes", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED - 60000);
+      const { run, reviewGraphql, threadGraphql, publish } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      const sleep = vi.fn(async (ms) => vi.setSystemTime(Date.now() + ms));
+      await expect(run({ sleep })).resolves.toMatchObject({
+        state: "success",
+      });
+      expect(sleep).toHaveBeenCalledExactlyOnceWith(61000);
+      expect(publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: "pending",
+          description: "Waiting for GitHub to show any Codex review first.",
+        }),
+      );
+    });
+
+    it("stays pending if a review appears while it waits", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED - 1);
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValueOnce(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      // The published review shows up during the wait.
+      const sleep = vi.fn(async (ms) => vi.setSystemTime(Date.now() + ms));
+      await expect(run({ sleep })).resolves.toMatchObject({
+        state: "pending",
+      });
+      expect(sleep).toHaveBeenCalledOnce();
+    });
+
+    it("checks only once more after waiting", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED - 1);
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      // A clock that does not move: the recheck is still inside the window.
+      const sleep = vi.fn(async () => {});
+      await expect(run({ sleep })).resolves.toMatchObject({
+        state: "pending",
+      });
+      expect(sleep).toHaveBeenCalledOnce();
+    });
+
+    it("stays pending without a known completion time for the run", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED);
+      const { run, reviewGraphql, threadGraphql, github } =
+        setupFallback(silentState());
+      // A summary whose table lost the Code Review's time.
+      github.paginate.mockImplementationOnce(async () => [
+        summary(silentState(), 10, FINISH),
+      ]);
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    });
+
+    it("stays pending when a review on this commit is dated after the completion", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED);
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(
+        receiptPage([receipt({ submittedAt: "2026-10-17T06:05:00Z" })]),
+      );
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    });
+
+    it("still fails while an older Codex finding is unresolved", async () => {
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      const old = reviewThread({ isResolved: false });
+      old.comments.nodes[0].pullRequestReview = receipt({
+        id: "review-0",
+        commit: { oid: OLD_HEAD },
+        submittedAt: BEFORE,
+      });
+      threadGraphql.mockResolvedValue(threadPage([old]));
+      await expect(run()).resolves.toMatchObject({ state: "failure" });
+    });
+
+    it("verifies findings as usual when the run did publish a review", async () => {
+      const { run, threadGraphql } = setupFallback(silentState());
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    });
+
+    it("requires an observed Code Review start", async () => {
+      const { run, github } = setup([withTimes(silentState())]);
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+      expect(github.graphql).not.toHaveBeenCalled();
+    });
   });
 
   it("requires an observed Code Review start before attempting null-metadata fallback", async () => {
