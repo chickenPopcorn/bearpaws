@@ -10,7 +10,15 @@ import { MidiConnection } from "./midi";
 import type { PedalSpan, Song, Hand } from "./song";
 import { classSongs } from "./lessons";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
-import { settings, write, progress, type Progress } from "./storage";
+import {
+  settings,
+  write,
+  progress,
+  DAILY_GOAL_CHOICES,
+  LEARNER_NAME_MAX,
+  type Progress,
+} from "./storage";
+import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
 const NO_PEDALS: readonly PedalSpan[] = [];
 export class Studio {
@@ -44,6 +52,14 @@ export class Studio {
   revision = 0;
   listeners = new Set<() => void>();
   lastSave = 0;
+  /** Playing time per day, for the practice calendar. */
+  practiceLog = new PracticeLog();
+  /** When a key was last pressed, on the audio clock. */
+  private lastKeyAt = -Infinity;
+  /** The previous tick while practice time was being counted. */
+  private lastPracticeTick: number | null = null;
+  /** Stops following other tabs' practice; see watchPractice(). */
+  private unwatchPractice = () => {};
   progress: Progress = {
     position: 0,
     best: 0,
@@ -63,7 +79,14 @@ export class Studio {
       voices: this.settings.pianoVoices,
     });
     this.midi = this.createMidi();
+    this.watchPractice();
     this.load(this.song);
+  }
+  /** Another tab's practice shows here too, without waiting for this one. */
+  private watchPractice() {
+    this.unwatchPractice = watchSessions(() => {
+      if (this.practiceLog.refresh()) this.emit();
+    });
   }
   private createMidi() {
     return new MidiConnection({
@@ -149,6 +172,9 @@ export class Studio {
     if (this.timer !== null) return;
     if (this.destroyed) {
       this.midi = this.createMidi();
+      this.watchPractice();
+      // Take in what other tabs saved while this studio was closed.
+      this.practiceLog.refresh();
       this.destroyed = false;
     }
     void this.midi.autoConnect();
@@ -161,8 +187,11 @@ export class Studio {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.save();
+    // A restart begins a new playback run, which needs its own key press.
+    this.lastPracticeTick = null;
     this.audio.stop();
     this.midi.dispose();
+    this.unwatchPractice();
   }
   persist() {
     if (!write("settings", this.settings))
@@ -170,6 +199,10 @@ export class Studio {
         "Browser storage is full or blocked. Changes will last for this session.";
   }
   save() {
+    // Practice time grows on its own, so it is saved even when progress has
+    // not changed.
+    if (!this.practiceLog.commit())
+      this.storageNotice = "Practice time could not be saved in this browser.";
     this.progress = {
       ...this.progress,
       position: this.position,
@@ -264,6 +297,17 @@ export class Studio {
     this.persist();
     this.emit();
   }
+  learnerName(name: string) {
+    this.settings.learnerName = name.slice(0, LEARNER_NAME_MAX);
+    this.persist();
+    this.emit();
+  }
+  dailyGoal(minutes: number) {
+    if (!DAILY_GOAL_CHOICES.includes(minutes)) return;
+    this.settings.dailyGoalMinutes = minutes;
+    this.persist();
+    this.emit();
+  }
   reference(enabled: boolean) {
     if (this.settings.reference === enabled) return;
     const resume =
@@ -319,6 +363,7 @@ export class Studio {
     this.cancelPlaybackPreparation();
     const now = this.audio.now();
     if (this.transport.playing) this.tick(now);
+    this.lastPracticeTick = null;
     this.transport.pause(now);
     this.position = this.transport.position;
     this.audio.stop();
@@ -438,6 +483,20 @@ export class Studio {
         this.transport.seek(this.loopStart, this.passEpoch);
         this.position = this.transport.update(now, this.waitGate);
       }
+      // Practice time counts while someone plays along: not in Listen, and
+      // not once the keys have been quiet for a while, such as a Wait gate
+      // left waiting. Each playback run needs its own key press, so one from
+      // before a pause or the song's end cannot count the next run's start.
+      if (this.lastPracticeTick === null) this.lastKeyAt = -Infinity;
+      else if (
+        this.settings.mode !== "listen" &&
+        now - this.lastKeyAt <= IDLE_SECONDS
+      )
+        this.practiceLog.add(
+          Math.min(now - this.lastPracticeTick, 1),
+          this.song.id,
+        );
+      this.lastPracticeTick = this.transport.playing ? now : null;
       if (this.settings.mode === "rhythm")
         this.practice.expire(
           this.position,
@@ -485,6 +544,15 @@ export class Studio {
     const edge = this.input.message(data);
     if (edge) {
       this.lastVelocity = edge.velocity;
+      // Only presses during playback that counts keep practice time going;
+      // one made while paused or in Listen would credit idle time after. The
+      // press's own time counts, not a late delivery's.
+      if (
+        wasPlaying &&
+        this.settings.mode !== "listen" &&
+        event >= this.scoringEpoch
+      )
+        this.lastKeyAt = Math.max(this.lastKeyAt, event);
       // A Rhythm press within the timing window before a loop wrap, delivered
       // after it, is scored in the new pass's time. There it can be early for
       // the pass's first notes or late for the previous pass's last ones.

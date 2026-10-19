@@ -9,6 +9,8 @@ const env = vi.hoisted(() => ({
   resets: [] as (() => void)[],
   unlockWait: null as Promise<void> | null,
   prepareWait: null as Promise<void> | null,
+  /** What each studio does when another tab changes stored practice. */
+  watchers: new Set<() => void>(),
 }));
 
 vi.mock("../src/audio", () => ({
@@ -49,6 +51,8 @@ vi.mock("../src/midi", () => ({
   },
 }));
 vi.mock("../src/storage", () => ({
+  DAILY_GOAL_CHOICES: [5, 10, 15, 20, 30],
+  LEARNER_NAME_MAX: 40,
   settings: () => ({
     mode: "wait",
     speed: 1,
@@ -65,11 +69,24 @@ vi.mock("../src/storage", () => ({
       pedalNoise: true,
       resonance: true,
     },
+    learnerName: "",
+    dailyGoalMinutes: 5,
     ...((env.values.get("settings") as object) ?? {}),
   }),
+  read: (key: string, fallback: unknown) =>
+    env.values.has(key) ? structuredClone(env.values.get(key)) : fallback,
   write: (key: string, value: unknown) => {
     env.values.set(key, structuredClone(value));
     return true;
+  },
+  readAll: (prefix: string) =>
+    [...env.values]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([, value]) => structuredClone(value)),
+  remove: (key: string) => env.values.delete(key),
+  watchStored: (_prefix: string, onChange: () => void) => {
+    env.watchers.add(onChange);
+    return () => env.watchers.delete(onChange);
   },
   progress: (id: string, _duration: number) =>
     structuredClone({
@@ -126,6 +143,7 @@ function midi(studio: Studio, data: number[], delay = 0) {
 beforeEach(() => {
   env.now = 100;
   env.values.clear();
+  env.watchers.clear();
   env.resets = [];
   env.unlockWait = null;
   env.prepareWait = null;
@@ -1357,5 +1375,184 @@ describe("practice studio integration", () => {
     expect(restored.settings.tolerance).toBe(0.35);
     expect(restored.song.tracks[0].hand).toBe("left");
     expect(restored.transport.loop).toEqual([0.5, 2.5]);
+  });
+});
+
+describe("practice time", () => {
+  // A wrong key holds Wait mode at its first note, so playback keeps running.
+  const held = () => song([[60, 1]]);
+  const today = (studio: Studio) =>
+    studio.practiceLog.totals().get(studio.practiceLog.today()) ?? 0;
+
+  it("counts playing time only while keys are being pressed", async () => {
+    const studio = create(held());
+    await studio.play();
+    advance(studio, 1);
+    advance(studio, 1);
+    expect(today(studio)).toBe(0);
+    midi(studio, [0x90, 72, 80]);
+    midi(studio, [0x80, 72, 0]);
+    for (let i = 0; i < 20; i++) advance(studio, 1);
+    // Time stops counting 15 seconds after the last key press.
+    expect(studio.transport.playing).toBe(true);
+    expect(today(studio)).toBe(15);
+    midi(studio, [0x90, 72, 80]);
+    advance(studio, 1);
+    expect(today(studio)).toBe(16);
+  });
+
+  it("leaves out Listen, paused time and long gaps between ticks", async () => {
+    const studio = create(held());
+    studio.mode("listen");
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    advance(studio, 3);
+    expect(today(studio)).toBe(0);
+    studio.pause();
+
+    studio.mode("wait");
+    await studio.play();
+    advance(studio, 0.5);
+    midi(studio, [0x90, 74, 80]);
+    advance(studio, 1);
+    studio.pause();
+    // The minute spent paused is not practice.
+    env.now += 60;
+    await studio.play();
+    midi(studio, [0x90, 74, 80]);
+    advance(studio, 0.5);
+    // A stalled tick counts at most a second.
+    advance(studio, 5);
+    expect(today(studio)).toBe(2);
+  });
+
+  it("times key activity from when the key was pressed", async () => {
+    const studio = create(held());
+    await studio.play();
+    advance(studio, 5);
+    // Pressed before this playback run started, delivered late.
+    midi(studio, [0x90, 72, 80], 8);
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(0);
+    advance(studio, 2);
+    // Pressed 8 seconds before its delivery: 7 seconds of activity remain.
+    midi(studio, [0x90, 74, 80], 8);
+    for (let i = 0; i < 10; i++) advance(studio, 1);
+    expect(today(studio)).toBe(7);
+  });
+
+  it("shows practice another tab saves, and listens again after a restart", () => {
+    const studio = create(held());
+    const emitted = vi.fn();
+    studio.subscribe(emitted);
+    env.values.set("practice:other", {
+      id: "other",
+      day: studio.practiceLog.today(),
+      startedAt: "x",
+      seconds: 120,
+      songs: { ode: 120 },
+    });
+    for (const watcher of env.watchers) watcher();
+    expect(today(studio)).toBe(120);
+    expect(emitted).toHaveBeenCalled();
+    studio.destroy();
+    expect(env.watchers.size).toBe(0);
+    // Saved while this studio was closed, then more after it reopens.
+    const other = (seconds: number) => ({
+      id: "other",
+      day: studio.practiceLog.today(),
+      startedAt: "x",
+      seconds,
+      songs: { ode: seconds },
+    });
+    env.values.set("practice:other", other(180));
+    studio.init();
+    expect(today(studio)).toBe(180);
+    expect(env.watchers.size).toBe(1);
+    env.values.set("practice:other", other(240));
+    for (const watcher of env.watchers) watcher();
+    expect(today(studio)).toBe(240);
+  });
+
+  it("needs a new key press after the studio restarts mid-playback", async () => {
+    const studio = create(held());
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    advance(studio, 1);
+    expect(today(studio)).toBe(1);
+    studio.destroy();
+    studio.init();
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(1);
+    midi(studio, [0x90, 74, 80]);
+    advance(studio, 1);
+    expect(today(studio)).toBe(2);
+  });
+
+  it("needs a new key press after resuming playback", async () => {
+    const studio = create(held());
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    for (let i = 0; i < 2; i++) advance(studio, 1);
+    expect(today(studio)).toBe(2);
+    studio.pause();
+    await studio.play();
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(2);
+    midi(studio, [0x90, 74, 80]);
+    advance(studio, 1);
+    expect(today(studio)).toBe(3);
+  });
+
+  it("ignores key presses made while paused or in Listen", async () => {
+    const studio = create(held());
+    midi(studio, [0x90, 72, 80]);
+    await studio.play();
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(0);
+    studio.pause();
+
+    studio.mode("listen");
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    studio.pause();
+    studio.mode("wait");
+    await studio.play();
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(0);
+  });
+
+  it("saves practice sessions in browser storage as they grow", async () => {
+    const studio = create(held());
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    for (let i = 0; i < 4; i++) advance(studio, 1);
+    studio.pause();
+    const sessions = [...env.values].filter(([key]) =>
+      key.startsWith("practice:"),
+    );
+    expect(sessions).toEqual([
+      [
+        expect.any(String),
+        expect.objectContaining({
+          seconds: 4,
+          songs: { "controller-fixture": 4 },
+          day: studio.practiceLog.today(),
+        }),
+      ],
+    ]);
+    expect(sessions[0][0]).toBe(
+      `practice:${(sessions[0][1] as { id: string }).id}`,
+    );
+  });
+
+  it("saves the learner's name and a daily goal from the choices", () => {
+    const studio = create();
+    studio.learnerName("George");
+    studio.dailyGoal(15);
+    studio.dailyGoal(7);
+    const saved = { learnerName: "George", dailyGoalMinutes: 15 };
+    expect(studio.settings).toMatchObject(saved);
+    expect(env.values.get("settings")).toMatchObject(saved);
   });
 });
