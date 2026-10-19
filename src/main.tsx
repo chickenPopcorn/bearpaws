@@ -520,10 +520,11 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
       else studio.emit();
     };
     const hidden = () => {
-      if (document.hidden && studio.transport.playing) studio.pause();
+      if (document.hidden) studio.pause();
     };
     const save = () => {
-      studio.save();
+      // Also cancel starts still opening audio/MIDI, and release hardware notes.
+      studio.pause();
       saveReloadSnapshot(document.getElementById("root")!, currentUser ?? "");
     };
     window.addEventListener("keydown", down);
