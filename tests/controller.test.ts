@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
+import type { Mode } from "../src/engine";
 import type { Note, Song } from "../src/song";
 import { fixtureLibrary } from "./fixtures/library";
 
@@ -51,6 +52,7 @@ vi.mock("../src/midi", () => ({
       schedule: vi.fn(),
       keyDown: vi.fn(),
       keyUp: vi.fn(),
+      click: vi.fn(),
     };
     selectOutput = vi.fn(async () => {});
     selectedId = "";
@@ -1960,5 +1962,116 @@ describe("practice time", () => {
     const saved = { learnerName: "George", dailyGoalMinutes: 15 };
     expect(studio.settings).toMatchObject(saved);
     expect(env.values.get("settings")).toMatchObject(saved);
+  });
+});
+
+describe("metronome", () => {
+  /** A studio in `mode` with the metronome on. The fixture is 4/4 at 120 BPM. */
+  function clicking(fixture: Song, mode: Mode = "rhythm") {
+    const studio = create(fixture);
+    studio.mode(mode);
+    studio.click();
+    return studio;
+  }
+  /** Advance in practice ticks of 20 ms. */
+  function run(studio: Studio, seconds: number) {
+    for (let t = 0; t < seconds - 1e-9; t += 0.02) advance(studio, 0.02);
+  }
+  it("is remembered, and stays off in Wait for me", async () => {
+    const studio = create(song([[60, 0.5]]));
+    studio.click();
+    expect(env.values.get("settings")).toMatchObject({ click: true });
+    // Wait for me keeps no beat, so Play starts at once.
+    expect(studio.clicking).toBe(false);
+    await studio.play();
+    expect(studio.transport.playing).toBe(true);
+    studio.mode("listen");
+    expect(studio.clicking).toBe(true);
+  });
+  it("counts in a bar, then plays from where the count ends", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    // From the first beat, the whole bar before it: 2 s, after a short delay.
+    expect(studio.playing).toBe(true);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 2.05);
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.position).toBe(0);
+    advance(studio, 0.07);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(0.02);
+  });
+  it("clicks the count-in and every beat on a MIDI output, accenting each bar", async () => {
+    const studio = clicking(song([[60, 0.5]]), "listen");
+    output(studio);
+    await studio.play();
+    run(studio, 2.7);
+    expect(vi.mocked(studio.midi.player.click).mock.calls).toEqual([
+      [true],
+      [false],
+      [false],
+      [false],
+      [true],
+      [false],
+    ]);
+    // Turned off, it stops; the music plays on.
+    studio.click();
+    run(studio, 1);
+    expect(studio.midi.player.click).toHaveBeenCalledTimes(6);
+    expect(studio.transport.playing).toBe(true);
+  });
+  it("cancels the count-in on pause, and counts again from a seek", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    advance(studio, 1);
+    studio.pause();
+    expect(studio.playing).toBe(false);
+    advance(studio, 2);
+    expect(studio.transport.playing).toBe(false);
+    await studio.play();
+    advance(studio, 1);
+    // From the third beat: the bar's first two, 1 s.
+    studio.seek(1);
+    await vi.waitFor(() => expect(studio.playing).toBe(true));
+    advance(studio, 1.05);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 0.1);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(1.05);
+  });
+  it("carries a count-in on at a new speed", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    advance(studio, 1.1);
+    // Halfway through the bar at full speed; the other half takes 2 s.
+    studio.speed(0.5);
+    advance(studio, 1.95);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 0.1);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(0.025);
+  });
+  it("scores a Rhythm press early for the first note as the count-in ends", async () => {
+    const studio = clicking(
+      song([
+        [60, 0],
+        [62, 0.5],
+      ]),
+    );
+    await studio.play();
+    advance(studio, 1);
+    // Long before the music: no score.
+    midi(studio, [0x90, 62, 100]);
+    midi(studio, [0x80, 62, 0]);
+    advance(studio, 1);
+    // 100 ms before playback starts.
+    midi(studio, [0x90, 60, 100]);
+    midi(studio, [0x80, 60, 0]);
+    expect(studio.practice.feedback).toMatchObject([
+      { kind: "early", pitch: 60, offset: expect.closeTo(-0.1) },
+    ]);
+    run(studio, 0.6);
+    expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+    expect(studio.practice.missed).toEqual(new Set());
   });
 });

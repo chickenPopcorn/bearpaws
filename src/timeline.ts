@@ -52,8 +52,10 @@ export function createBeatClock(ppq: number, changes: Tempo[]) {
       secondsPerBeat: change.microseconds / 1e6,
     };
   });
+  // Before the start, such as in a count-in, the opening tempo carries on.
+  const opening = lastIndexAtOrBefore(segments, "beat", 0);
   const find = (value: number, key: "beat" | "seconds") =>
-    segments[Math.max(0, lastIndexAtOrBefore(segments, key, value))];
+    segments[Math.max(opening, lastIndexAtOrBefore(segments, key, value))];
   return {
     at(time: number) {
       const segment = find(time, "seconds");

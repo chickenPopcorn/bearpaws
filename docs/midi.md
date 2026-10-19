@@ -26,7 +26,10 @@ loads no piano samples for the notes it sends. A piano with no MIDI output keeps
 the laptop's sound. Laptop mute does not mute MIDI output.
 
 Everything goes out on the same MIDI channel as the latest key played on the
-piano (channel 1 until the first keypress). The student's physical keys remain
+piano (channel 1 until the first keypress), except the metronome: its clicks
+go out as General MIDI percussion on channel 10, wood blocks 76 and 77. A
+piano without percussion sounds plays no click; choose **Laptop** under
+**Sound** to hear it on the laptop. The student's physical keys remain
 live on the piano and are never sent back to it. The teacher still waits at each
 **Wait for me** gate and resumes when the student plays the requested note. If
 the piano's output disconnects or cannot open, playback stops and **Sound** goes

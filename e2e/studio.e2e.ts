@@ -120,6 +120,29 @@ test("Listen plays the song and pauses", async ({ page }) => {
   await expect(time(page)).toHaveText(paused!);
 });
 
+test("the metronome counts in a bar before Rhythm plays", async ({
+  page,
+  supabase,
+}) => {
+  await page.goto("/");
+  const metronome = page.getByRole("button", { name: "Metronome" });
+  // Wait for me keeps no beat.
+  await expect(metronome).toBeDisabled();
+  await mode(page, "Rhythm").click();
+  await metronome.click();
+  await expect(metronome).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() => supabase.settingsUploads.at(-1), { timeout: 10_000 })
+    .toMatchObject({ click: true });
+
+  await page.getByRole("button", { name: "▷ Play" }).click();
+  await expect(page.getByRole("button", { name: "Ⅱ Pause" })).toBeVisible();
+  // At 80 BPM the count-in takes over two seconds, and the song waits.
+  await page.waitForTimeout(1500);
+  await expect(time(page)).toHaveText(/^0:00 \//);
+  await expect(time(page)).not.toHaveText(/^0:00 \//, { timeout: 10_000 });
+});
+
 test("Wait for me waits for the right key", async ({ page, supabase }) => {
   await page.goto("/");
   const review = page.getByRole("region", { name: "Practice review" });
