@@ -698,6 +698,16 @@ h1 {
 .song-midi-download:hover {
   background: none;
 }
+/* Pressed while the CD's story plays. */
+.song-story {
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  padding: 4px var(--space-3);
+}
+.song-story[aria-pressed="true"] {
+  background: var(--soft);
+  border-color: var(--accent);
+}
 .practice-toolbar {
   display: flex;
   align-items: center;

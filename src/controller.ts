@@ -81,6 +81,12 @@ export class Studio {
   private lastPracticeTick: number | null = null;
   /** Stops following other tabs' practice; see watchPractice(). */
   private unwatchPractice = () => {};
+  /**
+   * The course CD's story (src/story.ts), which plays apart from practice: it
+   * stops as practice starts, another song opens or the studio closes, so it
+   * never sounds with the piano part.
+   */
+  narration: { stop(): void } | null = null;
   progress: Progress = {
     beat: 0,
     best: 0,
@@ -298,6 +304,7 @@ export class Studio {
     this.save();
     // A restart begins a new playback run, which needs its own key press.
     this.lastPracticeTick = null;
+    this.narration?.stop();
     this.midi.player.stop();
     this.audio.stop();
     this.midi.dispose();
@@ -344,6 +351,7 @@ export class Studio {
     this.sync?.progress(this.song.id, this.progress, loaded);
   }
   load(song: Song) {
+    this.narration?.stop();
     this.cancelPlaybackPreparation();
     if (this.transport.playing) this.pause();
     this.midi.player.stop();
@@ -589,6 +597,7 @@ export class Studio {
       this.emit();
       return;
     }
+    this.narration?.stop();
     try {
       const p = this.position;
       // A MIDI output plays it all, so the laptop prepares nothing.

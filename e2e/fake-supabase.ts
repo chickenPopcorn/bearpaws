@@ -56,6 +56,58 @@ export const LIBRARY = [
   },
 }));
 
+/**
+ * The course CD's manifest in the cd-audio bucket, cut down: Five O'Clock,
+ * the library's one piece of Lesson Book 3, is the CD's first piece, so its
+ * story is the opening story and the one leading into it (tracks 1 and 2).
+ * Track 4 is the closing story, which leads into no piece.
+ */
+export const CD_MANIFEST = {
+  version: 1,
+  title: "Music for Little Mozarts: Lesson and Discovery, Level 3",
+  publisher: "Alfred Music",
+  year: 2015,
+  tracks: [
+    { disc: 1, track: 1, title: "Opening Story", kind: "story" },
+    { disc: 1, track: 2, title: "The Story Goes On", kind: "story" },
+    {
+      disc: 1,
+      track: 3,
+      title: "Five O'Clock",
+      kind: "song",
+      songId: "pawpal-five-oclock-v1",
+    },
+    { disc: 1, track: 4, title: "Closing Story", kind: "story" },
+    { disc: 2, track: 1, title: "Discovery", kind: "discovery" },
+  ].map((track) => ({
+    ...track,
+    audio: `mflm-3/disc-${track.disc}/${String(track.track).padStart(2, "0")}.mp3`,
+  })),
+};
+
+/**
+ * Silent audio `seconds` long, standing in for a track of the CD, which never
+ * goes into this repository: a WAV file (8 kHz, 16-bit mono), which the
+ * browser plays whatever the file is called.
+ */
+function silence(seconds: number) {
+  const data = Math.round(seconds * 8000) * 2;
+  const wav = Buffer.alloc(44 + data);
+  wav.write("RIFF", 0, "latin1");
+  wav.writeUInt32LE(36 + data, 4);
+  wav.write("WAVEfmt ", 8, "latin1");
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20); // PCM
+  wav.writeUInt16LE(1, 22); // mono
+  wav.writeUInt32LE(8000, 24);
+  wav.writeUInt32LE(16000, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write("data", 36, "latin1");
+  wav.writeUInt32LE(data, 40);
+  return wav;
+}
+
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "*",
@@ -143,9 +195,9 @@ type Row = { user_id: string; song_id: string; data: unknown };
 
 /**
  * Supabase as the app uses it: Google sign-in (PKCE), the settings and
- * progress tables, and the song library bucket, which only signed-in users
- * may read. Tests read and change its state to arrange and check what the
- * app sent.
+ * progress tables, and the song library and course CD buckets, which only
+ * signed-in users may read. Tests read and change its state to arrange and
+ * check what the app sent.
  */
 export class FakeSupabase {
   /** The account's settings row, or null for a new account. */
@@ -160,6 +212,12 @@ export class FakeSupabase {
   signOuts = 0;
   /** Answer library requests with a server error. */
   libraryDown = false;
+  /** cd-audio files the app asked for, in order. */
+  cdAudioRequests: string[] = [];
+  /** cd-audio files to answer with a server error. */
+  cdAudioDown = new Set<string>();
+  /** How long each CD track lasts, in seconds, by path: 30 unless set. */
+  cdTrackSeconds: Record<string, number> = {};
   /** Requests nothing here answers, which a test should fail on. */
   unexpected: string[] = [];
 
@@ -178,6 +236,9 @@ export class FakeSupabase {
     const library = "/storage/v1/object/authenticated/library/";
     if (path.startsWith(library))
       return this.library(route, path.slice(library.length));
+    const cdAudio = "/storage/v1/object/authenticated/cd-audio/";
+    if (path.startsWith(cdAudio))
+      return this.cdAudio(route, path.slice(cdAudio.length));
 
     if (path === "/auth/v1/authorize") {
       // Google says yes at once and returns to the app with a PKCE code.
@@ -242,19 +303,8 @@ export class FakeSupabase {
   }
 
   private library(route: Route, file: string) {
-    // Only signed-in users may read the bucket: Storage refuses a request
-    // without a user's access token, such as one with just the publishable
-    // key, as if the file were not there.
     if (!signedInRequest(route.request().headers().authorization))
-      return route.fulfill({
-        status: 400,
-        headers: { ...CORS, "content-type": "application/json" },
-        body: JSON.stringify({
-          statusCode: "404",
-          error: "not_found",
-          message: "Object not found",
-        }),
-      });
+      return notFound(route);
     if (this.libraryDown)
       return route.fulfill({ status: 503, headers: CORS, body: "down" });
     if (file === "index.json")
@@ -273,6 +323,40 @@ export class FakeSupabase {
       body: Buffer.from("MThd"),
     });
   }
+
+  /** The cd-audio bucket: the manifest, and silence for each track. */
+  private cdAudio(route: Route, file: string) {
+    if (!signedInRequest(route.request().headers().authorization))
+      return notFound(route);
+    this.cdAudioRequests.push(file);
+    if (this.cdAudioDown.has(file))
+      return route.fulfill({ status: 503, headers: CORS, body: "down" });
+    if (file === "mflm-3/manifest.json") return json(route, CD_MANIFEST);
+    if (!CD_MANIFEST.tracks.some((track) => track.audio === file))
+      return notFound(route);
+    return route.fulfill({
+      status: 200,
+      headers: { ...CORS, "content-type": "audio/wav" },
+      body: silence(this.cdTrackSeconds[file] ?? 30),
+    });
+  }
+}
+
+/**
+ * Storage's answer for a file that is not there, and for a private bucket's
+ * file asked for without a signed-in user's access token, such as with just
+ * the publishable key.
+ */
+function notFound(route: Route) {
+  return route.fulfill({
+    status: 400,
+    headers: { ...CORS, "content-type": "application/json" },
+    body: JSON.stringify({
+      statusCode: "404",
+      error: "not_found",
+      message: "Object not found",
+    }),
+  });
 }
 
 function json(route: Route, body: unknown) {

@@ -37,12 +37,13 @@ npm run format         # Format source, tests and documentation
 `npm run test:e2e` builds the app into `e2e/.dist`, serves it on port 4174
 and drives it in Chromium with Playwright: Google sign-in and sign-out, the
 library and search, settings from and to the account, Listen and Wait for me
-practice, a library that fails to load, and the one studio tab. The first run
-needs the browser: `npx playwright install chromium`. The build talks to a
-fake Supabase project that `e2e/fake-supabase.ts` answers inside the browser,
-with the three fixture songs as the library, so the tests need no account or
-network. Like Storage, the fake answers library requests only when they carry
-the signed-in user's access token.
+practice, the course CD's story, a library that fails to load, and the one
+studio tab. The first run needs the browser: `npx playwright install
+chromium`. The build talks to a fake Supabase project that
+`e2e/fake-supabase.ts` answers inside the browser, with the three fixture
+songs as the library, so the tests need no account or network. Like Storage, the fake answers library requests only when they carry
+the signed-in user's access token. It answers the `cd-audio` bucket the same
+way, with a cut-down manifest and generated silence for the CD's tracks.
 
 The **E2E tests** workflow runs them in the merge queue only, on the merged
 result. Pull requests show the check as skipped, so it can be a required
@@ -60,6 +61,7 @@ check; it can also be run by hand from the Actions tab.
 - `src/storage.ts`: validated settings and progress.
 - `src/library.ts`, `scripts/library.mjs`: the shared song library and its pull/push script.
 - `scripts/cd-audio.mjs`: uploads the course CD's audio; `scripts/supabase-admin.mjs`: the secret-key client both scripts use.
+- `src/story.ts`: the CD's story before each piece of Lesson Book 3, for the Story button.
 - `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in, and `signedInFetch` for Storage that only signed-in users read.
 - `src/cloud.ts`, `src/studioClaim.ts`: account sync, one studio tab at a time.
 - `src/main.tsx`, `src/session.ts`: page startup, and sign-in through to the open studio.

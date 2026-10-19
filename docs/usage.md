@@ -25,6 +25,10 @@ Books start folded; click one to open it. Searching opens them all, and moving
 to a song in another book opens that one.
 Search the classes by title or composer. **Download MIDI** saves the selected
 song as a standard MIDI file.
+On a piece of Lesson Book 3, **Story** plays the course CD's story that leads
+into it (for the first piece, the CD's opening story too); click it again to
+stop. Starting it pauses practice, and it stops when practice starts, another
+song opens or the piano goes full screen.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
 with barlines. General MIDI players may ignore these text events.
