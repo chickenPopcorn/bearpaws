@@ -84,13 +84,18 @@ export class PracticeLog {
   private current: PracticeSession | null = null;
   /** Unrounded seconds of the session in progress. */
   private exact = 0;
-  private songExact: Record<string, number> = {};
+  /** A Map, so a song id such as `__proto__` is an ordinary key. */
+  private songExact = new Map<string, number>();
   private lastAdd = 0;
   /** Changes whenever a day's total does, so views can skip work. */
   revision = 0;
 
   constructor(
-    private onCommit: (session: PracticeSession) => void = () => {},
+    /** `saved` is false when browser storage refused the session. */
+    private onCommit: (
+      session: PracticeSession,
+      saved: boolean,
+    ) => void = () => {},
     private clock: () => Date = () => new Date(),
   ) {
     for (const session of storedSessions())
@@ -120,14 +125,14 @@ export class PracticeLog {
         songs: {},
       };
       this.exact = 0;
-      this.songExact = {};
+      this.songExact = new Map();
       this.own.add(this.current.id);
       this.sessions.set(this.current.id, this.current);
     }
     this.lastAdd = now.getTime();
     const before = Math.floor(this.exact);
     this.exact += seconds;
-    this.songExact[songId] = (this.songExact[songId] ?? 0) + seconds;
+    this.songExact.set(songId, (this.songExact.get(songId) ?? 0) + seconds);
     if (Math.floor(this.exact) !== before) this.revision++;
   }
 
@@ -142,7 +147,7 @@ export class PracticeLog {
       ...session,
       seconds: Math.floor(this.exact),
       songs: Object.fromEntries(
-        Object.entries(this.songExact).map(([id, s]) => [id, Math.floor(s)]),
+        [...this.songExact].map(([id, s]) => [id, Math.floor(s)]),
       ),
     };
     this.current = updated;
@@ -161,7 +166,7 @@ export class PracticeLog {
     for (const [id, s] of this.sessions)
       if (s.day < oldest) this.sessions.delete(id);
     const saved = write("practice", [...this.sessions.values()]);
-    this.onCommit(updated);
+    this.onCommit(updated, saved);
     return saved;
   }
 

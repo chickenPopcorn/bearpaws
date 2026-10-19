@@ -112,6 +112,41 @@ describe("practice log", () => {
     ]);
   });
 
+  it("totals songs whose ids match object properties", () => {
+    const log = new PracticeLog(() => {}, clock);
+    log.add(2, "__proto__");
+    log.add(1, "constructor");
+    log.commit();
+    expect(Object.entries(saved()[0].songs)).toEqual([
+      ["__proto__", 2],
+      ["constructor", 1],
+    ]);
+  });
+
+  it("tells the sync when browser storage refused a session", () => {
+    const onCommit = vi.fn();
+    const log = new PracticeLog(onCommit, clock);
+    log.add(1, "ode");
+    expect(log.commit()).toBe(true);
+    expect(onCommit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ seconds: 1 }),
+      true,
+    );
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: () => {
+        throw new Error("full");
+      },
+      removeItem: (key: string) => void stored.delete(key),
+    });
+    log.add(1, "ode");
+    expect(log.commit()).toBe(false);
+    expect(onCommit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ seconds: 2 }),
+      false,
+    );
+  });
+
   it("keeps other tabs' sessions when saving its own", () => {
     const tabA = new PracticeLog(() => {}, clock);
     const tabB = new PracticeLog(() => {}, clock);

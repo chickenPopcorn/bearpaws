@@ -106,8 +106,8 @@ export class Studio {
       ambience: this.settings.ambience,
       voices: this.settings.pianoVoices,
     });
-    this.practiceLog = new PracticeLog((session) =>
-      this.sync?.practice(session),
+    this.practiceLog = new PracticeLog((session, saved) =>
+      this.sync?.practice(session, saved),
     );
     this.midi = this.createMidi();
     this.load(this.song);
@@ -593,8 +593,14 @@ export class Studio {
     if (edge) {
       this.lastVelocity = edge.velocity;
       // Only presses during playback that counts keep practice time going;
-      // one made while paused or in Listen would credit idle time after.
-      if (wasPlaying && this.settings.mode !== "listen") this.lastKeyAt = now;
+      // one made while paused or in Listen would credit idle time after. The
+      // press's own time counts, not a late delivery's.
+      if (
+        wasPlaying &&
+        this.settings.mode !== "listen" &&
+        event >= this.scoringEpoch
+      )
+        this.lastKeyAt = Math.max(this.lastKeyAt, event);
       // A Rhythm press within the timing window before a loop wrap, delivered
       // after it, is scored in the new pass's time. There it can be early for
       // the pass's first notes or late for the previous pass's last ones.

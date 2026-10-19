@@ -1581,6 +1581,21 @@ describe("practice time", () => {
     expect(today(studio)).toBe(2);
   });
 
+  it("times key activity from when the key was pressed", async () => {
+    const studio = create(held());
+    await studio.play();
+    advance(studio, 5);
+    // Pressed before this playback run started, delivered late.
+    midi(studio, [0x90, 72, 80], 8);
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(0);
+    advance(studio, 2);
+    // Pressed 8 seconds before its delivery: 7 seconds of activity remain.
+    midi(studio, [0x90, 74, 80], 8);
+    for (let i = 0; i < 10; i++) advance(studio, 1);
+    expect(today(studio)).toBe(7);
+  });
+
   it("needs a new key press after resuming playback", async () => {
     const studio = create(held());
     await studio.play();
@@ -1635,6 +1650,7 @@ describe("practice time", () => {
         songs: { "controller-fixture": 4 },
         day: studio.practiceLog.today(),
       }),
+      true,
     );
     expect(env.values.get("practice")).toEqual([
       expect.objectContaining({ seconds: 4 }),

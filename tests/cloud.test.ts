@@ -269,18 +269,39 @@ describe("account sync", () => {
     expect(unsynced()).toMatchObject({ settings: false, progress: [] });
   });
 
-  it("retries a failed practice upload on its own", async () => {
+  it("uploads at once a session the browser could not store", async () => {
     const b = backend();
     const sync = new CloudSync(client(b), USER);
-    b.failLabels = ["upsert practice_sessions"];
-    sync.progress("song", { best: 1 } as never);
-    sync.practice({
+    const session = {
       id: "s1",
       day: "2026-10-18",
       startedAt: "2026-10-18T10:00:00.000Z",
       seconds: 30,
       songs: { song: 30 },
-    });
+    };
+    sync.practice(session, true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.calls).toEqual([]);
+    sync.practice({ ...session, seconds: 31 }, false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.calls).toEqual(["upsert practice_sessions"]);
+  });
+
+  it("retries a failed practice upload on its own", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    b.failLabels = ["upsert practice_sessions"];
+    sync.progress("song", { best: 1 } as never);
+    sync.practice(
+      {
+        id: "s1",
+        day: "2026-10-18",
+        startedAt: "2026-10-18T10:00:00.000Z",
+        seconds: 30,
+        songs: { song: 30 },
+      },
+      true,
+    );
     await vi.advanceTimersByTimeAsync(2000);
     expect(unsynced()).toMatchObject({ progress: [], practice: ["s1"] });
     b.failLabels = [];
@@ -325,12 +346,12 @@ describe("account sync", () => {
     });
     b.failWrites = true;
     tabA.progress("a", { best: 1 } as never);
-    tabA.practice(session("pa"));
+    tabA.practice(session("pa"), true);
     await vi.advanceTimersByTimeAsync(2000);
     expect(unsynced()).toMatchObject({ progress: ["a"], practice: ["pa"] });
     b.failWrites = false;
     tabB.progress("b", { best: 2 } as never);
-    tabB.practice(session("pb"));
+    tabB.practice(session("pb"), true);
     expect(unsynced()).toMatchObject({
       progress: ["a", "b"],
       practice: ["pa", "pb"],
@@ -472,8 +493,8 @@ describe("account sync", () => {
       seconds: 90,
       songs: { ode: 90 },
     };
-    sync.practice(session);
-    sync.practice({ ...session, seconds: 120, songs: { ode: 120 } });
+    sync.practice(session, true);
+    sync.practice({ ...session, seconds: 120, songs: { ode: 120 } }, true);
     expect(unsynced().practice).toEqual(["s1"]);
     await vi.advanceTimersByTimeAsync(2000);
     // Re-sending a session's running total replaces it, never adds to it.
@@ -495,13 +516,15 @@ describe("account sync", () => {
     expect(unsynced().practice).toEqual([]);
   });
 
-  it("loads recent practice and keeps this browser's unsent sessions", async () => {
+  it("loads recent practice and keeps the larger copy of each session", async () => {
     const b = backend();
     write("owner", USER);
     const today = localDay(new Date());
     b.practice_sessions = [
       { id: "a", day: today, started_at: "x", seconds: 200, songs: {} },
       { id: "b", day: today, started_at: "y", seconds: 50, songs: {} },
+      { id: "c", day: today, started_at: "v", seconds: 300, songs: {} },
+      { id: "d", day: today, started_at: "u", seconds: 500, songs: {} },
       {
         id: "old",
         day: "2000-01-01",
@@ -513,8 +536,12 @@ describe("account sync", () => {
     write("practice", [
       { id: "b", day: today, startedAt: "y", seconds: 80, songs: {} },
       { id: "gone", day: today, startedAt: "w", seconds: 30, songs: {} },
+      // Newer here than in the account, though not in the marker.
+      { id: "c", day: today, startedAt: "v", seconds: 400, songs: {} },
+      // In the marker, but another tab already uploaded a newer copy.
+      { id: "d", day: today, startedAt: "u", seconds: 100, songs: {} },
     ]);
-    write("unsynced", { practice: ["b"] });
+    write("unsynced", { practice: ["b", "d"] });
     const sync = new CloudSync(client(b), USER);
     await sync.pull();
     // "gone" was uploaded before and is no longer in the account.
@@ -526,14 +553,20 @@ describe("account sync", () => {
     ).toEqual([
       ["a", 200],
       ["b", 80],
+      ["c", 400],
+      ["d", 500],
     ]);
     await vi.advanceTimersByTimeAsync(0);
     expect(b.upserts).toEqual([
       [
         "practice_sessions",
-        [expect.objectContaining({ id: "b", seconds: 80 })],
+        [
+          expect.objectContaining({ id: "b", seconds: 80 }),
+          expect.objectContaining({ id: "c", seconds: 400 }),
+        ],
       ],
     ]);
+    expect(unsynced().practice).toEqual([]);
   });
 
   it("aborts a timed-out upload and holds newer changes until it settles", async () => {

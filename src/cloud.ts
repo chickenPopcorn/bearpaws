@@ -113,7 +113,8 @@ export interface SyncHooks {
   /** The song was removed from this browser, so its progress goes too. */
   forgetProgress(songId: string): void;
   /** A practice session gained time. */
-  practice(session: PracticeSession): void;
+  /** A practice session gained time; `saved` is false if storage refused it. */
+  practice(session: PracticeSession, saved: boolean): void;
 }
 
 /**
@@ -225,8 +226,9 @@ export class CloudSync implements SyncHooks {
     }
     for (const [id, data] of remote) store(`progress:${id}`, data);
 
-    // Practice: the account's sessions, with this browser's unconfirmed ones
-    // in place of the account's copy.
+    // Practice: the account's sessions, with this browser's copy wherever it
+    // has more time. A session only grows, so the larger copy is the newer
+    // one, whichever tab or upload made it.
     const sessions = new Map<string, PracticeSession>(
       practiceRows.map((row) => [
         row.id,
@@ -240,14 +242,17 @@ export class CloudSync implements SyncHooks {
       ]),
     );
     const unsentPractice = new Set(unsynced.practice);
-    for (const session of storedSessions())
+    for (const session of storedSessions()) {
+      const remote = sessions.get(session.id);
       if (
-        unsentPractice.has(session.id) ||
-        (adopting && !sessions.has(session.id))
+        remote
+          ? session.seconds > remote.seconds
+          : unsentPractice.has(session.id) || adopting
       ) {
         sessions.set(session.id, session);
         this.pendingPractice.set(session.id, session);
       }
+    }
     store(
       "practice",
       [...sessions.values()].filter((session) => session.day >= since),
@@ -302,10 +307,16 @@ export class CloudSync implements SyncHooks {
     this.queued();
   }
 
-  practice(session: PracticeSession) {
+  practice(session: PracticeSession, saved: boolean) {
     if (this.stopped) return;
     this.pendingPractice.set(session.id, { ...session });
-    this.queued();
+    // Without its stored copy, a reload before the upload would lose this
+    // time, so upload at once.
+    if (saved) this.queued();
+    else {
+      this.saveUnsynced();
+      this.uploadNow();
+    }
   }
 
   forgetProgress(songId: string) {
@@ -325,6 +336,10 @@ export class CloudSync implements SyncHooks {
   private queued() {
     if (this.saveUnsynced()) return this.schedule();
     this.setError(STORAGE_FULL);
+    this.uploadNow();
+  }
+
+  private uploadNow() {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     this.schedule(0);
