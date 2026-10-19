@@ -56,9 +56,7 @@ export class MidiDuet {
     this.send([0x80 | this.channel, pitch, 0]);
   }
   private sounding(pitch: number) {
-    for (const note of this.active.values())
-      if (note.pitch === pitch) return true;
-    return false;
+    return [...this.active.values()].filter((note) => note.pitch === pitch);
   }
   stop() {
     const pitches = new Set([...this.active.values()].map((n) => n.pitch));
@@ -89,18 +87,22 @@ export class MidiDuet {
       if (wanted.has(id)) continue;
       this.active.delete(id);
       // An overlapping note of the same pitch still owns the key.
-      if (!this.sounding(n.pitch)) this.noteOff(n.pitch);
+      if (!this.sounding(n.pitch).length) this.noteOff(n.pitch);
     }
     for (const [id, n] of wanted) {
       // A failed send has dropped the output.
       if (!this.port) return;
       if (this.active.has(id)) continue;
+      const others = this.sounding(n.pitch);
+      this.active.set(id, n);
+      // A unison in another voice shares the key already struck with it.
+      if (others.some((other) => Math.abs(other.start - n.start) < 1e-6))
+        continue;
       // A new attack on a sounding pitch restarts it, as a pianist would.
-      if (this.sounding(n.pitch)) {
+      if (others.length) {
         this.noteOff(n.pitch);
         if (!this.port) return;
       }
-      this.active.set(id, n);
       this.send([
         0x90 | this.channel,
         n.pitch,

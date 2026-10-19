@@ -91,6 +91,14 @@ describe("teacher MIDI output", () => {
     duet.schedule(notes, 3, 1, false);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
   });
+  it("strikes a unison once, and releases it when its last note ends", () => {
+    const { duet, send } = setup();
+    const notes = [note("a", 48, 0, 2), note("b", 48, 0, 3)];
+    for (const position of [0, 1, 2]) duet.schedule(notes, position, 1, false);
+    expect(send).toHaveBeenCalledTimes(1);
+    duet.schedule(notes, 3, 1, false);
+    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+  });
   it("silences and closes the old output when switching or returning to laptop", () => {
     const { duet, send, port } = setup();
     duet.schedule([note("a", 48, 0, 2)], 0, 1, false);

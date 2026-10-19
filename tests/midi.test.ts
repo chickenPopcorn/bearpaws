@@ -469,6 +469,37 @@ describe("USB MIDI output selection", () => {
     expect(port.close).toHaveBeenCalledOnce();
   });
 
+  it("keeps an output chosen again after Laptop when its earlier open resolves late", async () => {
+    const { midi, access } = setup();
+    const old = deferred<MIDIPort>(),
+      current = deferred<MIDIPort>();
+    const port = {
+      id: "out",
+      state: "connected",
+      open: vi
+        .fn()
+        .mockReturnValueOnce(old.promise)
+        .mockReturnValueOnce(current.promise),
+      close: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn(),
+    } as unknown as MIDIOutput;
+    Object.defineProperty(access, "outputs", {
+      value: new Map([[port.id, port]]),
+    });
+    await midi.connect();
+    const first = midi.selectOutput("out");
+    await midi.selectOutput("");
+    const second = midi.selectOutput("out");
+    current.resolve(port);
+    await second;
+    old.resolve(port);
+    await first;
+    expect(midi.duet.connected).toBe(true);
+    expect(port.close).not.toHaveBeenCalled();
+    await midi.selectOutput("");
+    expect(port.close).toHaveBeenCalledOnce();
+  });
+
   it("keeps an output a newer choice opened again", async () => {
     const { midi, access } = setup();
     const first = deferred<MIDIPort>();
