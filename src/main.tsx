@@ -29,7 +29,7 @@ import { BrowserStorageError, CloudSync, UnsentChangesError } from "./cloud";
 import { StudioClaim } from "./studioClaim";
 import { OpeningStudio } from "./OpeningStudio";
 import { SignIn } from "./SignIn";
-import { signInWithGoogle, supabase } from "./supabase";
+import { firstName, signInWithGoogle, supabase } from "./supabase";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
 import "./style.css";
 // One studio per signed-in session, created once the account's songs and
@@ -830,9 +830,10 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                     aria-label="Speed and position"
                   >
                     <label className="speed">
-                      Speed
+                      <span className="speed-label">Speed</span>
                       <input
                         aria-label="Playback speed"
+                        title="Playback speed"
                         type="range"
                         min={SPEED_PERCENT.min}
                         max={SPEED_PERCENT.max}
@@ -868,7 +869,8 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                     <span aria-hidden="true">
                       {fullscreen.expanded ? "↙" : "⛶"}
                     </span>
-                    {fullscreen.expanded ? "Exit full screen" : "Full screen"}
+                    {/* Icon only beside the controls, so they fit one row. */}
+                    {fullscreen.expanded && "Exit full screen"}
                   </button>
                 </div>
                 {fullscreen.expanded && (
@@ -1090,6 +1092,8 @@ let readyGate: Extract<Gate, { status: "ready" }> | null = null;
 /** The sign-in still loading, so a newer auth event can stop it. */
 let loading: CloudSync | null = null;
 let currentEmail = "";
+/** The account's first name, the learner's name until someone changes it. */
+let currentName = "";
 /** This tab's claim on the studio, which only one tab runs at a time. */
 const claim = new StudioClaim(() => {
   // Another tab took the studio over, and with it the stored upload queue.
@@ -1107,7 +1111,7 @@ const claim = new StudioClaim(() => {
   if (currentUser) setGate({ status: "elsewhere" });
 });
 
-async function openSession(userId: string, email: string) {
+async function openSession(userId: string, email: string, name = "") {
   if (userId === currentUser) return;
   currentUser = userId;
   loading?.stop();
@@ -1126,6 +1130,7 @@ async function openSession(userId: string, email: string) {
     return;
   }
   currentEmail = email;
+  currentName = name;
   const claimed = await claim.claim();
   if (currentUser !== userId) {
     // A newer auth event moved on while the claim was pending. A lock that
@@ -1180,6 +1185,14 @@ async function openStudio(userId: string, email: string) {
   cloud = sync;
   studio = new Studio(songs, sync);
   sync.onChange = () => studio.emit();
+  // Signed in, the learner has a name from the start: the account's.
+  // Once only: a name cleared on purpose stays blank.
+  if (
+    !studio.settings.learnerNameChosen &&
+    !studio.settings.learnerName.trim() &&
+    currentName
+  )
+    studio.learnerName(currentName);
   readyGate = { status: "ready", userId, email };
   setGate(readyGate);
 }
@@ -1263,7 +1276,12 @@ if (supabase) {
   // Supabase asks that auth callbacks not await its own calls directly.
   supabase.auth.onAuthStateChange((_event, session) => {
     setTimeout(
-      () => void openSession(session?.user.id ?? "", session?.user.email ?? ""),
+      () =>
+        void openSession(
+          session?.user.id ?? "",
+          session?.user.email ?? "",
+          firstName(session?.user),
+        ),
       0,
     );
   });

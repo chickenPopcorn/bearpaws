@@ -57,8 +57,10 @@ describe("practice calendar", () => {
     expect(container.querySelector("#practice-month")!.textContent).toBe(
       "October",
     );
-    // October 2026 starts on a Thursday; weeks start on Monday.
-    expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(31);
+    // October 2026 starts on a Thursday; weeks start on Monday, and each of
+    // its five weeks ends with a stamp.
+    expect(container.querySelectorAll(".practice-day")).toHaveLength(31);
+    expect(container.querySelectorAll(".practice-stamp")).toHaveLength(5);
     expect(day(16).className).toContain("done");
     expect(day(16).getAttribute("aria-label")).toBe(
       "October 16: 7 minutes, star earned",
@@ -77,6 +79,57 @@ describe("practice calendar", () => {
     expect(container.querySelector(".practice-today")!.textContent).toBe(
       "Today: 3 of 5 minutes",
     );
+  });
+
+  it("stamps a week once all seven days have their star, counting days in other months", async () => {
+    const days = (from: string, count: number) =>
+      Array.from({ length: count }, (_, i) => {
+        const d = new Date(`${from}T12:00:00`);
+        d.setDate(d.getDate() + i);
+        return [d.toLocaleDateString("en-CA"), goal] as [string, number];
+      });
+    // The first row runs Monday 28 September to Sunday 4 October.
+    await render([...days("2026-09-28", 7), ...days("2026-10-12", 6)]);
+    const stamps = [...container.querySelectorAll(".practice-stamp")];
+    expect(stamps.map((s) => s.getAttribute("aria-label"))).toEqual([
+      "Week of October 1: stamp earned",
+      "Week of October 5: 0 of 7 stars",
+      "Week of October 12: 6 of 7 stars",
+      "Week of October 19: 0 of 7 stars",
+      "Week of October 26: 0 of 7 stars",
+    ]);
+    expect(stamps.map((s) => s.classList.contains("earned"))).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    await render([...days("2026-10-12", 7)]);
+    expect(
+      container.querySelector(
+        '[aria-label="Week of October 12: stamp earned"]',
+      )!.className,
+    ).toContain("earned");
+  });
+
+  it("asks for the day's goal with its minutes in bold", async () => {
+    await render([]);
+    expect(container.querySelector(".practice-today")!.textContent).toBe(
+      "Play 5 minutes today to earn a star.",
+    );
+    expect(container.querySelector(".practice-today strong")!.textContent).toBe(
+      "5 minutes",
+    );
+  });
+
+  it("titles the calendar with the learner's name", async () => {
+    await render([], "2026-10-18", { learnerName: "  George  " });
+    expect(container.querySelector(".practice-learner")!.textContent).toBe(
+      "George’s practice",
+    );
+    await render([], "2026-10-18", { learnerName: "" });
+    expect(container.querySelector(".practice-learner")).toBeNull();
   });
 
   it("celebrates once when today reaches the goal", async () => {

@@ -23,6 +23,11 @@ export interface Settings {
   pianoVoices: PianoVoices;
   /** Who practices here, for the calendar's praise; may be blank. */
   learnerName: string;
+  /**
+   * Whether the name was ever set, here or from the account, so a name
+   * cleared on purpose stays blank rather than taking the account's again.
+   */
+  learnerNameChosen: boolean;
   /** Minutes of practice that earn a day its star. */
   dailyGoalMinutes: number;
 }
@@ -48,6 +53,7 @@ export const defaults: Settings = {
   ambience: DEFAULT_PIANO_SOUND.ambience,
   pianoVoices: { ...DEFAULT_PIANO_SOUND.voices },
   learnerName: "",
+  learnerNameChosen: false,
   dailyGoalMinutes: 5,
 };
 const storageKey = (key: string) => `cadence:${key}`;
@@ -159,6 +165,7 @@ export function settings(): Settings {
       typeof s.learnerName === "string"
         ? s.learnerName.slice(0, LEARNER_NAME_MAX)
         : "",
+    learnerNameChosen: s.learnerNameChosen === true,
     dailyGoalMinutes: DAILY_GOAL_CHOICES.includes(s.dailyGoalMinutes)
       ? s.dailyGoalMinutes
       : defaults.dailyGoalMinutes,
