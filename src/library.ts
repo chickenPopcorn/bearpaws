@@ -168,6 +168,8 @@ export function validateSong(value: unknown, id: string): Song {
           whole(p.channel) &&
           finite(p.start) &&
           finite(p.end) &&
+          // Left down at the end of the file, or absent.
+          (p.open === undefined || p.open === true) &&
           (p.start as number) >= 0 &&
           (p.end as number) >= (p.start as number) &&
           (p.end as number) <= (value.duration as number) + 1e-6,

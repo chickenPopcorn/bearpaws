@@ -16,6 +16,8 @@ interface Backend {
   upserts: [string, unknown][];
   calls: string[];
   failWrites: boolean;
+  /** Writes to reject, by label, such as "upsert settings". */
+  failLabels: string[];
   /** "abort": writes answer only when aborted. "manual": when release() runs. */
   hang: "no" | "abort" | "manual";
   release: () => void;
@@ -35,6 +37,7 @@ function backend(): Backend {
     upserts: [],
     calls: [],
     failWrites: false,
+    failLabels: [],
     hang: "no",
     release: () => {},
     signOutError: null,
@@ -64,9 +67,10 @@ function client(b: Backend) {
             resolve(reply(null));
           };
         });
-      if (upsert && !b.failWrites) b.upserts.push(upsert);
+      const fails = b.failWrites || b.failLabels.includes(label);
+      if (upsert && !fails) b.upserts.push(upsert);
       return Promise.resolve(
-        reply(null, b.failWrites ? { message: "offline" } : null),
+        reply(null, fails ? { message: "offline" } : null),
       );
     },
   });
@@ -224,6 +228,48 @@ describe("account sync", () => {
         "progress",
         [{ user_id: USER, song_id: "only-here", data: { best: 4 } }],
       ],
+    ]);
+  });
+
+  it("retries only the requests that failed", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    b.failLabels = ["upsert settings"];
+    sync.settings({ mode: "wait" } as never);
+    sync.progress("song", { best: 1 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.upserts).toEqual([
+      ["progress", [{ user_id: USER, song_id: "song", data: { best: 1 } }]],
+    ]);
+    expect(unsynced()).toMatchObject({ settings: true, progress: [] });
+    b.failLabels = [];
+    await vi.advanceTimersByTimeAsync(15000);
+    // The landed progress is not sent again, where it could overwrite newer
+    // practice from another device.
+    expect(b.calls).toEqual([
+      "upsert settings",
+      "upsert progress",
+      "upsert settings",
+    ]);
+    expect(unsynced()).toMatchObject({ settings: false, progress: [] });
+  });
+
+  it("keeps changes another tab saves while sign-in loads", async () => {
+    const b = backend();
+    write("owner", USER);
+    let open!: () => void;
+    b.readGate = new Promise((resolve) => (open = resolve));
+    b.progress = [{ song_id: "song", data: { best: 1 } }];
+    const pulling = new CloudSync(client(b), USER).pull();
+    // Another tab of this account saves while the reads are under way.
+    write("progress:song", { best: 9 });
+    write("unsynced", { progress: ["song"] });
+    open();
+    await pulling;
+    expect(read("progress:song", null)).toEqual({ best: 9 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts).toEqual([
+      ["progress", [{ user_id: USER, song_id: "song", data: { best: 9 } }]],
     ]);
   });
 
