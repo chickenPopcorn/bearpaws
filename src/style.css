@@ -333,6 +333,168 @@ span.device {
   background: #fbfaff;
   font-size: var(--text-sm);
 }
+/* Practice calendar: a star on each day that met the daily goal. */
+.practice-calendar {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fbfaff;
+}
+.practice-calendar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-md);
+}
+.practice-streak {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: #8a5a0b;
+}
+.practice-streak .practice-star {
+  width: 14px;
+  height: 14px;
+}
+.practice-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  text-align: center;
+}
+.practice-weekday {
+  font-size: var(--text-caps);
+  color: var(--muted);
+}
+.practice-day {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}
+.practice-day.done {
+  background: #fcefd6;
+}
+.practice-day.done .practice-star {
+  width: 62%;
+  height: 62%;
+}
+.practice-star {
+  fill: #e0a030;
+}
+.practice-day.some::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #b296ef;
+}
+.practice-day.future {
+  color: #b9b4c6;
+}
+.practice-day.is-today {
+  font-weight: 700;
+  color: var(--text);
+}
+.practice-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  fill: none;
+  stroke: var(--soft);
+  stroke-width: 3;
+}
+.practice-ring-done {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+.practice-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.practice-today {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.practice-edit {
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-size: var(--text-xs);
+  color: var(--accent-text);
+}
+.practice-profile {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.practice-profile label {
+  display: grid;
+  gap: 2px;
+}
+.practice-profile input {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px var(--space-2);
+  min-height: 32px;
+  color: var(--text-2);
+}
+.practice-profile input,
+.practice-profile select {
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+@keyframes practice-star-pop {
+  0% {
+    transform: scale(0) rotate(-40deg);
+  }
+  60% {
+    transform: scale(1.35) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes practice-spark {
+  from {
+    transform: rotate(var(--angle)) translateY(0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: rotate(var(--angle)) translateY(-24px) scale(0.3);
+    opacity: 0;
+  }
+}
+.practice-day.celebrate .practice-star {
+  animation: practice-star-pop 0.7s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.practice-spark {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #e0a030;
+  animation: practice-spark 0.8s ease-out both;
+}
 .privacy {
   font-size: var(--text-xs);
   color: var(--muted);
@@ -1397,8 +1559,15 @@ footer a {
     transition: none;
   }
   .bear-paw-wave,
-  .bear-paw-digit {
+  .bear-paw-digit,
+  .practice-day.celebrate .practice-star {
     animation: none;
+  }
+  .practice-ring-done {
+    transition: none;
+  }
+  .practice-spark {
+    display: none;
   }
 }
 

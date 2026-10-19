@@ -5,6 +5,9 @@ import {
   normalizePianoSound,
   type PianoVoices,
 } from "./pianoSound";
+/** Daily practice goals to choose from, in minutes. */
+export const DAILY_GOAL_CHOICES = [5, 10, 15, 20, 30];
+export const LEARNER_NAME_MAX = 40;
 export interface Settings {
   mode: Mode;
   speed: number;
@@ -17,6 +20,10 @@ export interface Settings {
   ambience: number;
   /** The optional Accurate-Salamander voices that play. */
   pianoVoices: PianoVoices;
+  /** Who practices here, for the calendar's praise; may be blank. */
+  learnerName: string;
+  /** Minutes of practice that earn a day its star. */
+  dailyGoalMinutes: number;
 }
 export interface Progress {
   position: number;
@@ -38,6 +45,8 @@ export const defaults: Settings = {
   selected: "cadence-ode-to-joy-v1",
   ambience: DEFAULT_PIANO_SOUND.ambience,
   pianoVoices: { ...DEFAULT_PIANO_SOUND.voices },
+  learnerName: "",
+  dailyGoalMinutes: 5,
 };
 const storageKey = (key: string) => `cadence:${key}`;
 export function read<T>(key: string, fallback: T): T {
@@ -91,6 +100,13 @@ export function settings(): Settings {
     selected: typeof s.selected === "string" ? s.selected : defaults.selected,
     ambience: sound.ambience,
     pianoVoices: sound.voices,
+    learnerName:
+      typeof s.learnerName === "string"
+        ? s.learnerName.slice(0, LEARNER_NAME_MAX)
+        : "",
+    dailyGoalMinutes: DAILY_GOAL_CHOICES.includes(s.dailyGoalMinutes)
+      ? s.dailyGoalMinutes
+      : defaults.dailyGoalMinutes,
   };
 }
 export function progress(id: string, duration: number): Progress {

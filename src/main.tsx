@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -25,8 +26,12 @@ import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { isBuiltInSong } from "./lessons";
 import { collectionForSong, songsInCollection } from "./collections";
+import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
 import "./style.css";
 const studio = new Studio();
+const practiceDay = () => studio.practiceLog.today();
+const setLearnerName = (name: string) => studio.learnerName(name);
+const setDailyGoal = (minutes: number) => studio.dailyGoal(minutes);
 const stamp = (t: number) =>
   `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 // The studio is a singleton, so these stay stable and let memoized views skip
@@ -536,6 +541,13 @@ function App() {
   const misses = p.recentMisses,
     stats = p.stats,
     recent = p.feedback.at(-1);
+  const today = useLocalDay(practiceDay);
+  // Totals change at most once a second, when a day gains a whole second.
+  const practiceRevision = studio.practiceLog.revision;
+  const practiceTotals = useMemo(
+    () => studio.practiceLog.totals(),
+    [practiceRevision, today],
+  );
   return (
     <div className="app">
       <header className="top">
@@ -602,6 +614,14 @@ function App() {
       )}
       <div className="body">
         <aside className="sidebar">
+          <PracticeCalendar
+            totals={practiceTotals}
+            today={today}
+            learnerName={s.learnerName}
+            goalMinutes={s.dailyGoalMinutes}
+            onLearnerName={setLearnerName}
+            onGoalMinutes={setDailyGoal}
+          />
           <SongLibrary
             songs={studio.songs}
             selected={studio.song.id}
