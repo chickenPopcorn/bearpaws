@@ -4,7 +4,10 @@ import { lastIndexAtOrBefore } from "./timeline";
 /** A library request that takes longer than this fails, so startup can offer a retry. */
 const TIMEOUT_MS = 30000;
 
-/** The public Supabase bucket that holds the shared song library. */
+/**
+ * The Supabase bucket that holds the shared song library. Only signed-in
+ * users may read it (see supabase/migrations).
+ */
 export const LIBRARY_BUCKET = "library";
 export const COLLECTION_IDS = ["classes", "songs", "pops"] as const;
 export type LibraryCollection = (typeof COLLECTION_IDS)[number];
@@ -347,10 +350,10 @@ export function validateSong(value: unknown, id: string): Song {
 
 /**
  * Load the songs of George Bear’s Classes, the `classes` collection. `url`
- * turns a bucket path into its public URL. The index is revalidated on every
- * load. Song files are named after their content hash and served with a
- * one-year cache, so the browser reuses them without asking until a song
- * changes and gets a new name.
+ * turns a bucket path into its URL, and `fetcher` reads it, as the signed-in
+ * user in the app. The index is revalidated on every load. Song files are
+ * named after their content hash and served with a one-year cache, so the
+ * browser keeps them until a song changes and gets a new name.
  */
 export async function loadLibrary(
   url: (path: string) => string,

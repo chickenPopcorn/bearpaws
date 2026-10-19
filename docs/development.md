@@ -28,6 +28,7 @@ npm run preview        # Serve the production build, normally localhost:4173
 npm run example        # Regenerate the original downloadable MIDI exercise
 npm run library:pull   # Download the shared song library into ./library
 npm run library:push   # Check ./library and upload it to the library bucket
+npm run cd-audio:push -- <folder>  # Upload the course CD's MP3 files to the cd-audio bucket
 npm run format         # Format source, tests and documentation
 ```
 
@@ -40,7 +41,8 @@ practice, a library that fails to load, and the one studio tab. The first run
 needs the browser: `npx playwright install chromium`. The build talks to a
 fake Supabase project that `e2e/fake-supabase.ts` answers inside the browser,
 with the three fixture songs as the library, so the tests need no account or
-network.
+network. Like Storage, the fake answers library requests only when they carry
+the signed-in user's access token.
 
 The **E2E tests** workflow runs them in the merge queue only, on the merged
 result. Pull requests show the check as skipped, so it can be a required
@@ -57,7 +59,8 @@ check; it can also be run by hand from the Actions tab.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings and progress.
 - `src/library.ts`, `scripts/library.mjs`: the shared song library and its pull/push script.
-- `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in.
+- `scripts/cd-audio.mjs`: uploads the course CD's audio; `scripts/supabase-admin.mjs`: the secret-key client both scripts use.
+- `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in, and `signedInFetch` for Storage that only signed-in users read.
 - `src/cloud.ts`, `src/studioClaim.ts`: account sync, one studio tab at a time.
 - `src/main.tsx`, `src/session.ts`: page startup, and sign-in through to the open studio.
 - `src/App.tsx`: Practice studio: library, practice controls, piano and score.

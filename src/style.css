@@ -689,7 +689,14 @@ h1 {
 .song-midi-download {
   color: var(--accent-text);
   font-size: var(--text-sm);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
   text-underline-offset: 3px;
+}
+.song-midi-download:hover {
+  background: none;
 }
 .practice-toolbar {
   display: flex;

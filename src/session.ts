@@ -3,7 +3,7 @@ import { BrowserStorageError, CloudSync, UnsentChangesError } from "./cloud";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
 import type { Song } from "./song";
 import { StudioClaim } from "./studioClaim";
-import { firstName, supabase } from "./supabase";
+import { firstName, signedInFetch, supabase } from "./supabase";
 
 /** What the page shows: sign-in, loading and errors, or the studio. */
 export type Gate =
@@ -38,16 +38,21 @@ export const subscribeGate = (listener: () => void) => {
 // says whether anyone is signed in, and "" once nobody is.
 export let currentUser: string | null = null;
 
-/** The public URL of a file in the song library bucket. */
+/**
+ * The URL of a file in the song library bucket, which only signed-in users
+ * may read: fetch it with signedInFetch().
+ */
 const libraryUrl = (path: string) =>
-  `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${LIBRARY_BUCKET}/${path}`;
+  `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/authenticated/${LIBRARY_BUCKET}/${path}`;
 let library: Promise<Song[]> | undefined;
 /** The song library, loaded once per page; a failed load is tried again. */
 function loadSongs() {
-  library ??= loadLibrary(libraryUrl).catch((error) => {
-    library = undefined;
-    throw error;
-  });
+  library ??= signedInFetch()
+    .then((fetcher) => loadLibrary(libraryUrl, fetcher))
+    .catch((error) => {
+      library = undefined;
+      throw error;
+    });
   return library;
 }
 /** The open studio's session, to return to if sign-out fails. */

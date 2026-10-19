@@ -14,13 +14,13 @@
 // The bucket names each file after its content hash (songs/<id>.<hash>.json),
 // so browsers can keep it for a year: a changed song gets a new name. A file
 // the index stops listing is removed 24 hours later (see retired.json).
-// Uploading needs the project's secret key: SUPABASE_SECRET_KEY, or a Supabase
-// account token in MUSIC_API_KEY to look it up. Neither ever reaches the app.
-import { createClient } from "@supabase/supabase-js";
+// Only signed-in users may read the bucket, so pulling and pushing both use
+// the project's secret key (see scripts/supabase-admin.mjs).
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { createServer, loadEnv } from "vite";
+import { createServer } from "vite";
+import { adminClient } from "./supabase-admin.mjs";
 
 const FOLDER = "library";
 /** Hashed files never change, so browsers and the CDN may keep them this long. */
@@ -44,10 +44,6 @@ if (command !== "pull" && command !== "push") {
   console.error("Usage: node scripts/library.mjs pull|push");
   process.exit(1);
 }
-const env = { ...loadEnv("", process.cwd(), "VITE_"), ...process.env };
-const url = env.VITE_SUPABASE_URL;
-if (!url) throw new Error("Set VITE_SUPABASE_URL in .env.local (see README).");
-const ref = new URL(url).hostname.split(".")[0];
 
 const server = await createServer({
   server: { middlewareMode: true },
@@ -57,22 +53,25 @@ const server = await createServer({
 try {
   const { LIBRARY_BUCKET, validateIndex, validateSong } =
     await server.ssrLoadModule("/src/library.ts");
-  const publicUrl = (path) =>
-    `${url}/storage/v1/object/public/${LIBRARY_BUCKET}/${path}`;
-  if (command === "pull") await pull(publicUrl, validateIndex);
-  else await push(LIBRARY_BUCKET, validateIndex, validateSong);
+  const storage = (await adminClient()).storage.from(LIBRARY_BUCKET);
+  if (command === "pull") await pull(storage, validateIndex);
+  else await push(storage, LIBRARY_BUCKET, validateIndex, validateSong);
 } finally {
   await server.close();
 }
 
-async function pull(publicUrl, validateIndex) {
-  const download = async (path) => {
-    const response = await fetch(`${publicUrl(path)}?t=${Date.now()}`);
-    if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
-    return new Uint8Array(await response.arrayBuffer());
-  };
+/** A file from the bucket, read past the CDN so it is current. */
+async function download(storage, path) {
+  const { data, error } = await storage.download(path, {
+    cacheNonce: Date.now(),
+  });
+  if (error) throw new Error(`${path}: ${error.message}`, { cause: error });
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+async function pull(storage, validateIndex) {
   const index = validateIndex(
-    JSON.parse(new TextDecoder().decode(await download("index.json"))),
+    JSON.parse(new TextDecoder().decode(await download(storage, "index.json"))),
   );
   const songsFolder = resolve(FOLDER, "songs");
   mkdirSync(songsFolder, { recursive: true });
@@ -89,7 +88,7 @@ async function pull(publicUrl, validateIndex) {
         throw new Error(
           `${entry.id}: ${entry[key]} is outside ${FOLDER}/songs`,
         );
-      writeFileSync(target, await download(original));
+      writeFileSync(target, await download(storage, original));
     }
     delete entry.hash;
     delete entry.midiHash;
@@ -98,7 +97,7 @@ async function pull(publicUrl, validateIndex) {
   console.log(`Pulled ${index.songs.length} songs into ./${FOLDER}`);
 }
 
-async function push(bucket, validateIndex, validateSong) {
+async function push(storage, bucket, validateIndex, validateSong) {
   const { parseSong } = await server.ssrLoadModule("/src/song.ts");
   const index = validateIndex(
     JSON.parse(readFileSync(`${FOLDER}/index.json`, "utf8")),
@@ -118,21 +117,19 @@ async function push(bucket, validateIndex, validateSong) {
   // The live index, to notice a MIDI file replaced without its song data.
   // Only a bucket with no index yet (the first push) goes without; any other
   // failure stops the push rather than skip the check.
-  const liveResponse = await fetch(
-    `${url}/storage/v1/object/public/${bucket}/index.json?t=${Date.now()}`,
-  );
-  const liveBody = await liveResponse.text();
   let live;
-  if (liveResponse.ok) live = JSON.parse(liveBody);
-  else if (
-    liveResponse.status === 404 ||
-    /"code"\s*:\s*"NoSuchKey"/.test(liveBody)
-  )
-    live = { songs: [] };
-  else
-    throw new Error(
-      `Could not read the live index.json (HTTP ${liveResponse.status}); try again.`,
+  try {
+    live = JSON.parse(
+      new TextDecoder().decode(await download(storage, "index.json")),
     );
+  } catch (error) {
+    const { statusCode, message } = error.cause ?? {};
+    if (String(statusCode) !== "404" || !/object not found/i.test(message))
+      throw new Error(`Could not read the live index.json; try again.`, {
+        cause: error,
+      });
+    live = { songs: [] };
+  }
   const hashOf = (path) => /\.([0-9a-f]{16})\.\w+$/.exec(path ?? "")?.[1];
   const before = new Map(
     (live.songs ?? []).map((song) => [
@@ -199,10 +196,6 @@ async function push(bucket, validateIndex, validateSong) {
     if (bytes.length > MAX_FILE)
       throw new Error(`${path} is larger than the bucket's 5 MiB file limit.`);
 
-  const client = createClient(url, await secretKey(), {
-    auth: { persistSession: false },
-  });
-  const storage = client.storage.from(bucket);
   const upload = async (path, bytes, contentType, cacheControl) => {
     const { error } = await storage.upload(path, bytes, {
       contentType,
@@ -271,19 +264,4 @@ async function readRetired(storage) {
   } catch {
     return {};
   }
-}
-
-async function secretKey() {
-  if (env.SUPABASE_SECRET_KEY) return env.SUPABASE_SECRET_KEY;
-  if (!env.MUSIC_API_KEY)
-    throw new Error("Set SUPABASE_SECRET_KEY or MUSIC_API_KEY to upload.");
-  const response = await fetch(
-    `https://api.supabase.com/v1/projects/${ref}/api-keys?reveal=true`,
-    { headers: { Authorization: `Bearer ${env.MUSIC_API_KEY}` } },
-  );
-  if (!response.ok)
-    throw new Error(`Supabase account API: HTTP ${response.status}`);
-  const key = (await response.json()).find((k) => k.type === "secret");
-  if (!key) throw new Error("This project has no secret API key.");
-  return key.api_key;
 }

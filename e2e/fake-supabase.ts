@@ -108,6 +108,23 @@ export function session() {
   };
 }
 
+/** Whether an Authorization header carries a signed-in user's access token. */
+function signedInRequest(authorization: string | undefined) {
+  const token = /^Bearer (.+)$/.exec(authorization ?? "")?.[1] ?? "";
+  try {
+    const claims = JSON.parse(
+      Buffer.from(token.split(".")[1] ?? "", "base64url").toString(),
+    ) as { role?: string; sub?: string; exp?: number };
+    return (
+      claims.role === "authenticated" &&
+      claims.sub === USER.id &&
+      (claims.exp ?? 0) * 1000 > Date.now()
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The browser storage of a context already signed in, as supabase-js leaves
  * it after Google sign-in.
@@ -126,8 +143,9 @@ type Row = { user_id: string; song_id: string; data: unknown };
 
 /**
  * Supabase as the app uses it: Google sign-in (PKCE), the settings and
- * progress tables, and the public song library bucket. Tests read and change
- * its state to arrange and check what the app sent.
+ * progress tables, and the song library bucket, which only signed-in users
+ * may read. Tests read and change its state to arrange and check what the
+ * app sent.
  */
 export class FakeSupabase {
   /** The account's settings row, or null for a new account. */
@@ -157,7 +175,7 @@ export class FakeSupabase {
     if (method === "OPTIONS")
       return route.fulfill({ status: 204, headers: CORS });
 
-    const library = "/storage/v1/object/public/library/";
+    const library = "/storage/v1/object/authenticated/library/";
     if (path.startsWith(library))
       return this.library(route, path.slice(library.length));
 
@@ -224,6 +242,19 @@ export class FakeSupabase {
   }
 
   private library(route: Route, file: string) {
+    // Only signed-in users may read the bucket: Storage refuses a request
+    // without a user's access token, such as one with just the publishable
+    // key, as if the file were not there.
+    if (!signedInRequest(route.request().headers().authorization))
+      return route.fulfill({
+        status: 400,
+        headers: { ...CORS, "content-type": "application/json" },
+        body: JSON.stringify({
+          statusCode: "404",
+          error: "not_found",
+          message: "Object not found",
+        }),
+      });
     if (this.libraryDown)
       return route.fulfill({ status: 503, headers: CORS, body: "down" });
     if (file === "index.json")
