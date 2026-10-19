@@ -551,11 +551,20 @@ async function codexThreadResolution(
   // Some connector versions record nothing at all for a clean Code Review: no
   // findings flag and no review on GitHub. A review it did publish can take a
   // moment to appear in GitHub's views, so absence counts as clean only once
-  // that has had time to settle, and every Codex thread is resolved.
-  if (!findingsRecorded && !currentReview)
-    return Date.now() - completed >= SILENT_REVIEW_SETTLE_MS
+  // that has had time to settle, measured from a known completion of this
+  // run, and every Codex thread is resolved. Any review on this commit since
+  // the run started, even one dated after the summary's completion, means
+  // the run was not silent.
+  if (!findingsRecorded && !currentReview) {
+    const publishedSinceStart =
+      latest && Date.parse(latest.submittedAt) > started;
+    return !publishedSinceStart &&
+      completed > 0 &&
+      completed >= started &&
+      Date.now() - completed >= SILENT_REVIEW_SETTLE_MS
       ? "success"
       : "pending";
+  }
   return commentsComplete &&
     expectedFindings.size > 0 &&
     findings.size === expectedFindings.size &&

@@ -952,6 +952,32 @@ describe("Codex review merge gate", () => {
       await expect(run()).resolves.toMatchObject({ state: "pending" });
     });
 
+    it("stays pending without a known completion time for the run", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED);
+      const { run, reviewGraphql, threadGraphql, github } =
+        setupFallback(silentState());
+      // A summary whose table lost the Code Review's time.
+      github.paginate.mockImplementationOnce(async () => [
+        summary(silentState(), 10, FINISH),
+      ]);
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    });
+
+    it("stays pending when a review on this commit is dated after the completion", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED);
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(
+        receiptPage([receipt({ submittedAt: "2026-10-17T06:05:00Z" })]),
+      );
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    });
+
     it("still fails while an older Codex finding is unresolved", async () => {
       const { run, reviewGraphql, threadGraphql } =
         setupFallback(silentState());
