@@ -18,6 +18,8 @@ export interface MidiCallbacks {
   onChange(): void;
   /** The chosen duet output failed or went away; the duet is back on the laptop. */
   onOutputLost(): void;
+  /** Advance playback before moving currently sounding notes to a new channel. */
+  onBeforeChannelChange?(): void;
 }
 export interface MidiNavigator {
   requestMIDIAccess(options?: MIDIOptions): Promise<MIDIAccess>;
@@ -268,8 +270,12 @@ export class MidiConnection {
       // DOM event timestamps share performance.now()'s clock. Never substitute animation-frame time.
       // Only physical note-ons select the teacher channel, never virtual keys
       // or system messages. Channel 1 is used until the first physical note.
-      if ((event.data[0] & 0xf0) === 0x90 && event.data[2] > 0)
-        this.duet.setChannel(event.data[0] & 0x0f);
+      if ((event.data[0] & 0xf0) === 0x90 && event.data[2] > 0) {
+        const channel = event.data[0] & 0x0f;
+        if (channel !== this.duet.channelNumber)
+          this.callbacks.onBeforeChannelChange?.();
+        this.duet.setChannel(channel);
+      }
       this.callbacks.onMessage(new Uint8Array(event.data), event.timeStamp);
     };
     void input.open().then(

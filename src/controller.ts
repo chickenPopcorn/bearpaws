@@ -129,6 +129,9 @@ export class Studio {
         this.emit();
       },
       onChange: () => this.emit(),
+      onBeforeChannelChange: () => {
+        if (this.transport.playing) this.tick();
+      },
       onOutputLost: () => {
         // Playback, or a start still loading, routed the duet to the lost
         // output and never prepared its laptop sound: stop, and let Play
@@ -644,6 +647,7 @@ export class Studio {
           cycle,
           false,
           this.midiPassStart,
+          this.settings.speed,
         );
         this.midiPassStart = this.loopStart;
         this.passEpoch =
@@ -691,7 +695,7 @@ export class Studio {
       if (!this.transport.playing) {
         // The transport has finished, but the final piano release can still
         // be ringing. Explicit pause/seek/song changes continue to stop audio.
-        this.midi.duet.stop();
+        this.midi.duet.finish();
         this.audio.setPlaybackNotes([]);
         this.notice = "";
         this.save();
@@ -733,6 +737,7 @@ export class Studio {
       this.transport.cycle,
       this.transport.held,
       this.midiPassStart,
+      this.settings.speed,
     );
     const browserNotes = this.midi.duet.connected ? reference : notes;
     this.audio.schedule(
