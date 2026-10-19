@@ -4,38 +4,28 @@ import type { Note } from "./song";
 export function closeOutput(port: MIDIOutput) {
   void port.close().catch(() => {});
 }
-interface Message {
-  at: number;
-  data: number[];
-  order: number;
-}
 
-/** Teacher-only output. Delayed messages stay in our cancellable queue, not the device. */
+/** Teacher-only output, on the student piano’s MIDI channel; never echoes or scores student input. */
 export class MidiDuet {
   private port?: MIDIOutput;
   private active = new Map<string, Note>();
   private started = new Set<string>();
-  private sounding = new Map<number, number>();
+  /** Attacks crossed last tick that waited behind an earlier one on their pitch. */
+  private deferred = new Set<string>();
   private position: number | undefined;
-  private clock: number | undefined;
   private cycle = -1;
   private channel = 0;
-  private generation = 0;
-  private queue: Message[] = [];
-  private timer?: ReturnType<typeof setTimeout>;
-  private order = 0;
-  private lastAt = 0;
-  private batching = false;
-  private finishing = false;
+  private outputGeneration = 0;
+  /** `lost` hears that the output stopped accepting notes. */
   constructor(private lost: () => void = () => {}) {}
   get connected() {
     return !!this.port;
   }
-  get channelNumber() {
-    return this.channel;
-  }
-
-  /** The caller advances the practice clock first, so expired notes cannot transfer. */
+  /**
+   * Follow another input channel. Sounding teacher notes end on the old one:
+   * striking them again on the new one would add attacks the book never wrote,
+   * and some of them may already be over by now.
+   */
   setChannel(channel: number) {
     if (
       !Number.isInteger(channel) ||
@@ -44,226 +34,137 @@ export class MidiDuet {
       channel === this.channel
     )
       return;
-    const notes = [...this.active.values()].filter(
-      (n) => n.soundEnd > (this.position ?? -Infinity),
-    );
     this.silence();
     this.channel = channel;
-    for (const note of notes) {
-      const unison = [...this.active.values()].some(
-        (n) => n.pitch === note.pitch,
-      );
-      this.active.set(note.id, note);
-      if (!unison) this.noteOn(note);
-    }
   }
+  /** Silence and close the current output, then play on `port`, if any. */
   setOutput(port?: MIDIOutput) {
     if (port === this.port) {
-      this.generation++;
+      this.outputGeneration++;
       return;
     }
     this.stop();
     const previous = this.port;
     this.port = port;
-    this.generation++;
+    this.outputGeneration++;
     if (previous) closeOutput(previous);
   }
-  private clearQueue() {
-    if (this.timer !== undefined) clearTimeout(this.timer);
-    this.timer = undefined;
-    this.queue = [];
-  }
-  private write(data: number[]) {
-    const port = this.port,
-      generation = this.generation;
+  private send(data: number[]) {
+    const port = this.port;
+    const generation = this.outputGeneration;
     if (!port) return;
     try {
-      // No future timestamps: Chrome has no MIDIOutput.clear().
       port.send(data);
-      if ((data[0] & 0xf0) === 0x90 && data[2] > 0)
-        this.sounding.set(data[1], data[2]);
-      else if ((data[0] & 0xf0) === 0x80) this.sounding.delete(data[1]);
     } catch {
-      this.clearQueue();
+      // An unplugged output must not break the practice clock. It can take
+      // no note-offs either, so its notes are simply forgotten.
       this.port = undefined;
       this.active.clear();
-      this.sounding.clear();
       this.cycle = -1;
       closeOutput(port);
+      // Report after the tick that is still scheduling.
       queueMicrotask(() => {
-        if (this.generation === generation) this.lost();
+        if (this.outputGeneration === generation) this.lost();
       });
     }
   }
-  private send(data: number[], at = performance.now()) {
-    if (!this.port) return;
-    this.lastAt = Math.max(this.lastAt, at);
-    if (at <= performance.now() && !this.queue.length) this.write(data);
-    else {
-      this.queue.push({ data, at, order: this.order++ });
-      if (!this.batching) this.arm();
-    }
+  private noteOff(pitch: number) {
+    this.send([0x80 | this.channel, pitch, 0]);
   }
-  private arm() {
-    if (this.timer !== undefined) clearTimeout(this.timer);
-    this.timer = undefined;
-    if (!this.queue.length || !this.port) return;
-    this.queue.sort((a, b) => a.at - b.at || a.order - b.order);
-    this.timer = setTimeout(
-      () => this.pump(),
-      Math.max(0, Math.ceil(this.queue[0].at - performance.now())),
-    );
+  private sounding(pitch: number) {
+    return [...this.active.values()].filter((note) => note.pitch === pitch);
   }
-  private pump() {
-    this.timer = undefined;
-    if (!this.queue.length || !this.port) return;
-    const now = performance.now(),
-      due = this.queue[0].at;
-    if (now < due) {
-      this.arm();
-      return;
-    }
-    // A stalled callback must not collapse several past notes into one burst.
-    const delay = now - due;
-    if (delay > 0) {
-      for (const message of this.queue) message.at += delay;
-      if (this.clock !== undefined) this.clock += delay;
-      this.lastAt += delay;
-    }
-    while (this.queue.length && this.queue[0].at <= now + 1e-6) {
-      const message = this.queue.shift()!;
-      this.write(message.data);
-      if (!this.port) return;
-    }
-    if (this.finishing && !this.queue.length) {
-      this.stop();
-      return;
-    }
-    this.arm();
-  }
-  private noteOff(pitch: number, at?: number) {
-    this.send([0x80 | this.channel, pitch, 0], at);
-  }
-  private noteOn(note: Note, at?: number) {
-    this.send(
-      [
-        0x90 | this.channel,
-        note.pitch,
-        Math.max(1, Math.min(127, Math.round(note.velocity * 127))),
-      ],
-      at,
-    );
-  }
-  private owners(pitch: number) {
-    return [...this.active.values()].filter((n) => n.pitch === pitch);
-  }
-
-  /** Silence an input reset without replaying the passage's earlier notes. */
+  /** Silence current keys without replaying earlier attacks when Listen continues. */
   silence() {
-    this.clearQueue();
+    const pitches = new Set([...this.active.values()].map((n) => n.pitch));
     this.active.clear();
-    const pitches = [...this.sounding.keys()];
     for (const pitch of pitches) this.noteOff(pitch);
-    this.clock = performance.now();
-    this.lastAt = this.clock;
-    this.finishing = false;
   }
   stop() {
     this.silence();
     this.started.clear();
+    this.deferred.clear();
     this.position = undefined;
-    this.clock = undefined;
     this.cycle = -1;
   }
-  /** Let the final queued notes finish, but keep explicit pause/seek cancellable. */
-  finish() {
-    const at = Math.max(performance.now(), this.lastAt);
-    for (const pitch of new Set([...this.active.values()].map((n) => n.pitch)))
-      this.noteOff(pitch, at);
-    this.active.clear();
-    this.finishing = true;
-    if (!this.queue.length) this.stop();
-  }
+  /** Process every attack crossed by the clock, including notes shorter than a tick. */
   schedule(
     notes: readonly Note[],
     position: number,
     cycle: number,
     held: boolean,
     passStart = position,
-    speed = 1,
   ) {
     if (!this.port) return;
-    let now = performance.now();
-    this.finishing = false;
     if (cycle !== this.cycle) {
-      if (this.cycle >= 0) {
-        const boundary = Math.max(now, this.lastAt);
-        for (const pitch of new Set(
-          [...this.active.values()].map((n) => n.pitch),
-        ))
-          this.noteOff(pitch, boundary);
-        this.clock = boundary;
-      }
-      this.active.clear();
-      this.started.clear();
+      this.stop();
       this.cycle = cycle;
       this.position = passStart;
     }
-    const from = this.position ?? passStart,
-      milliseconds = 1000 / Math.max(0.01, speed);
+    const from = this.position ?? passStart;
     const events: { time: number; on: boolean; note: Note }[] = [];
     const releases = (n: Note) =>
       n.soundEnd < position - 1e-9 || (!held && n.soundEnd <= position);
-    for (const note of this.active.values())
+    for (const note of this.active.values()) {
       if (releases(note))
         events.push({ time: Math.max(from, note.soundEnd), on: false, note });
-    for (const note of notes) {
-      if (this.started.has(note.id) || note.start > position) continue;
-      this.started.add(note.id);
-      if (
-        note.soundEnd <= note.start ||
-        (note.start < from && note.soundEnd <= from)
-      )
+    }
+    const due = notes
+      .filter((n) => !this.started.has(n.id) && n.start <= position)
+      .sort((a, b) => a.start - b.start);
+    /** Each pitch's attack this tick, by its start. */
+    const struck = new Map<number, number>();
+    const deferred = new Set<string>();
+    for (const note of due) {
+      // Seeking restores held notes, but does not replay already-finished
+      // notes; a note that waited last tick is not one of those.
+      const finished =
+        note.start < from &&
+        note.soundEnd <= from &&
+        !this.deferred.has(note.id);
+      if (note.soundEnd <= note.start || finished) {
+        this.started.add(note.id);
         continue;
-      events.push({ time: Math.max(from, note.start), on: true, note });
-      if (releases(note))
-        events.push({ time: Math.max(from, note.soundEnd), on: false, note });
-    }
-    events.sort((a, b) => a.time - b.time || Number(a.on) - Number(b.on));
-    now = performance.now();
-    let base = this.clock ?? now - (position - from) * milliseconds;
-    if (events.length)
-      base += Math.max(
-        0,
-        now - (base + (events[0].time - from) * milliseconds),
-      );
-    this.batching = true;
-    try {
-      for (const { time, on, note } of events) {
-        if (!this.port) return;
-        const at = Math.max(now, base + (time - from) * milliseconds);
-        if (!on) {
-          if (!this.active.delete(note.id)) continue;
-          if (!this.owners(note.pitch).length) this.noteOff(note.pitch, at);
-        } else {
-          const others = this.owners(note.pitch);
-          const unison = others.some(
-            (n) => Math.abs(n.start - note.start) < 1e-6,
-          );
-          if (!unison && others.length) {
-            for (const old of others) this.active.delete(old.id);
-            this.noteOff(note.pitch, at);
-          }
-          this.active.set(note.id, note);
-          if (!unison) this.noteOn(note, at);
-        }
       }
-      this.position = position;
-      this.clock = base + (position - from) * milliseconds;
-      if (held || !this.active.size) this.clock = Math.max(now, this.lastAt);
-    } finally {
-      this.batching = false;
-      this.arm();
+      // One attack per pitch per tick: a later one waits for the next tick,
+      // so the earlier note sounds rather than being cut off at once.
+      const first = struck.get(note.pitch);
+      if (first !== undefined && Math.abs(first - note.start) > 1e-6) {
+        deferred.add(note.id);
+        continue;
+      }
+      struck.set(note.pitch, note.start);
+      this.started.add(note.id);
+      // Its release waits for a later tick: a note crossed whole between two
+      // ticks still sounds for a tick, not as a zero-length on/off pair.
+      events.push({ time: Math.max(from, note.start), on: true, note });
     }
+    this.deferred = deferred;
+    events.sort((a, b) => a.time - b.time || Number(a.on) - Number(b.on));
+    for (const { on, note } of events) {
+      if (!this.port) return;
+      if (!on) {
+        if (!this.active.delete(note.id)) continue;
+        if (!this.sounding(note.pitch).length) this.noteOff(note.pitch);
+        continue;
+      }
+      const others = this.sounding(note.pitch);
+      const unison = others.some(
+        (other) => Math.abs(other.start - note.start) < 1e-6,
+      );
+      if (!unison && others.length) {
+        // Retriggering ended these voices: their old tails cannot own the new key.
+        for (const old of others) this.active.delete(old.id);
+        this.noteOff(note.pitch);
+      }
+      this.active.set(note.id, note);
+      if (!unison && this.port)
+        this.send([
+          0x90 | this.channel,
+          note.pitch,
+          Math.max(1, Math.min(127, Math.round(note.velocity * 127))),
+        ]);
+    }
+    this.position = position;
   }
 }

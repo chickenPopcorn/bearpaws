@@ -43,12 +43,7 @@ vi.mock("../src/midi", () => ({
     status = "disconnected";
     message = "No piano";
     devices = [];
-    duet = {
-      connected: false,
-      stop: vi.fn(),
-      finish: vi.fn(),
-      schedule: vi.fn(),
-    };
+    duet = { connected: false, stop: vi.fn(), schedule: vi.fn() };
     selectOutput = vi.fn(async () => {});
     selectedId = "";
     constructor(callbacks: { onReset(): void; onOutputLost(): void }) {
