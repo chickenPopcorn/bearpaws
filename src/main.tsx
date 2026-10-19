@@ -22,7 +22,7 @@ import { LoopBoundInput } from "./LoopBoundInput";
 import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
-import { collectionForSong, songsInCollection } from "./collections";
+import { bookForSong, songsInBook } from "./books";
 import { BrowserStorageError, CloudSync } from "./cloud";
 import { OpeningStudio, SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
@@ -449,13 +449,11 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
     selectedDevice = studio.midi.devices.find(
       (d) => d.id === studio.midi.selectedId,
     );
-  const collection = collectionForSong(studio.song);
-  const collectionSongs = songsInCollection(studio.songs, collection.id);
-  const songIndex = collectionSongs.findIndex(
-    (song) => song.id === studio.song.id,
-  );
-  const previousSong = collectionSongs[songIndex - 1];
-  const nextSong = collectionSongs[songIndex + 1];
+  const book = bookForSong(studio.song);
+  const bookSongs = songsInBook(studio.songs, book.id);
+  const songIndex = bookSongs.findIndex((song) => song.id === studio.song.id);
+  const previousSong = bookSongs[songIndex - 1];
+  const nextSong = bookSongs[songIndex + 1];
   useEffect(() => {
     studio.init();
     const down = (e: KeyboardEvent) => {
@@ -654,7 +652,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
               </p>
             </div>
             <div className="song-tools">
-              <span className="chip">Shared library</span>
+              <span className="chip">{book.title}</span>
               {studio.song.library?.midi && (
                 <a
                   className="song-midi-download"
@@ -697,9 +695,8 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                     <strong className="fullscreen-song-title">
                       <SongTitle title={studio.song.title} />
                     </strong>
-                    <div className="fullscreen-collection">
-                      {collection.title} · {songIndex + 1} of{" "}
-                      {collectionSongs.length}
+                    <div className="fullscreen-book">
+                      {book.title} · {songIndex + 1} of {bookSongs.length}
                     </div>
                   </div>
                 )}
@@ -789,7 +786,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                   <div
                     className="song-navigation"
                     role="group"
-                    aria-label="Collection navigation"
+                    aria-label="Book navigation"
                   >
                     <button
                       aria-label="Previous song"
@@ -797,7 +794,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                       title={
                         previousSong
                           ? `Previous: ${previousSong.title} (Left arrow)`
-                          : "First song in this collection"
+                          : "First song in this book"
                       }
                       disabled={!previousSong || busy}
                       onClick={() => void navigateSong(previousSong)}
@@ -810,7 +807,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                       title={
                         nextSong
                           ? `Next: ${nextSong.title} (Right arrow)`
-                          : "Last song in this collection"
+                          : "Last song in this book"
                       }
                       disabled={!nextSong || busy}
                       onClick={() => void navigateSong(nextSong)}

@@ -7,12 +7,20 @@ const TIMEOUT_MS = 30000;
 export const LIBRARY_BUCKET = "library";
 export const COLLECTION_IDS = ["classes", "songs", "pops"] as const;
 export type LibraryCollection = (typeof COLLECTION_IDS)[number];
+/** The books of George Bear’s Classes. */
+export const BOOK_IDS = ["recital-3", "lesson-3"] as const;
+export type LibraryBook = (typeof BOOK_IDS)[number];
+/** The book of a classes song that names none. */
+const DEFAULT_BOOK: LibraryBook = "recital-3";
 
 /** One song in index.json. Paths are relative to the bucket. */
 export interface LibraryEntry {
   id: string;
   title: string;
+  /** The app shows only `classes`; the bucket keeps the others. */
   collection: LibraryCollection;
+  /** The class book of a `classes` song: recital-3 when left out. */
+  book?: LibraryBook;
   /**
    * The song in the app's format, as JSON: songs/<id>.json. Published paths
    * end in the file's content hash (songs/<id>.<hash>.json), so a changed
@@ -55,6 +63,11 @@ export function validateIndex(value: unknown): LibraryIndex {
     if (!text(entry.title)) fail(where, "missing title");
     if (!COLLECTION_IDS.includes(entry.collection as LibraryCollection))
       fail(where, `collection must be one of ${COLLECTION_IDS.join(", ")}`);
+    if (
+      entry.book !== undefined &&
+      !BOOK_IDS.includes(entry.book as LibraryBook)
+    )
+      fail(where, `book must be one of ${BOOK_IDS.join(", ")}`);
     // Paths name the song's own files in songs/, optionally with a content
     // hash, so nothing can point outside the library folder.
     const path = (ext: string) =>
@@ -272,10 +285,11 @@ export function validateSong(value: unknown, id: string): Song {
 }
 
 /**
- * Load every library song. `url` turns a bucket path into its public URL.
- * The index is revalidated on every load. Song files are named after their
- * content hash and served with a one-year cache, so the browser reuses them
- * without asking until a song changes and gets a new name.
+ * Load the songs of George Bear’s Classes, the `classes` collection. `url`
+ * turns a bucket path into its public URL. The index is revalidated on every
+ * load. Song files are named after their content hash and served with a
+ * one-year cache, so the browser reuses them without asking until a song
+ * changes and gets a new name.
  */
 export async function loadLibrary(
   url: (path: string) => string,
@@ -304,14 +318,17 @@ export async function loadLibrary(
     }
   };
   const index = validateIndex(await get("index.json", true));
+  // Earlier builds still show the other collections, so they stay in the bucket.
+  const classes = index.songs.filter((entry) => entry.collection === "classes");
+  if (!classes.length) fail("index.json", "George Bear’s Classes has no songs");
   return Promise.all(
-    index.songs.map(async (entry) => {
+    classes.map(async (entry) => {
       const song = validateSong(await get(entry.song), entry.id);
       return {
         ...song,
         title: entry.title,
         library: {
-          collection: entry.collection,
+          book: entry.book ?? DEFAULT_BOOK,
           midi: entry.midi ? url(entry.midi) : undefined,
         },
       };

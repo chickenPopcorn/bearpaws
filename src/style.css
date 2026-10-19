@@ -321,6 +321,12 @@ span.device {
 .library-section-title {
   min-width: 0;
 }
+.library-section-title small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
 .library-section-toggle svg {
   width: 12px;
   height: 12px;
@@ -660,7 +666,7 @@ h1 {
   flex: 1 1 320px;
   min-width: 150px;
 }
-.fullscreen-collection {
+.fullscreen-book {
   color: var(--muted);
   font-size: var(--text-xs);
   margin-top: 2px;
