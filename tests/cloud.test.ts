@@ -113,9 +113,12 @@ function client(b: Backend) {
 
 const stored = new Map<string, string>();
 let storageBlocked = false;
+/** A key browser storage refuses, as when it is nearly full. */
+let refusedKey = "";
 beforeEach(() => {
   stored.clear();
   storageBlocked = false;
+  refusedKey = "";
   vi.stubGlobal("localStorage", {
     get length() {
       return stored.size;
@@ -124,6 +127,8 @@ beforeEach(() => {
     getItem: (key: string) => stored.get(key) ?? null,
     setItem: (key: string, value: string) => {
       if (storageBlocked) throw new DOMException("Blocked", "SecurityError");
+      if (key === refusedKey)
+        throw new DOMException("Full", "QuotaExceededError");
       stored.set(key, value);
     },
     removeItem: (key: string) => void stored.delete(key),
@@ -214,6 +219,59 @@ describe("account sync", () => {
         [{ user_id: USER, song_id: "only-here", data: { best: 4 } }],
       ],
     ]);
+  });
+
+  it("adopts again after a first pull that could not save its marker", async () => {
+    const b = backend();
+    write("progress:only-here", { best: 4 });
+    refusedKey = "cadence:unsynced";
+    await expect(new CloudSync(client(b), USER).pull()).rejects.toBeInstanceOf(
+      BrowserStorageError,
+    );
+    // Not yet the owner, so the retry still adopts this browser's progress.
+    expect(read("owner", null)).toBeNull();
+    refusedKey = "";
+    await new CloudSync(client(b), USER).pull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read("progress:only-here", null)).toEqual({ best: 4 });
+    expect(b.upserts).toEqual([
+      [
+        "progress",
+        [{ user_id: USER, song_id: "only-here", data: { best: 4 } }],
+      ],
+    ]);
+  });
+
+  it("keeps another tab's unconfirmed changes in the shared marker", async () => {
+    const b = backend();
+    const tabA = new CloudSync(client(b), USER);
+    const tabB = new CloudSync(client(b), USER);
+    const session = (id: string) => ({
+      id,
+      day: "2026-10-18",
+      startedAt: "2026-10-18T10:00:00.000Z",
+      seconds: 30,
+      songs: { ode: 30 },
+    });
+    b.failWrites = true;
+    tabA.progress("a", { best: 1 } as never);
+    tabA.practice(session("pa"));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(unsynced()).toMatchObject({ progress: ["a"], practice: ["pa"] });
+    b.failWrites = false;
+    tabB.progress("b", { best: 2 } as never);
+    tabB.practice(session("pb"));
+    expect(unsynced()).toMatchObject({
+      progress: ["a", "b"],
+      practice: ["pa", "pb"],
+    });
+    // Tab B's upload confirms only its own changes.
+    await tabB.flush();
+    expect(unsynced()).toMatchObject({ progress: ["a"], practice: ["pa"] });
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(unsynced()).toMatchObject({ progress: [], practice: [] });
+    tabA.stop();
+    tabB.stop();
   });
 
   it("clears another account's settings and progress before loading this one", async () => {

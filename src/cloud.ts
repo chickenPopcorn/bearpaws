@@ -250,9 +250,10 @@ export class CloudSync implements SyncHooks {
       "practice",
       [...sessions.values()].filter((session) => session.day >= since),
     );
+    // The marker goes first: once the owner is recorded, the next pull no
+    // longer adopts, and only the marker would keep what this one adopted.
+    if (!this.saveUnsynced({ exact: true })) throw new BrowserStorageError();
     store("owner", this.userId);
-    // Without the marker, the next pull would drop what this one adopted.
-    if (!this.saveUnsynced()) throw new BrowserStorageError();
     this.error = "";
     if (this.pending) this.schedule(0);
   }
@@ -327,22 +328,42 @@ export class CloudSync implements SyncHooks {
     this.schedule(0);
   }
 
-  /** Keep the unconfirmed changes in browser storage. False if it is full. */
-  private saveUnsynced(): boolean {
+  /**
+   * Keep the unconfirmed changes in browser storage. False if it is full.
+   * Other tabs signed in to the same account share the marker, so this adds
+   * what this sync holds and removes only what it has just `confirmed`;
+   * `exact` replaces it, for pull(), which decides what is unconfirmed.
+   */
+  private saveUnsynced({
+    confirmed,
+    exact = false,
+  }: { confirmed?: Required<Unsynced>; exact?: boolean } = {}): boolean {
     const flight = this.inFlight;
+    const stored: Unsynced = exact ? {} : read<Unsynced>("unsynced", {});
+    const kept = (ids: string[] | undefined, done: string[] | undefined) =>
+      (ids ?? []).filter((id) => !done?.includes(id));
     return write("unsynced", {
-      settings: !!this.pendingSettings || !!flight?.settings,
+      settings:
+        !!this.pendingSettings ||
+        !!flight?.settings ||
+        (!!stored.settings && !confirmed?.settings),
       progress: [
         ...new Set([
+          ...kept(stored.progress, confirmed?.progress),
           ...this.pendingProgress.keys(),
           ...(flight?.progress ?? []),
         ]),
       ],
       deleted: [
-        ...new Set([...this.pendingDeletes, ...(flight?.deleted ?? [])]),
+        ...new Set([
+          ...kept(stored.deleted, confirmed?.deleted),
+          ...this.pendingDeletes,
+          ...(flight?.deleted ?? []),
+        ]),
       ],
       practice: [
         ...new Set([
+          ...kept(stored.practice, confirmed?.practice),
           ...this.pendingPractice.keys(),
           ...(flight?.practice ?? []),
         ]),
@@ -459,7 +480,18 @@ export class CloudSync implements SyncHooks {
             this.pendingPractice.set(session.id, session);
       }
       if (this.stopped) return;
-      this.saveUnsynced();
+      this.saveUnsynced(
+        ok
+          ? {
+              confirmed: {
+                settings: !!settings,
+                progress: progress.map(([id]) => id),
+                deleted,
+                practice: practice.map((session) => session.id),
+              },
+            }
+          : {},
+      );
       if (ok) this.setError("");
       else {
         this.setError("Changes could not be saved to your account. Retrying.");
