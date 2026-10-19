@@ -1,5 +1,9 @@
 # Paw Pal · MIDI piano practice
 
+[![Tests](https://github.com/chickenPopcorn/pawpal/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/chickenPopcorn/pawpal/actions/workflows/checks.yml)
+[![Code quality](https://github.com/chickenPopcorn/pawpal/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/chickenPopcorn/pawpal/actions/workflows/quality.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fpiano.pollos.us%2Fbadges%2Fcoverage.json)](https://github.com/chickenPopcorn/pawpal/actions/workflows/pages.yml)
+
 A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, browser storage, and Supabase accounts with Google sign-in. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
 
 ## Run locally
@@ -17,6 +21,9 @@ Open the printed local URL, normally `http://localhost:5173`. Desktop Chrome or 
 npm test               # Deterministic engine, MIDI lifecycle, controller, storage, audio/Canvas checks
 python3 -m unittest discover -s tests -p 'test_*.py' # Offline sample importer checks
 npm run test:watch     # Watch tests
+npm run test:coverage  # Tests with a coverage report in coverage/; fails below the floor in vite.config.ts
+npm run lint           # ESLint: TypeScript and React hook rules
+npm run format:check   # Check formatting without writing
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173
 npm run example        # Regenerate the original downloadable MIDI exercise

@@ -1136,7 +1136,7 @@ async function openSession(userId: string, email: string, name = "") {
 }
 
 /** Take the studio over from another tab. */
-async function useHere() {
+async function takeOverHere() {
   const userId = currentUser;
   if (!userId) return;
   await claim.claim(true);
@@ -1297,7 +1297,7 @@ function Root() {
     return (
       <OpeningStudio
         error="Paw Pal is open in another tab. Practice there, or move it here."
-        action={{ label: "Use here", onClick: () => void useHere() }}
+        action={{ label: "Use here", onClick: () => void takeOverHere() }}
       />
     );
   if (current.status === "failed")
