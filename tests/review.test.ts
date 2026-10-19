@@ -205,6 +205,37 @@ describe("teacher duet in the waterfall", () => {
     // C2 is now on the keyboard, so the teacher's bass is visible.
     expect(range(fixture, true)).toEqual([36, 84]);
   });
+
+  it("draws the duet from what is left of the shared budget, once per outline", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const students = Array.from({ length: MAX_VISIBLE_NOTES - 2 }, (_, i) =>
+      note(`s${i}`, 60 + (i % 12), 1 + i * 0.0005, 2),
+    );
+    const teacher = [
+      note("t0", 40, 1, 2, 2),
+      note("t0-again", 40, 1, 2, 2),
+      note("t1", 41, 1, 2, 2),
+      note("t2", 42, 1, 2, 2),
+    ];
+    const fixture = { ...song(students), duet: { octaves: 1, notes: teacher } };
+    const { canvas, noteFills } = drawingCanvas();
+    draw(
+      canvas,
+      fixture,
+      students,
+      0,
+      new MidiState(),
+      new Practice(students),
+      false,
+      false,
+      false,
+      teacher,
+    );
+    const duetFills = noteFills.filter(({ color }) => color === duetColor);
+    // Two shapes were left: the repeated outline counts once, and "t2" waits.
+    expect(duetFills).toHaveLength(2);
+    expect(noteFills).toHaveLength(MAX_VISIBLE_NOTES);
+  });
 });
 
 describe("review regressions", () => {

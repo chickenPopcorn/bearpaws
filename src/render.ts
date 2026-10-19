@@ -308,6 +308,17 @@ export function draw(
     // Tracks assigned to Skip remain excluded; disabled practice hands provide context.
     if (hand === "left" || hand === "right") collect(n, false);
   }
+  // The duet takes what is left of the same budget, one shape per outline.
+  const duetNotes: Note[] = [];
+  for (const n of duet) {
+    if (rendered.size >= MAX_VISIBLE_NOTES) break;
+    if (!geometry.has(n.pitch) || n.end < position || n.start > position + 5)
+      continue;
+    const shape = `duet:${n.pitch}:${n.start}:${n.end}`;
+    if (rendered.has(shape)) continue;
+    rendered.add(shape);
+    duetNotes.push(n);
+  }
   c.save();
   c.beginPath();
   c.rect(0, 0, width, fall);
@@ -427,12 +438,8 @@ export function draw(
   // The duet goes behind both hands: it is heard, never played or scored.
   c.fillStyle = duetColor;
   c.globalAlpha = DUET_ALPHA;
-  let duetDrawn = 0;
-  for (const n of duet) {
-    if (n.end < position || n.start > position + 5) continue;
-    if (++duetDrawn > MAX_VISIBLE_NOTES) break;
-    const k = geometry.get(n.pitch);
-    if (!k) continue;
+  for (const n of duetNotes) {
+    const k = geometry.get(n.pitch)!;
     const h = Math.max(8, (n.end - n.start) * px);
     c.beginPath();
     c.roundRect(
