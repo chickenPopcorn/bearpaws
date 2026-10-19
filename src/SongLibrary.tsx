@@ -24,14 +24,12 @@ export const SongLibrary = memo(function SongLibrary({
   selected,
   savedSelection,
   onSelect,
-  onImport,
 }: {
   songs: Song[];
   selected: string;
   /** The song restored at startup, which may load after the first render. */
   savedSelection?: string;
   onSelect(song: Song): void;
-  onImport(): void;
 }) {
   const [query, setQuery] = useState("");
   // Sections start folded, even for the restored song; a later song change
@@ -124,9 +122,7 @@ export const SongLibrary = memo(function SongLibrary({
                     <small>
                       {song.lesson
                         ? `${song.lesson.level} · ${song.lesson.bpm} BPM · Fingering`
-                        : song.source
-                          ? "Full piano · No finger numbers"
-                          : "Imported MIDI · On this browser"}
+                        : "Full piano · No finger numbers"}
                     </small>
                   </button>
                 ))}
@@ -134,15 +130,10 @@ export const SongLibrary = memo(function SongLibrary({
                   <p className="library-empty">
                     {term
                       ? "No matches in this section."
-                      : "Songs you add will appear here."}
+                      : "No songs here yet."}
                   </p>
                 )}
               </div>
-              {group.id === "songs" && (
-                <button className="import" onClick={onImport}>
-                  ＋ Import MIDI
-                </button>
-              )}
             </div>
           </section>
         );

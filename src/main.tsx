@@ -1,6 +1,5 @@
 import React, {
   memo,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -307,11 +306,6 @@ const PassagePanel = memo(function PassagePanel({
           {w}
         </p>
       ))}
-      {!song.library && (
-        <button className="text-button" onClick={() => void studio.remove()}>
-          Remove this local song
-        </button>
-      )}
     </section>
   );
 });
@@ -444,8 +438,6 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [connectTried, setConnectTried] = useState(false),
     [busy, setBusy] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
-  const openImport = useCallback(() => file.current?.click(), []);
   const fullscreen = usePianoFullscreen(() => {
     if (!studio.transport.playing && !busy) void startPlayback();
   });
@@ -465,7 +457,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   const previousSong = collectionSongs[songIndex - 1];
   const nextSong = collectionSongs[songIndex + 1];
   useEffect(() => {
-    void studio.init();
+    studio.init();
     const down = (e: KeyboardEvent) => {
       if (
         (e.target as HTMLElement).closest(
@@ -626,24 +618,8 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
             selected={studio.song.id}
             savedSelection={studio.savedSelection}
             onSelect={selectSong}
-            onImport={openImport}
           />
-          <input
-            ref={file}
-            className="sr-only"
-            type="file"
-            accept=".mid,.midi,audio/midi,audio/x-midi"
-            aria-label="Import MIDI file"
-            onChange={(e) => {
-              if (e.target.files?.[0]) void studio.import(e.target.files[0]);
-              e.target.value = "";
-            }}
-          />
-          <p className="privacy">
-            Imported songs stay on this browser.
-            <br />
-            Progress syncs to your account.
-          </p>
+          <p className="privacy">Progress syncs to your account.</p>
           <div className="side-footer">
             <strong>One phrase at a time.</strong>Slow it down.
             <br />
@@ -673,16 +649,12 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                 ) : studio.song.lesson ? (
                   `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
                 ) : (
-                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`
+                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events`
                 )}
               </p>
             </div>
             <div className="song-tools">
-              <span className="chip">
-                {studio.song.library
-                  ? "Shared library"
-                  : "Saved on this browser"}
-              </span>
+              <span className="chip">Shared library</span>
               {studio.song.library?.midi && (
                 <a
                   className="song-midi-download"
@@ -1055,18 +1027,6 @@ async function openSession(userId: string, email: string) {
   cloud = sync;
   studio = new Studio(library, sync);
   sync.onChange = () => studio.emit();
-  // A saved import loads from browser storage. While the page as it was left
-  // is on screen, wait briefly for it, so the first render does not show
-  // another song.
-  if (
-    snapshotOnScreen &&
-    !library.some((song) => song.id === studio.savedSelection)
-  )
-    await Promise.race([
-      studio.init(),
-      new Promise((resolve) => setTimeout(resolve, 1000)),
-    ]);
-  if (currentUser !== userId) return;
   readyGate = { status: "ready", userId, email };
   setGate(readyGate);
 }

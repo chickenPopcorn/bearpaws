@@ -1,4 +1,3 @@
-import type { Song } from "./song";
 import { SPEED_PERCENT, type Mode } from "./engine";
 import {
   DEFAULT_PIANO_SOUND,
@@ -140,68 +139,10 @@ export function progress(id: string, duration: number): Progress {
         : null,
   };
 }
-export async function songId(bytes: Uint8Array) {
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    bytes as Uint8Array<ArrayBuffer>,
-  );
-  return [...new Uint8Array(hash)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-// IndexedDB holds imported songs, normalized. They stay on this browser: no
-// file upload, analytics or network requests.
-const db = () =>
-  new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open("cadence-library", 1);
-    request.onupgradeneeded = () =>
-      request.result.createObjectStore("songs", { keyPath: "id" });
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-/**
- * Settle on the transaction, not the request: a commit can still fail after a
- * successful request (for example, a full disk), and only fires `abort`.
- */
-async function transact<T>(
-  mode: IDBTransactionMode,
-  run: (songs: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  const database = await db();
-  return new Promise<T>((resolve, reject) => {
-    try {
-      const tx = database.transaction("songs", mode);
-      const request = run(tx.objectStore("songs"));
-      tx.oncomplete = () => {
-        database.close();
-        resolve(request.result);
-      };
-      // Request errors bubble to the transaction and then abort it.
-      tx.onabort = () => {
-        database.close();
-        reject(
-          tx.error ?? new DOMException("Transaction aborted", "AbortError"),
-        );
-      };
-    } catch (error) {
-      database.close();
-      reject(error);
-    }
-  });
-}
-export function library(): Promise<Song[]> {
-  return transact("readonly", (songs) => songs.getAll());
-}
-export async function saveSong(song: Song) {
-  await transact("readwrite", (songs) => songs.put(song));
-}
-export async function deleteSong(id: string) {
-  await transact("readwrite", (songs) => songs.delete(id));
-}
 /**
  * Forget the signed-in account's settings and progress on this browser, such
- * as at sign-out. Imported songs belong to the browser and stay, and so do
- * other accounts' unsent changes (`stash:<user id>`), kept for their owners.
+ * as at sign-out. Other accounts' unsent changes (`stash:<user id>`) stay,
+ * kept for their owners.
  */
 export function clearAccountData() {
   try {
