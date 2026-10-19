@@ -1,5 +1,6 @@
 import { parseMidi } from "midi-file";
 import { createBeatClock, lastIndexAtOrBefore } from "./timeline";
+import type { LibraryBook } from "./library";
 export type Hand = "left" | "right" | "off";
 export type Finger = 1 | 2 | 3 | 4 | 5;
 export interface Note {
@@ -73,7 +74,7 @@ export interface Song {
   };
   /** Set on songs from the shared library bucket. */
   library?: {
-    collection: "classes" | "songs" | "pops";
+    book: LibraryBook;
     /** Public URL of the song's MIDI file, for its Download button. */
     midi?: string;
   };

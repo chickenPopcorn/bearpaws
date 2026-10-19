@@ -5,7 +5,9 @@
 //
 // ./library holds index.json and songs/<id>.json + songs/<id>.mid. To add a
 // song, put its MIDI file at songs/<id>.mid and list it in index.json with an
-// id, title and collection: push converts the MIDI into songs/<id>.json.
+// id, title and collection: push converts the MIDI into songs/<id>.json. The
+// app shows only the `classes` collection, George Bear's Classes; a song there
+// may name its book (recital-3, the default, or lesson-3).
 // The bucket names each file after its content hash (songs/<id>.<hash>.json),
 // so browsers can keep it for a year: a changed song gets a new name. A file
 // the index stops listing is removed 24 hours later (see retired.json).

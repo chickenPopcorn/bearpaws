@@ -5,7 +5,7 @@ release, key release noise, pedal noise and pseudo pedal resonance.
 
 ## Automated checks
 
-- `npm test`: 783 tests across 34 suites passed.
+- `npm test`: 786 tests across 34 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: the offline importer tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
@@ -24,12 +24,13 @@ seeking geometry and label bounds; hand-guide preferences; fullscreen fallback,
 Escape, focus restoration, tab trapping and audio-before-fullscreen ordering.
 Imported 3/4, 6/8 and changing meters are verified through parsing, score layout,
 displayed signatures, keyboard seeking and the waterfall beat grid.
-The library checks cover collection search and selection, native keyboard
+The library checks cover book sections, search and selection, native keyboard
 activation, score-slider shortcuts, loop preference persistence, and search
 casing remains consistent across browser locales.
-The 27 library songs live in the Supabase `library` bucket. Tests check the
-library index and song validation, loading with content hashes, collections,
-and clear failures for missing files, using three fixture songs. `npm run
+The 27 library songs live in the Supabase `library` bucket; the app loads the
+12 in George Bear’s Classes. Tests check the library index and song validation,
+loading only the classes with content hashes, each song's book, and clear
+failures for missing files or an empty class list, using three fixture songs. `npm run
 library:push` validates every song before uploading; a round trip through
 `library:pull` returned identical files, and adding a song from a MIDI file
 converted, uploaded and later removed it.

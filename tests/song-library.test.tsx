@@ -3,6 +3,7 @@ import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SongLibrary } from "../src/SongLibrary";
+import type { LibraryBook } from "../src/library";
 import type { Song } from "../src/song";
 import { fixtureLibrary } from "./fixtures/library";
 
@@ -11,28 +12,28 @@ const base = fixtureLibrary()[0];
 const song = (
   id: string,
   title: string,
-  composer?: string,
-  collection?: "classes" | "songs" | "pops",
+  composer: string | undefined,
+  book: LibraryBook,
 ): Song => ({
   ...base,
   id,
   title,
   lesson: composer ? { ...base.lesson!, composer } : undefined,
-  library: collection ? { collection } : undefined,
+  library: { book },
 });
 const songs = [
   song(
     "cadence-dancing-raindrops-v1",
     "Dancing Raindrops",
     "Émile Example",
-    "classes",
+    "recital-3",
   ),
-  song("cadence-ode-to-joy-v1", "Frère Jacques", "Traditional", "songs"),
-  song("bearpaws-jasmine-flower-v1", "Jasmine Flower", "Traditional", "pops"),
-  song("imported-waltz", "My Waltz"),
+  song("frere-jacques", "Frère Jacques", "Traditional", "recital-3"),
+  song("jasmine-flower", "Jasmine Flower", "Traditional", "lesson-3"),
+  song("my-waltz", "My Waltz", undefined, "recital-3"),
 ];
 const fullPiano: Song = {
-  ...song("bearpaws-an-jing-v1", "安静 · 周杰伦", undefined, "pops"),
+  ...song("an-jing", "安静 · 周杰伦", undefined, "lesson-3"),
   source: {
     composer: "周杰伦 · Jay Chou",
     description: "Full piano arrangement without suggested finger numbers.",
@@ -93,20 +94,41 @@ afterEach(async () => {
 });
 
 describe("song library", () => {
-  it("shows every collection and identifies the selected song", async () => {
+  it("shows George Bear’s Classes, one section per book, and the selected song", async () => {
     await render();
+    expect(container.querySelector(".nav-label")?.textContent).toBe(
+      "George Bear’s Classes 4",
+    );
+    expect(
+      Array.from(
+        container.querySelectorAll(".library-section-title"),
+        (title) => title.textContent,
+      ),
+    ).toEqual([
+      "Music for Little MozartsMusic Recital Book 3",
+      "Music for Little MozartsMusic Lesson Book 3",
+    ]);
     expect(titles()).toEqual([
       "Dancing Raindrops",
       "Frère Jacques",
       "My Waltz",
       "Jasmine Flower",
     ]);
-    expect(container.querySelectorAll(".library-section")).toHaveLength(3);
     expect(
       container.querySelector(".song[aria-pressed=true]")?.textContent,
     ).toContain("Frère Jacques");
-    expect(container.querySelector(".nav-label span")?.textContent).toBe("4");
     expect(container.textContent).not.toContain("Import MIDI");
+  });
+
+  it("shows a book with no songs yet", async () => {
+    await render({
+      songs: songs.filter((s) => s.library?.book === "recital-3"),
+    });
+    expect(groupToggle("lesson-3").textContent).toMatch(/Lesson Book 3 *0$/);
+    await click(groupToggle("lesson-3"));
+    expect(groupContent("lesson-3").textContent).toBe(
+      "No songs in this book yet.",
+    );
   });
 
   it.each([
@@ -139,6 +161,7 @@ describe("song library", () => {
         "jingle-bells",
         "Jingle Bells",
         "James Lord Pierpont",
+        "recital-3",
       );
       await render({ songs: [jingle], selected: jingle.id });
       await type("JINGLE");
@@ -161,7 +184,7 @@ describe("song library", () => {
   it("labels source arrangements as full piano without suggesting finger numbers", async () => {
     await render({ songs: [fullPiano], selected: fullPiano.id });
     const button =
-      groupContent("pops").querySelector<HTMLButtonElement>(".song")!;
+      groupContent("lesson-3").querySelector<HTMLButtonElement>(".song")!;
     expect(button.querySelector("small")?.textContent).toBe(
       "Full piano · No finger numbers",
     );
@@ -173,9 +196,9 @@ describe("song library", () => {
   it("keeps a matching source-composer search when revealing the selected arrangement", async () => {
     await render({ songs: [...songs, fullPiano] });
     await type("JAY CHOU");
-    await click(groupToggle("pops"));
+    await click(groupToggle("lesson-3"));
     await render({ selected: fullPiano.id });
-    expect(groupContent("pops").hidden).toBe(false);
+    expect(groupContent("lesson-3").hidden).toBe(false);
     expect(search().value).toBe("JAY CHOU");
     expect(titles()).toEqual([fullPiano.title]);
     expect(
@@ -186,9 +209,9 @@ describe("song library", () => {
   it("clears an unrelated search when revealing a selected source arrangement", async () => {
     await render({ songs: [...songs, fullPiano] });
     await type("waltz");
-    await click(groupToggle("pops"));
+    await click(groupToggle("lesson-3"));
     await render({ selected: fullPiano.id });
-    expect(groupContent("pops").hidden).toBe(false);
+    expect(groupContent("lesson-3").hidden).toBe(false);
     expect(search().value).toBe("");
     expect(titles()).toContain(fullPiano.title);
   });
@@ -197,16 +220,16 @@ describe("song library", () => {
     await render({ selected: songs[0].id, savedSelection: songs[2].id });
     // The saved song loads after the first render, as the library does.
     await render({ selected: songs[2].id });
-    expect(groupContent("pops").hidden).toBe(true);
-    expect(groupContent("classes").hidden).toBe(true);
+    expect(groupContent("lesson-3").hidden).toBe(true);
+    expect(groupContent("recital-3").hidden).toBe(true);
     await render({ selected: songs[0].id });
-    expect(groupContent("classes").hidden).toBe(false);
-    expect(groupContent("pops").hidden).toBe(true);
+    expect(groupContent("recital-3").hidden).toBe(false);
+    expect(groupContent("lesson-3").hidden).toBe(true);
   });
 
-  it("starts with collections folded, toggles each one, and opens all when searching", async () => {
+  it("starts with books folded, toggles each one, and opens all when searching", async () => {
     await render();
-    for (const group of ["classes", "songs", "pops"]) {
+    for (const group of ["recital-3", "lesson-3"]) {
       expect(groupToggle(group).getAttribute("aria-expanded")).toBe("false");
       expect(groupContent(group).hidden).toBe(true);
       await click(groupToggle(group));
@@ -216,7 +239,7 @@ describe("song library", () => {
       expect(groupContent(group).hidden).toBe(true);
     }
     await type("traditional");
-    for (const group of ["classes", "songs", "pops"]) {
+    for (const group of ["recital-3", "lesson-3"]) {
       expect(groupToggle(group).getAttribute("aria-expanded")).toBe("true");
       expect(groupContent(group).hidden).toBe(false);
     }
@@ -226,9 +249,9 @@ describe("song library", () => {
   it("reveals an externally selected song even if its group and search hid it", async () => {
     await render();
     await type("frere");
-    await click(groupToggle("pops"));
+    await click(groupToggle("lesson-3"));
     await render({ selected: songs[2].id });
-    expect(groupContent("pops").hidden).toBe(false);
+    expect(groupContent("lesson-3").hidden).toBe(false);
     expect(search().value).toBe("");
     expect(titles()).toContain("Jasmine Flower");
     expect(
@@ -255,7 +278,7 @@ describe("song library", () => {
   it("dispatches selection with the selected song object", async () => {
     await render();
     const raindrops = container.querySelector<HTMLButtonElement>(
-      "#library-classes .song",
+      "#library-recital-3 .song",
     )!;
     await click(raindrops);
     expect(props.onSelect).toHaveBeenCalledExactlyOnceWith(songs[0]);
@@ -269,7 +292,7 @@ describe("song library", () => {
       container.querySelectorAll(".library-empty"),
       (element) => element.textContent,
     );
-    expect(messages).toEqual(Array(3).fill("No matches in this section."));
+    expect(messages).toEqual(Array(2).fill("No matches in this book."));
     await type("");
     expect(titles()).toHaveLength(songs.length);
   });
@@ -277,6 +300,11 @@ describe("song library", () => {
   it("shows an empty-library message", async () => {
     await render({ songs: [] });
     expect(titles()).toEqual([]);
-    expect(container.textContent).toContain("No songs here yet.");
+    expect(
+      Array.from(
+        container.querySelectorAll(".library-empty"),
+        (element) => element.textContent,
+      ),
+    ).toEqual(Array(2).fill("No songs in this book yet."));
   });
 });

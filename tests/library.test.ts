@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadLibrary, validateIndex, validateSong } from "../src/library";
-import { collectionForSong } from "../src/collections";
+import {
+  BOOK_IDS,
+  loadLibrary,
+  validateIndex,
+  validateSong,
+} from "../src/library";
+import { bookForSong, books } from "../src/books";
 import data from "./fixtures/library-songs.json";
 import type { Song } from "../src/song";
 
@@ -33,6 +38,10 @@ describe("song library", () => {
     [
       { version: 1, songs: [{ ...index().songs[0], collection: "jazz" }] },
       /collection must be one of/,
+    ],
+    [
+      { version: 1, songs: [{ ...index().songs[0], book: "primer-1" }] },
+      /book must be one of/,
     ],
     [
       { version: 1, songs: [{ ...index().songs[0], id: "../escape" }] },
@@ -216,9 +225,12 @@ describe("song library", () => {
     expect(() => validateSong(change(ode()), ode().id)).toThrow(problem);
   });
 
-  it("loads every song with its title, collection and download", async () => {
+  it("loads only George Bear’s Classes, each song with its book and download", async () => {
+    const classes = index();
+    // Five O'Clock names its book; Dancing Raindrops does not.
+    Object.assign(classes.songs[2], { book: "lesson-3" });
     const files = new Map<string, unknown>([
-      [url("index.json"), index()],
+      [url("index.json"), classes],
       ...fixtures.map(
         ({ song }) =>
           [url(`songs/${song.id}.0123456789abcdef.json`), song] as const,
@@ -231,14 +243,21 @@ describe("song library", () => {
       });
     });
     const songs = await loadLibrary(url, fetcher as typeof fetch);
-    expect(songs.map((song) => song.id)).toEqual(
-      fixtures.map(({ song }) => song.id),
-    );
-    expect(songs[1].library).toEqual({
-      collection: "classes",
+    // Ode to Joy is in another collection, so it is not even downloaded.
+    expect(fixtures[0].collection).toBe("songs");
+    expect(songs.map((song) => song.id)).toEqual([
+      fixtures[1].song.id,
+      fixtures[2].song.id,
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(songs[0].library).toEqual({
+      book: "recital-3",
       midi: url(`songs/${fixtures[1].song.id}.fedcba9876543210.mid`),
     });
-    expect(collectionForSong(songs[1]).id).toBe("classes");
+    expect(songs.map((song) => bookForSong(song).id)).toEqual([
+      "recital-3",
+      "lesson-3",
+    ]);
     // The index is always revalidated. Hashed song files use the browser's
     // normal cache, which keeps them for the year the bucket allows.
     expect(fetcher).toHaveBeenCalledWith(
@@ -249,6 +268,15 @@ describe("song library", () => {
       String(input).endsWith(".0123456789abcdef.json"),
     ) as unknown as [string, RequestInit];
     expect(songCall[1].cache).toBeUndefined();
+  });
+
+  it("fails clearly when George Bear’s Classes has no songs", async () => {
+    const others = index();
+    for (const entry of others.songs) entry.collection = "songs";
+    const fetcher = vi.fn(async () => new Response(JSON.stringify(others)));
+    await expect(loadLibrary(url, fetcher as typeof fetch)).rejects.toThrow(
+      /George Bear’s Classes has no songs/,
+    );
   });
 
   it("fails clearly when a song file is missing", async () => {
@@ -284,10 +312,9 @@ describe("song library", () => {
     }
   });
 
-  it("puts imported songs in Papa Bear's Collections", () => {
-    expect(collectionForSong({ ...ode(), library: undefined }).id).toBe(
-      "songs",
-    );
-    expect(collectionForSong(undefined).id).toBe("songs");
+  it("puts a song without a book in Recital Book 3", () => {
+    expect(books.map((book) => book.id)).toEqual([...BOOK_IDS]);
+    expect(bookForSong({ ...ode(), library: undefined }).id).toBe("recital-3");
+    expect(bookForSong(undefined).id).toBe("recital-3");
   });
 });

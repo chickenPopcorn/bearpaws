@@ -1,10 +1,6 @@
 import { memo, useEffect, useEffectEvent, useRef, useState } from "react";
-import {
-  collections,
-  collectionForSong,
-  songsInCollection,
-  type CollectionId,
-} from "./collections";
+import { books, bookForSong, CLASSES_TITLE, songsInBook } from "./books";
+import type { LibraryBook } from "./library";
 import type { Song } from "./song";
 
 const searchText = (text: string) =>
@@ -13,9 +9,9 @@ const songMatches = (song: Song, term: string) =>
   searchText(
     `${song.title} ${song.lesson?.composer ?? song.source?.composer ?? ""}`,
   ).includes(term);
-const allSections = (open: boolean) =>
-  Object.fromEntries(collections.map(({ id }) => [id, open])) as Record<
-    CollectionId,
+const allBooks = (open: boolean) =>
+  Object.fromEntries(books.map(({ id }) => [id, open])) as Record<
+    LibraryBook,
     boolean
   >;
 
@@ -32,17 +28,17 @@ export const SongLibrary = memo(function SongLibrary({
   onSelect(song: Song): void;
 }) {
   const [query, setQuery] = useState("");
-  // Sections start folded, even for the restored song; a later song change
-  // opens that song's section.
-  const [expanded, setExpanded] = useState(() => allSections(false));
+  // Books start folded, even for the restored song; a later song change opens
+  // that song's book.
+  const [expanded, setExpanded] = useState(() => allBooks(false));
   const startup = useRef<{ initial: string; saved?: string } | undefined>({
     initial: selected,
     saved: savedSelection,
   });
   const revealSelection = useEffectEvent(() => {
     const song = songs.find((song) => song.id === selected);
-    const group = collectionForSong(song).id;
-    setExpanded((current) => ({ ...current, [group]: true }));
+    const book = bookForSong(song).id;
+    setExpanded((current) => ({ ...current, [book]: true }));
     setQuery((current) =>
       song && !songMatches(song, searchText(current.trim())) ? "" : current,
     );
@@ -62,14 +58,14 @@ export const SongLibrary = memo(function SongLibrary({
     revealSelection();
   }, [selected]);
   const term = searchText(query.trim());
-  const groups = collections.map((group) => ({
-    ...group,
-    songs: songsInCollection(songs, group.id),
+  const groups = books.map((book) => ({
+    ...book,
+    songs: songsInBook(songs, book.id),
   }));
   return (
     <>
       <div className="nav-label">
-        Library <span>{songs.length}</span>
+        {CLASSES_TITLE} <span>{songs.length}</span>
       </div>
       <input
         type="search"
@@ -80,7 +76,7 @@ export const SongLibrary = memo(function SongLibrary({
         onChange={(event) => {
           const value = event.target.value;
           setQuery(value);
-          if (value.trim()) setExpanded(allSections(true));
+          if (value.trim()) setExpanded(allBooks(true));
         }}
       />
       {groups.map((group) => {
@@ -104,7 +100,10 @@ export const SongLibrary = memo(function SongLibrary({
               <span className="library-section-icon" aria-hidden="true">
                 {group.icon}
               </span>
-              <span className="library-section-title">{group.title}</span>
+              <span className="library-section-title">
+                <small>{group.series}</small>
+                {group.title}
+              </span>
               <span className="library-section-count" aria-hidden="true">
                 {group.songs.length}
               </span>
@@ -129,8 +128,8 @@ export const SongLibrary = memo(function SongLibrary({
                 {!visible.length && (
                   <p className="library-empty">
                     {term
-                      ? "No matches in this section."
-                      : "No songs here yet."}
+                      ? "No matches in this book."
+                      : "No songs in this book yet."}
                   </p>
                 )}
               </div>

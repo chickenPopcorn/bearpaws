@@ -27,28 +27,22 @@ npm run format         # Format source, tests and documentation
 
 ## Practice
 
-The shared library has 27 songs, including **26 beginner arrangements** with **Ode to Joy** and
-**Dancing Raindrops** and adding familiar melodies such as Mary Had a Little Lamb,
-Twinkle, Twinkle, Little Star, London Bridge, Frère Jacques, and Jingle Bells.
-Each includes suggested finger numbers on the score, falling notes, active keys
-and Wait for me practice, plus starting hand positions. The simplest pieces stay
-in C position; melodies with position changes explain the moves. Short themes
-and the Jingle Bells chorus are labelled as such. New arrangements use one held
-bass note per bar; Dancing Raindrops retains its supplied chords and articulation.
-George Bear’s Classes adds eleven more personal-practice transcriptions from
-your piano book, in C and Middle C positions. They keep the student parts'
-printed rests, chords, staccato, dynamics, repeat and finger numbers, without
-lyrics or teacher duet parts.
-Mama Bear’s Pops includes **好一朵茉莉花 (Jasmine Flower)** as an eight-bar chorus
-in C major, with suggested finger numbers and a simple left-hand accompaniment.
-It also includes **安静 · 周杰伦 (Silence / An Jing)** as a complete piano MIDI
-from [Shaivan’s Online Sequencer upload](https://onlinesequencer.net/1677315).
-Its original notes and timing are preserved, with suggested hands split at middle
-C and no added finger numbers. Its download is the original MIDI file.
+Paw Pal is for one learner: the library is **George Bear’s Classes**, one
+section per class book of _Music for Little Mozarts_:
 
-Library collections start folded; click one to open it. Searching opens them
-all, and moving to a song in another collection opens that one.
-Search the library by title or composer. **Download MIDI** saves the selected
+- **Music Recital Book 3**: twelve personal-practice pieces from the book, in
+  C and Middle C positions. Dancing Raindrops keeps its supplied chords and
+  articulation. The other eleven are transcriptions that keep the student
+  parts' printed rests, chords, staccato, dynamics, repeat and finger numbers,
+  without lyrics or teacher duet parts.
+- **Music Lesson Book 3**: no songs yet.
+
+Each song includes suggested finger numbers on the score, falling notes, active
+keys and Wait for me practice, plus starting hand positions.
+
+Books start folded; click one to open it. Searching opens them all, and moving
+to a song in another book opens that one.
+Search the classes by title or composer. **Download MIDI** saves the selected
 arrangement as a standard MIDI file.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
@@ -60,8 +54,11 @@ The songs live in the public Supabase bucket `library`, not in this repository.
 The app loads them after sign-in:
 
 - `index.json` lists the songs in order, with each one's title, collection
-  (`classes`, `songs` or `pops`) and file names. Browsers check it on every
-  load; it is cached for 60 seconds.
+  (`classes`, `songs` or `pops`) and file names. The app loads only `classes`,
+  George Bear’s Classes; the bucket keeps the 15 songs of the other two
+  collections, which earlier builds still show. A `classes` song may name its
+  `book`: `recital-3` (the default) or `lesson-3`. Browsers check the index on
+  every load; it is cached for 60 seconds.
 - `songs/<id>.<hash>.json` is each song in the app's format: notes, tracks,
   tempo, suggested fingering and lesson text.
 - `songs/<id>.<hash>.mid` is each song's MIDI file, for its Download button.
@@ -72,7 +69,8 @@ visit downloads only `index.json`; a changed song gets a new name.
 To change the library, run `npm run library:pull`, edit `./library` (ignored by
 git), then run `npm run library:push`. To add a song, put its MIDI file at
 `library/songs/<id>.mid` and add an entry to `library/index.json` with its `id`,
-`title`, `collection`, `song: "songs/<id>.json"` and `midi: "songs/<id>.mid"`;
+`title`, `collection: "classes"`, an optional `book`, `song: "songs/<id>.json"`
+and `midi: "songs/<id>.mid"`;
 push converts the MIDI into the song file. `./library` uses plain names; push
 adds the hashes. Push checks every song before it uploads anything, uploads the
 index last, and removes a file only 24 hours after the index stops listing it,
@@ -88,7 +86,7 @@ rhythms and rests are preserved for the lessons; a song converted from plain
 MIDI uses approximate note values derived from performed timing.
 Click a note or drag across the score to change playback position. The focused
 score also supports Shift+arrow for a bar and Home/End. Left/Right arrow keys
-select the previous/next song in the current collection and start playback,
+select the previous/next song in the current book and start playback,
 as do the Previous/Next buttons in full screen. Mode,
 restart, playback, speed, time and full-screen controls share the row above the
 score.
@@ -103,7 +101,7 @@ On both hands, 1 means thumb and 5 means little finger. Changing a track to the
 opposite hand hides its original fingering; a song converted from plain MIDI
 gets no guessed finger numbers.
 
-1. Choose a beginner piece from the library; use **Find a song** to filter it.
+1. Choose a piece from George Bear’s Classes; use **Find a song** to filter them.
 2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. On later visits, saved browser permission automatically connects the first available MIDI input. When more than one input is available, a menu beside it chooses one. If the chosen input is unplugged, clicking Connect your piano picks any available input. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
 3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen works without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
 4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
