@@ -210,16 +210,6 @@ compatibility. See the verification document for that distinction.
 
 The reference images and HTML remain unchanged in `docs/design/`.
 
-### Local development without sign-in
-
-In the Vite development server, choose **Open local development studio** on the
-sign-in screen (or add `?local=1`). This opens a local developer profile with
-three bundled sample songs, including Dancing Raindrops and Five O'Clock with
-teacher duets. It does not use Supabase; its settings and practice records use a
-separate browser-storage namespace. **Leave local studio** returns to sign-in.
-The bypass and sample library are excluded from production builds, including
-`npm run preview`. The full shared library still requires normal sign-in.
-
 ### Play the teacher duet on a USB piano
 
 In desktop Chrome or Edge, connect a piano that exposes a MIDI **output** as well
