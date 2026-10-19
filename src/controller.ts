@@ -146,7 +146,6 @@ export class Studio {
     });
   }
   async duetOutput(id: string) {
-    // Keep the original resume intent until this selection has finished.
     if (this.outputChanging) return;
     this.outputChanging = true;
     this.emit();
@@ -155,17 +154,17 @@ export class Studio {
     const generation = this.playGeneration;
     try {
       await this.midi.selectOutput(id);
-      if (
-        resume &&
-        !this.destroyed &&
-        generation === this.playGeneration &&
-        (!id || this.midi.duet.connected)
-      )
-        await this.play();
     } finally {
       this.outputChanging = false;
       this.emit();
     }
+    if (
+      resume &&
+      !this.destroyed &&
+      generation === this.playGeneration &&
+      (!id || this.midi.duet.connected)
+    )
+      await this.play();
   }
   get scoringNotes() {
     return this.notes.filter(
@@ -547,6 +546,7 @@ export class Studio {
     }
   }
   async play() {
+    if (this.outputChanging) return;
     this.cancelPlaybackPreparation();
     const generation = this.playGeneration;
     this.playbackPending = true;
@@ -639,6 +639,7 @@ export class Studio {
           cycle,
           false,
           this.midiPassStart,
+          this.settings.speed,
         );
         this.midiPassStart = this.loopStart;
         this.passEpoch =
@@ -686,7 +687,7 @@ export class Studio {
       if (!this.transport.playing) {
         // The transport has finished, but the final piano release can still
         // be ringing. Explicit pause/seek/song changes continue to stop audio.
-        this.midi.duet.stop();
+        this.midi.duet.finish();
         this.audio.setPlaybackNotes([]);
         this.notice = "";
         this.save();
@@ -728,6 +729,7 @@ export class Studio {
       this.transport.cycle,
       this.transport.held,
       this.midiPassStart,
+      this.settings.speed,
     );
     const browserNotes = this.midi.duet.connected ? reference : notes;
     this.audio.schedule(

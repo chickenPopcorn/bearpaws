@@ -1,4 +1,4 @@
-import { closeOutput, MidiDuet } from "./midiDuet";
+import { closeOutput, MidiDuet, type QueuedMidiOutput } from "./midiDuet";
 /** New MIDI permission stays behind Connect; saved permission can reconnect at startup. */
 export type MidiConnectionStatus =
   | "unsupported"
@@ -182,6 +182,8 @@ export class MidiConnection {
     const port = this.access?.outputs?.get(id);
     try {
       if (port?.state !== "connected") throw new Error("Unavailable");
+      if (typeof (port as QueuedMidiOutput).clear !== "function")
+        throw new Error("MIDI queue cancellation unavailable");
       await port.open();
       if (generation !== this.outputGeneration || this.disposed) {
         // A newer choice replaced this one, and may itself use this port.

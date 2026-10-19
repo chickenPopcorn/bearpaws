@@ -43,7 +43,12 @@ vi.mock("../src/midi", () => ({
     status = "disconnected";
     message = "No piano";
     devices = [];
-    duet = { connected: false, stop: vi.fn(), schedule: vi.fn() };
+    duet = {
+      connected: false,
+      stop: vi.fn(),
+      finish: vi.fn(),
+      schedule: vi.fn(),
+    };
     selectOutput = vi.fn(async () => {});
     selectedId = "";
     constructor(callbacks: { onReset(): void; onOutputLost(): void }) {
@@ -426,6 +431,8 @@ describe("practice studio integration", () => {
     Object.defineProperty(studio.midi.duet, "connected", { value: true });
     const selecting = studio.duetOutput("first");
     expect(studio.outputChanging).toBe(true);
+    expect(studio.transport.playing).toBe(false);
+    await studio.play();
     expect(studio.transport.playing).toBe(false);
     await studio.duetOutput("second");
     expect(studio.midi.selectOutput).toHaveBeenCalledExactlyOnceWith("first");

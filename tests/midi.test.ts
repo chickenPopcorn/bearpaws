@@ -355,6 +355,7 @@ describe("USB MIDI output selection", () => {
       open: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
       send: vi.fn(),
+      clear: vi.fn(),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[port.id, port]]),
@@ -414,6 +415,7 @@ describe("USB MIDI output selection", () => {
       open: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
       send: vi.fn(),
+      clear: vi.fn(),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[port.id, port]]),
@@ -428,6 +430,26 @@ describe("USB MIDI output selection", () => {
     expect(port.close).toHaveBeenCalledOnce();
   });
 
+  it("rejects outputs that cannot cancel queued MIDI messages", async () => {
+    const { midi, access, callbacks } = setup();
+    const port = {
+      id: "out",
+      state: "connected",
+      open: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn(),
+    } as unknown as MIDIOutput;
+    Object.defineProperty(access, "outputs", {
+      value: new Map([[port.id, port]]),
+    });
+    await midi.connect();
+    await midi.selectOutput("out");
+    expect(port.open).not.toHaveBeenCalled();
+    expect(midi.selectedOutputId).toBe("");
+    expect(midi.duet.connected).toBe(false);
+    expect(callbacks.onOutputLost).toHaveBeenCalledOnce();
+  });
+
   it("follows the physical piano note channel but ignores note-offs and system messages", async () => {
     const piano = input("in");
     const { midi, access, send } = setup([piano]);
@@ -437,6 +459,7 @@ describe("USB MIDI output selection", () => {
       open: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
       send: vi.fn(),
+      clear: vi.fn(),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[output.id, output]]),
@@ -477,6 +500,7 @@ describe("USB MIDI output selection", () => {
       open: vi.fn(() => pending.promise),
       close: vi.fn().mockResolvedValue(undefined),
       send: vi.fn(),
+      clear: vi.fn(),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[port.id, port]]),
@@ -504,6 +528,7 @@ describe("USB MIDI output selection", () => {
         .mockReturnValueOnce(current.promise),
       close: vi.fn().mockResolvedValue(undefined),
       send: vi.fn(),
+      clear: vi.fn(),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[port.id, port]]),
@@ -534,6 +559,7 @@ describe("USB MIDI output selection", () => {
         .mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
       send: vi.fn(),
+      clear: vi.fn(),
     } as unknown as MIDIOutput;
     Object.defineProperty(access, "outputs", {
       value: new Map([[port.id, port]]),

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MidiDuet } from "../src/midiDuet";
 import type { Note } from "../src/song";
 const note = (id: string, pitch: number, start: number, end: number): Note => ({
@@ -14,6 +14,7 @@ const note = (id: string, pitch: number, start: number, end: number): Note => ({
 const output = (send = vi.fn()) =>
   ({
     send,
+    clear: vi.fn(),
     close: vi.fn().mockResolvedValue(undefined),
   }) as unknown as MIDIOutput & { close: ReturnType<typeof vi.fn> };
 function setup() {
@@ -24,6 +25,7 @@ function setup() {
   duet.setOutput(port);
   return { duet, send, failed, port };
 }
+afterEach(() => vi.restoreAllMocks());
 describe("teacher MIDI output", () => {
   it("sends velocity-scaled teacher notes on channel 1 by default and releases only its notes", () => {
     const { duet, send } = setup();
@@ -32,11 +34,14 @@ describe("teacher MIDI output", () => {
     expect(send).not.toHaveBeenCalled();
     duet.schedule(notes, 1, 1, false);
     duet.schedule(notes, 1.5, 1, false);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x90, 55, 64]]]);
+    expect(send.mock.calls.map(([data]) => [data])).toEqual([
+      [[0x90, 48, 64]],
+      [[0x90, 55, 64]],
+    ]);
     duet.schedule(notes, 2, 1, false);
-    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+    expect(send.mock.calls.at(-1)?.[0]).toEqual([0x80, 48, 0]);
     duet.stop();
-    expect(send).toHaveBeenLastCalledWith([0x80, 55, 0]);
+    expect(send.mock.calls.at(-1)?.[0]).toEqual([0x80, 55, 0]);
   });
   it("releases on the old channel before moving teacher notes to a new one", () => {
     const { duet, send } = setup();
@@ -45,7 +50,7 @@ describe("teacher MIDI output", () => {
     duet.setChannel(4);
     duet.schedule(notes, 0.5, 1, false);
     duet.stop();
-    expect(send.mock.calls).toEqual([
+    expect(send.mock.calls.map(([data]) => [data])).toEqual([
       [[0x90, 48, 64]],
       [[0x80, 48, 0]],
       [[0x94, 48, 64]],
@@ -61,14 +66,14 @@ describe("teacher MIDI output", () => {
     duet.schedule([], 1, 1, true);
     expect(send).toHaveBeenCalledTimes(1);
     duet.schedule([], 1, 1, false);
-    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+    expect(send.mock.calls.at(-1)?.[0]).toEqual([0x80, 48, 0]);
   });
   it("releases and retriggers on a seek or loop cycle and restores notes at a seek position", () => {
     const { duet, send } = setup();
     const notes = [note("a", 48, 0, 2)];
     duet.schedule(notes, 1, 1, false);
     duet.schedule(notes, 0.5, 2, false);
-    expect(send.mock.calls).toEqual([
+    expect(send.mock.calls.map(([data]) => [data])).toEqual([
       [[0x90, 48, 64]],
       [[0x80, 48, 0]],
       [[0x90, 48, 64]],
@@ -80,7 +85,7 @@ describe("teacher MIDI output", () => {
     const notes = [note("a", 48, 0, 2), note("b", 48, 1, 3)];
     duet.schedule(notes, 0, 1, false);
     duet.schedule(notes, 1, 1, false);
-    expect(send.mock.calls).toEqual([
+    expect(send.mock.calls.map(([data]) => [data])).toEqual([
       [[0x90, 48, 64]],
       [[0x80, 48, 0]],
       [[0x90, 48, 64]],
@@ -89,7 +94,7 @@ describe("teacher MIDI output", () => {
     duet.schedule(notes, 2, 1, false);
     expect(send).toHaveBeenCalledTimes(3);
     duet.schedule(notes, 3, 1, false);
-    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+    expect(send.mock.calls.at(-1)?.[0]).toEqual([0x80, 48, 0]);
   });
   it("does not retain an older tail after a shorter repeated attack ends", () => {
     const { duet, send } = setup();
@@ -97,7 +102,7 @@ describe("teacher MIDI output", () => {
     duet.schedule(notes, 0, 1, false);
     duet.schedule(notes, 1, 1, false);
     duet.schedule(notes, 2, 1, false);
-    expect(send.mock.calls).toEqual([
+    expect(send.mock.calls.map(([data]) => [data])).toEqual([
       [[0x90, 48, 64]],
       [[0x80, 48, 0]],
       [[0x90, 48, 64]],
@@ -112,7 +117,10 @@ describe("teacher MIDI output", () => {
     const notes = [note("short", 48, 0.005, 0.01)];
     duet.schedule(notes, 0, 1, false);
     duet.schedule(notes, 0.02, 1, false);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x80, 48, 0]]]);
+    expect(send.mock.calls.map(([data]) => [data])).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+    ]);
     duet.schedule(notes, 0.04, 1, false);
     expect(send).toHaveBeenCalledTimes(2);
   });
@@ -124,7 +132,10 @@ describe("teacher MIDI output", () => {
       note("short", 48, 1.005, 1.01),
     ];
     duet.schedule(notes, 1.02, 1, false, 1);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x80, 48, 0]]]);
+    expect(send.mock.calls.map(([data]) => [data])).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+    ]);
   });
 
   it("does not leave a zero-duration event sounding", () => {
@@ -133,20 +144,70 @@ describe("teacher MIDI output", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("preserves a short note's real duration after a late tick, scaled by speed", () => {
+    let now = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const { duet, send, port } = setup();
+    const sent: { data: number[]; at: number }[] = [];
+    send.mockImplementation((data: number[], at?: number) =>
+      sent.push({ data, at: at ?? now }),
+    );
+    const clear = vi.fn();
+    Object.defineProperty(port, "clear", { value: clear });
+    const notes = [note("short", 48, 0.005, 0.012)];
+    duet.schedule(notes, 0, 1, false, 0, 1.4);
+    now = 1020;
+    duet.schedule(notes, 0.02, 1, false, 0, 1.4);
+    expect(sent.map((s) => s.data)).toEqual([
+      [0x90, 48, 64],
+      [0x80, 48, 0],
+    ]);
+    expect(sent[1].at - sent[0].at).toBeCloseTo(5);
+    duet.finish();
+    expect(clear).not.toHaveBeenCalled();
+    now = 1021;
+    duet.stop();
+    expect(clear).toHaveBeenCalledOnce();
+    expect(sent.at(-1)).toEqual({ data: [0x80, 48, 0], at: 1021 });
+  });
+
+  it("keeps the queued tail across a loop boundary instead of cancelling it", () => {
+    let now = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const { duet, send, port } = setup();
+    const clear = (port as unknown as { clear: ReturnType<typeof vi.fn> })
+      .clear;
+    const sent: { data: number[]; at: number }[] = [];
+    send.mockImplementation((data: number[], at?: number) =>
+      sent.push({ data, at: at ?? now }),
+    );
+    const notes = [note("short", 48, 0.005, 0.01)];
+    duet.schedule(notes, 0, 1, false);
+    now = 1020;
+    duet.schedule(notes, 0.02, 1, false);
+    duet.schedule(notes, 0, 2, false, 0);
+    expect(clear).not.toHaveBeenCalled();
+    expect(sent[1].at - sent[0].at).toBeCloseTo(5);
+    now = 1040;
+    duet.schedule(notes, 0.02, 2, false, 0);
+    expect(sent[3].at - sent[2].at).toBeCloseTo(5);
+    expect(sent[2].at).toBeGreaterThanOrEqual(sent[1].at);
+  });
+
   it("strikes a unison once, and releases it when its last note ends", () => {
     const { duet, send } = setup();
     const notes = [note("a", 48, 0, 2), note("b", 48, 0, 3)];
     for (const position of [0, 1, 2]) duet.schedule(notes, position, 1, false);
     expect(send).toHaveBeenCalledTimes(1);
     duet.schedule(notes, 3, 1, false);
-    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+    expect(send.mock.calls.at(-1)?.[0]).toEqual([0x80, 48, 0]);
   });
   it("silences and closes the old output when switching or returning to laptop", () => {
     const { duet, send, port } = setup();
     duet.schedule([note("a", 48, 0, 2)], 0, 1, false);
     const next = output();
     duet.setOutput(next);
-    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+    expect(send.mock.calls.at(-1)?.[0]).toEqual([0x80, 48, 0]);
     expect(port.close).toHaveBeenCalledOnce();
     duet.setOutput();
     expect(next.close).toHaveBeenCalledOnce();
