@@ -7,7 +7,6 @@ export function usePracticeShortcuts({
   onPreviousSong,
   onNextSong,
 }: {
-  expanded: boolean;
   busy: boolean;
   onEnter(): void;
   onTogglePlayback(): void;

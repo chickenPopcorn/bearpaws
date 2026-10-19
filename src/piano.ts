@@ -23,15 +23,20 @@ for (const region of PIANO_REGIONS) {
   keys.set(region.pitch, regions);
 }
 
+/** A velocity from 0 to 1, as MIDI's 0 to 127. */
+export const midiVelocity = (velocity: number) =>
+  Math.round(Math.max(0, Math.min(1, velocity)) * 127);
+/** The key that plays `pitch`: beyond the piano, its nearest key. */
+export const pianoKey = (pitch: number) =>
+  Math.max(21, Math.min(108, Math.round(pitch)));
+
 export function selectPianoRegion(pitch: number, velocity: number) {
   if (!Number.isFinite(pitch) || !Number.isFinite(velocity)) return;
-  const midiVelocity = Math.round(Math.max(0, Math.min(1, velocity)) * 127);
+  const value = midiVelocity(velocity);
   return keys
-    .get(Math.max(21, Math.min(108, Math.round(pitch))))
+    .get(pianoKey(pitch))
     ?.find(
-      (region) =>
-        midiVelocity >= region.velocityMin &&
-        midiVelocity <= region.velocityMax,
+      (region) => value >= region.velocityMin && value <= region.velocityMax,
     );
 }
 

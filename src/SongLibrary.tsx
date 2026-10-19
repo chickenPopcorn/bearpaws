@@ -18,23 +18,17 @@ const allBooks = (open: boolean) =>
 export const SongLibrary = memo(function SongLibrary({
   songs,
   selected,
-  savedSelection,
   onSelect,
 }: {
   songs: Song[];
   selected: string;
-  /** The song restored at startup, which may load after the first render. */
-  savedSelection?: string;
   onSelect(song: Song): void;
 }) {
   const [query, setQuery] = useState("");
   // Books start folded, even for the restored song; a later song change opens
   // that song's book.
   const [expanded, setExpanded] = useState(() => allBooks(false));
-  const startup = useRef<{ initial: string; saved?: string } | undefined>({
-    initial: selected,
-    saved: savedSelection,
-  });
+  const started = useRef(false);
   const revealSelection = useEffectEvent(() => {
     const song = songs.find((song) => song.id === selected);
     const book = bookForSong(song).id;
@@ -44,18 +38,8 @@ export const SongLibrary = memo(function SongLibrary({
     );
   });
   useEffect(() => {
-    const pending = startup.current;
-    if (
-      pending &&
-      (selected === pending.initial || selected === pending.saved)
-    ) {
-      // Startup ends once the saved song is showing.
-      if (!pending.saved || selected === pending.saved)
-        startup.current = undefined;
-      return;
-    }
-    startup.current = undefined;
-    revealSelection();
+    if (started.current) revealSelection();
+    started.current = true;
   }, [selected]);
   const term = searchText(query.trim());
   const groups = books.map((book) => ({

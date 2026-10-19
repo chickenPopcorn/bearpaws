@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ReferenceAudio } from "../src/audio";
+import { PianoAudio } from "../src/audio";
 import { Transport } from "../src/engine";
 import { selectPianoRegion } from "../src/piano";
 import {
@@ -23,7 +23,7 @@ const node = () => ({
   disconnect: vi.fn(),
 });
 /** Send one cached note through the room. */
-function playTone(audio: ReferenceAudio) {
+function playTone(audio: PianoAudio) {
   const region = selectPianoRegion(60, 0.8)!;
   audio.samples.set(region.file, { duration: 20 } as AudioBuffer);
   audio.tone(60, 0.8, 10, 2);
@@ -164,10 +164,10 @@ describe("synthetic room impulse", () => {
   );
 });
 
-describe("shared reference sound bus", () => {
+describe("shared piano sound bus", () => {
   it("lets voices ring and reuses the room processor across automatic loop wraps", async () => {
     const { context, audioContext } = contextFixture();
-    const audio = new ReferenceAudio();
+    const audio = new PianoAudio();
     audio.context = audioContext;
     await audio.unlock();
     const transport = new Transport(1);
@@ -195,7 +195,7 @@ describe("shared reference sound bus", () => {
       for (const source of sources())
         if (source.stop.mock.lastCall![0] <= iteration) source.onended?.();
       transport.update(iteration);
-      audio.schedule(notes, transport, true);
+      audio.schedule(notes, transport);
       expect(audio.scheduled.has("loop-note")).toBe(true);
     }
     expect(context.createBufferSource).toHaveBeenCalledTimes(20);
@@ -244,7 +244,7 @@ describe("shared reference sound bus", () => {
 
   it("smooths repeated live changes without allocating nodes or changing active notes", async () => {
     const { context, audioContext } = contextFixture();
-    const audio = new ReferenceAudio();
+    const audio = new PianoAudio();
     audio.setSound({ ambience: 0.6 });
     expect(audio.context).toBeNull();
     expect(context.createBuffer).not.toHaveBeenCalled();
@@ -281,7 +281,7 @@ describe("shared reference sound bus", () => {
 
   it("flushes old room tails on stop while reusing the impulse and persistent bus", async () => {
     const { context, audioContext } = contextFixture();
-    const audio = new ReferenceAudio();
+    const audio = new PianoAudio();
     audio.context = audioContext;
     await audio.unlock();
     const first = context.createConvolver.mock.results[0].value;
@@ -298,7 +298,7 @@ describe("shared reference sound bus", () => {
 
   it("keeps the room while nothing has played since it was last flushed", async () => {
     const { context, audioContext } = contextFixture();
-    const audio = new ReferenceAudio();
+    const audio = new PianoAudio();
     audio.context = audioContext;
     await audio.unlock();
     for (let seek = 0; seek < 5; seek++) audio.stop();
@@ -311,7 +311,7 @@ describe("shared reference sound bus", () => {
 
   it("contains a room-reset allocation failure and rebuilds on explicit retry", async () => {
     const { context, audioContext } = contextFixture();
-    const audio = new ReferenceAudio();
+    const audio = new PianoAudio();
     audio.context = audioContext;
     await audio.unlock();
     const first = context.createConvolver.mock.results[0].value;
@@ -329,7 +329,7 @@ describe("shared reference sound bus", () => {
 
   it("disconnects a partially built bus before an unlock retry", async () => {
     const { context, audioContext } = contextFixture();
-    const audio = new ReferenceAudio();
+    const audio = new PianoAudio();
     audio.context = audioContext;
     context.createBuffer.mockImplementationOnce(() => {
       throw new Error("quota");

@@ -227,7 +227,7 @@ describe("USB MIDI connection lifecycle", () => {
     );
     await midi.connect();
     expect(midi.status).toBe("denied");
-    expect(midi.message).toContain("Import and Listen still work");
+    expect(midi.message).toContain("Listen still works");
     expect(callbacks.onReset).not.toHaveBeenCalled();
     await midi.connect();
     expect(midi.status).toBe("no-device");

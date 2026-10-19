@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { progress, removeProgress, settings, write } from "../src/storage";
+import { progress, remove, settings, write } from "../src/storage";
 let values: Map<string, string>;
 beforeEach(() => {
   values = new Map();
@@ -44,7 +44,7 @@ it("persists actual settings and song progress under independent browser keys", 
 it("removes one song's progress under the same key it was saved with", () => {
   write("progress:gone", { position: 3 });
   write("progress:kept", { position: 2 });
-  removeProgress("gone");
+  expect(remove("progress:gone")).toBe(true);
   expect(progress("gone", 5).position).toBe(0);
   expect(progress("kept", 5).position).toBe(2);
 });

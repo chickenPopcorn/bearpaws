@@ -269,7 +269,7 @@ describe("sheet timeline progress", () => {
     },
   );
 
-  it("follows reference playback in Listen mode without marking future or skipped earlier notes", () => {
+  it("follows playback in Listen mode without marking future or skipped earlier notes", () => {
     const current = note("current", 2, 3);
     expect(isNotePlayed(current, "listen", new Set(), 1.9)).toBe(false);
     expect(isNotePlayed(current, "listen", new Set(), 2.1)).toBe(true);
