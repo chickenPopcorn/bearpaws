@@ -636,7 +636,8 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
             </button>
           )}
         </div>
-        {connected && (
+        {/* A chosen output stays switchable even while the input is gone. */}
+        {(connected || studio.midi.selectedOutputId) && (
           <label>
             Duet sound
             <select
