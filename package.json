@@ -11,8 +11,8 @@
     "test:coverage": "vitest run --coverage",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint .",
-    "format": "prettier --write src tests scripts *.json *.ts *.js index.html README.md docs/verification.md",
-    "format:check": "prettier --check src tests scripts *.json *.ts *.js index.html README.md docs/verification.md",
+    "format": "prettier --write src tests scripts *.json *.ts *.js index.html README.md docs/*.md",
+    "format:check": "prettier --check src tests scripts *.json *.ts *.js index.html README.md docs/*.md",
     "example": "node scripts/create-example.mjs",
     "library:pull": "node scripts/library.mjs pull",
     "library:push": "node scripts/library.mjs push"

@@ -1,5 +1,7 @@
 # Cloud development handoff
 
+[← Back to the README](../README.md)
+
 ## Outcome and architecture
 
 Build an actual browser piano-learning app using the visual references in `design/`. Use TypeScript + Vite + React for the static app, Canvas for the waterfall/keyboard, Web MIDI for piano input, and Web Audio for listening playback and the shared musical clock. No backend, accounts, billing, or cloud sync is needed for the MVP.

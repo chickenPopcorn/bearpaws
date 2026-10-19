@@ -1,5 +1,7 @@
 # Verification record
 
+[← Back to the README](../README.md)
+
 Updated October 18, 2026 for the Accurate-Salamander optional voices: sampled
 release, key release noise, pedal noise and pseudo pedal resonance.
 
