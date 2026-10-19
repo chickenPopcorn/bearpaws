@@ -203,18 +203,20 @@ export function validateSong(value: unknown, id: string): Song {
     );
   // Pedal lookup searches each channel's spans by start time.
   // One channel's pedal is down for one span at a time.
+  // A span still down at the end of the file is the channel's last.
   const pedalEnds = new Map<number, number>();
   for (const p of (value.pedals ?? []) as {
     channel: number;
     start: number;
     end: number;
+    open?: true;
   }[]) {
     if (p.start < (pedalEnds.get(p.channel) ?? 0))
       fail(
         where,
         "pedals must be in start order on each channel, without overlaps",
       );
-    pedalEnds.set(p.channel, p.end);
+    pedalEnds.set(p.channel, p.open ? Infinity : p.end);
   }
   if (!Array.isArray(value.tracks) || !value.tracks.length)
     fail(where, "missing tracks");

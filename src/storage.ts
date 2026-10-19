@@ -57,6 +57,18 @@ export function write(key: string, value: unknown) {
   }
 }
 /** Throws when browser storage is blocked. */
+/** The stored keys that start with `prefix`, as read() and write() name them. */
+export function storedKeys(prefix: string): string[] {
+  const keys: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(storageKey(prefix)))
+        keys.push(key.slice(storageKey("").length));
+    }
+  } catch {}
+  return keys;
+}
 /** Remove a stored value. Throws when browser storage is blocked. */
 export function remove(key: string) {
   localStorage.removeItem(storageKey(key));

@@ -152,7 +152,7 @@ beforeEach(() => {
     },
     setItem: (key: string, value: string) => {
       if (storageBlocked) throw new DOMException("Blocked", "SecurityError");
-      if (key === refusedKey)
+      if (refusedKey && key.startsWith(refusedKey))
         throw new DOMException("Full", "QuotaExceededError");
       stored.set(key, value);
     },
@@ -166,13 +166,26 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** The stored marker: whether settings are unconfirmed, and which songs. */
-const marker = () =>
-  read<{
-    settings?: string;
-    progress?: Record<string, string>;
-    deleted?: Record<string, string>;
-  }>("unsynced", {});
+/** The stored marker entries, gathered: versions by song, and their owners. */
+const marker = () => {
+  const gathered = {
+    settings: undefined as string | undefined,
+    progress: {} as Record<string, string>,
+    deleted: {} as Record<string, string>,
+    owners: new Set<string>(),
+  };
+  for (const [key, value] of stored) {
+    if (!key.startsWith("cadence:unsynced:")) continue;
+    const entry = JSON.parse(value) as { owner?: string; version: string };
+    if (entry.owner) gathered.owners.add(entry.owner);
+    const name = key.slice("cadence:unsynced:".length);
+    if (name === "settings") gathered.settings = entry.version;
+    else if (name.startsWith("progress:"))
+      gathered.progress[name.slice("progress:".length)] = entry.version;
+    else gathered.deleted[name.slice("deleted:".length)] = entry.version;
+  }
+  return gathered;
+};
 const unsynced = () => {
   const stored = marker();
   return {
@@ -252,7 +265,7 @@ describe("account sync", () => {
   it("adopts again after a first pull that could not save its marker", async () => {
     const b = backend();
     write("progress:only-here", { best: 4 });
-    refusedKey = "cadence:unsynced";
+    refusedKey = "cadence:unsynced:";
     await expect(new CloudSync(client(b), USER).pull()).rejects.toBeInstanceOf(
       BrowserStorageError,
     );
@@ -369,6 +382,21 @@ describe("account sync", () => {
     ]);
   });
 
+  it("keeps an entry another tab writes while this one updates the marker", async () => {
+    const sync = new CloudSync(client(backend()), USER);
+    let injected = false;
+    afterGet = (key) => {
+      if (injected || !key.startsWith("cadence:unsynced")) return;
+      injected = true;
+      // Another tab saves a different song between this tab's read and write.
+      write("unsynced:progress:b", { owner: USER, version: "v" });
+    };
+    sync.progress("a", { best: 1, updated: "u" } as never);
+    afterGet = null;
+    expect(marker().progress).toEqual({ a: "u", b: "v" });
+    sync.stop();
+  });
+
   it("keeps another tab's unconfirmed changes in the shared marker", async () => {
     const b = backend();
     const tabA = new CloudSync(client(b), USER);
@@ -468,7 +496,11 @@ describe("account sync", () => {
     await expect(
       new CloudSync(client(backend()), USER).pull(),
     ).rejects.toBeInstanceOf(BrowserStorageError);
-    expect(read("unsynced", null)).toEqual(foreign);
+    // Still there, and still the other account's.
+    expect(marker()).toMatchObject({
+      progress: { theirs: "t" },
+      owners: new Set([OTHER]),
+    });
   });
 
   it("lets a later removal win when setting changes aside again", async () => {

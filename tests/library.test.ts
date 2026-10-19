@@ -222,6 +222,17 @@ describe("song library", () => {
       /pedals must be a list/,
     ],
     [
+      "a pedal after one left down at the end",
+      (song: Song) => ({
+        ...song,
+        pedals: [
+          { channel: 0, start: 0, end: 1, open: true },
+          { channel: 0, start: 2, end: 3 },
+        ],
+      }),
+      /without overlaps/,
+    ],
+    [
       "overlapping pedals on one channel",
       (song: Song) => ({
         ...song,

@@ -25,6 +25,8 @@ import { createServer, loadEnv } from "vite";
 const FOLDER = "library";
 /** Hashed files never change, so browsers and the CDN may keep them this long. */
 const FOREVER = "31536000";
+/** The bucket's largest file (file_size_limit in its migration). */
+const MAX_FILE = 5 * 1024 * 1024;
 /** The index changes on every push. */
 const BRIEF = "60";
 /**
@@ -191,6 +193,10 @@ async function push(bucket, validateIndex, validateSong) {
       files.push([out.midi, midiBytes, "audio/midi"]);
     }
   }
+  // The bucket refuses larger files, so stop before uploading any.
+  for (const [path, bytes] of files)
+    if (bytes.length > MAX_FILE)
+      throw new Error(`${path} is larger than the bucket's 5 MiB file limit.`);
 
   const client = createClient(url, await secretKey(), {
     auth: { persistSession: false },
