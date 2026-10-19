@@ -220,6 +220,8 @@ export function validateSong(value: unknown, id: string): Song {
   }
   if (!Array.isArray(value.tracks) || !value.tracks.length)
     fail(where, "missing tracks");
+  // Progress records each track's hand, and must fit its database row.
+  if (value.tracks.length > 256) fail(where, "more than 256 tracks");
   const tracks = new Set<number>();
   for (const track of value.tracks as unknown[]) {
     if (
@@ -274,6 +276,27 @@ export function validateSong(value: unknown, id: string): Song {
     if (notes.has(note.id as string))
       fail(where, `duplicate note id ${note.id}`);
     notes.add(note.id as string);
+  }
+  // A key released while its channel's pedal is down sounds until the pedal
+  // lifts, as parseSong records it: playback stops each note at soundEnd.
+  const spans = new Map<number, { start: number; end: number }[]>();
+  for (const p of (value.pedals ?? []) as {
+    channel: number;
+    start: number;
+    end: number;
+  }[])
+    spans.set(p.channel, [...(spans.get(p.channel) ?? []), p]);
+  for (const note of value.notes as {
+    id: string;
+    channel: number;
+    end: number;
+    soundEnd: number;
+  }[]) {
+    const span = (spans.get(note.channel) ?? [])
+      .filter((p) => p.start <= note.end)
+      .at(-1);
+    if (span && note.end < span.end && note.soundEnd < span.end - 1e-6)
+      fail(where, `note ${note.id} stops before the pedal holding it lifts`);
   }
   // The assignment panel lists tracks by count, so each must be exact.
   for (const track of value.tracks as { id: number; count: number }[]) {
