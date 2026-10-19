@@ -12,3 +12,7 @@ The catalog records countInBeats as the leading silent quarter-note beats.
 Melody credits, starting positions, and per-note fingering are in catalog.json.
 Dancing Raindrops and the other George Bear's Classes pieces are
 personal-practice transcriptions of the student parts supplied by the user.
+
+Recital Book 3 files add a third track, the printed teacher duet. As the
+book asks, the student plays an octave or two higher with it; the track's
+first text event and catalog.json (duet.octaves) say how far.

@@ -47,7 +47,8 @@ to a song in another book opens that one.
 Search the classes by title or composer. **Download MIDI** saves the selected
 song as a standard MIDI file.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
-and finger numbers as text events. The count-in keeps musical downbeats aligned
+and finger numbers as text events. Recital Book 3 files add the teacher duet as a
+third track, with a text event saying how far the student part moves with it. The count-in keeps musical downbeats aligned
 with barlines. General MIDI players may ignore these text events.
 
 The earlier arrangements (Ode to Joy, 12 familiar melodies, Jasmine Flower and

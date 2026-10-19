@@ -12,6 +12,16 @@ const server = await createServer({
   server: { middlewareMode: true, watch: null },
   appType: "custom",
 });
+/** How the book has the student play with the duet, as the duet track says. */
+function duetText(song) {
+  const octaves = song.duet.octaves,
+    distance = Math.abs(octaves) === 1 ? "one octave" : "two octaves";
+  return `Paw Pal teacher duet: the student plays ${
+    octaves === 0
+      ? "as written"
+      : `${distance} ${octaves > 0 ? "higher" : "lower"}`
+  } with this part`;
+}
 try {
   const { builtInSongs } = await server.ssrLoadModule("/src/lessons.ts");
   const { midiPieces, midiBytes } =
@@ -32,17 +42,30 @@ try {
     const leadInOffset = (countInBeats - (song.leadInBeats ?? 0)) * song.ppq;
     const tick = (seconds) =>
       Math.round((seconds * bpm * song.ppq) / 60) + leadInOffset;
-    const tracks = song.tracks.map((track) => {
-      const events = [];
-      for (const note of song.notes.filter((note) => note.track === track.id)) {
+    // The student's hands, then any teacher duet, which has no fingering.
+    const parts = [
+      ...song.tracks.map((track) => ({
+        name: track.hand,
+        notes: song.notes.filter((note) => note.track === track.id),
+      })),
+      ...(song.duet
+        ? [{ name: "duet", notes: song.duet.notes, about: duetText(song) }]
+        : []),
+    ];
+    const tracks = parts.map((part) => {
+      const events = part.about
+        ? [{ at: 0, order: 1, type: "text", text: part.about }]
+        : [];
+      for (const note of part.notes) {
         const start = tick(note.start);
-        events.push(
-          {
+        if (note.finger)
+          events.push({
             at: start,
             order: 1,
             type: "text",
             text: `Paw Pal fingering: ${note.fingerHand} ${note.finger}; MIDI pitch ${note.pitch}`,
-          },
+          });
+        events.push(
           {
             at: start,
             order: 2,
@@ -69,8 +92,8 @@ try {
           // This MIDI writer uses single-byte text; keep non-Latin titles in
           // the UTF-8 catalog and use portable English part names in the MIDI.
           text: /[^\u0000-\u00ff]/.test(song.title)
-            ? `${track.hand}: piano`
-            : `${track.hand}: ${song.title}`,
+            ? `${part.name}: piano`
+            : `${part.name}: ${song.title}`,
         },
         {
           deltaTime: 0,
@@ -129,6 +152,16 @@ try {
         hand: note.fingerHand,
         beats: note.notatedBeats,
       })),
+      ...(song.duet && {
+        duet: {
+          octaves: song.duet.octaves,
+          notes: song.duet.notes.map((note) => ({
+            pitch: note.pitch,
+            startTick: tick(note.start),
+            endTick: tick(note.end),
+          })),
+        },
+      }),
     });
   }
   writeFileSync(
@@ -148,7 +181,10 @@ try {
       "The catalog records countInBeats as the leading silent quarter-note beats.\n" +
       "Melody credits, starting positions, and per-note fingering are in catalog.json.\n" +
       "Dancing Raindrops and the other George Bear's Classes pieces are\n" +
-      "personal-practice transcriptions of the student parts supplied by the user.\n",
+      "personal-practice transcriptions of the student parts supplied by the user.\n\n" +
+      "Recital Book 3 files add a third track, the printed teacher duet. As the\n" +
+      "book asks, the student plays an octave or two higher with it; the track's\n" +
+      "first text event and catalog.json (duet.octaves) say how far.\n",
   );
   // Python's standard library packages fixed entry metadata for reproducible ZIPs.
   execFileSync("python3", ["scripts/create-library-zip.py", directory]);
