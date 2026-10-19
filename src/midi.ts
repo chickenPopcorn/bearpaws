@@ -1,4 +1,4 @@
-import { MidiDuet } from "./midiDuet";
+import { closeOutput, MidiDuet } from "./midiDuet";
 /** New MIDI permission stays behind Connect; saved permission can reconnect at startup. */
 export type MidiConnectionStatus =
   | "unsupported"
@@ -16,6 +16,8 @@ export interface MidiCallbacks {
   /** Clear physical keys, pedals, and pending input when a bound source changes or is disposed. */
   onReset(): void;
   onChange(): void;
+  /** The chosen duet output failed or went away; the duet is back on the laptop. */
+  onOutputLost(): void;
 }
 export interface MidiNavigator {
   requestMIDIAccess(options?: MIDIOptions): Promise<MIDIAccess>;
@@ -28,6 +30,8 @@ export interface MidiNavigator {
 
 const OPEN_FAILED =
   "This MIDI input could not be opened. Check the USB connection and choose it again.";
+const OUTPUT_LOST =
+  "Piano output disconnected. The duet plays on the laptop until you choose the piano again under Duet sound.";
 const label = (input: MIDIInput) => input.name || "MIDI input";
 
 export class MidiConnection {
@@ -40,8 +44,7 @@ export class MidiConnection {
   outputMessage = "";
   private outputGeneration = 0;
   duet = new MidiDuet(() => {
-    this.outputMessage =
-      "Piano output disconnected. Choose the output again to retry.";
+    this.loseOutput(OUTPUT_LOST);
     this.callbacks.onChange();
   });
   private access: MIDIAccess | undefined;
@@ -177,24 +180,37 @@ export class MidiConnection {
     this.callbacks.onChange();
     if (!id) return;
     const port = this.access?.outputs?.get(id);
-    if (!port || port.state !== "connected") {
-      this.outputMessage =
-        "Piano output is unavailable. Reconnect it and choose it again.";
-      this.callbacks.onChange();
-      return;
-    }
     try {
+      if (port?.state !== "connected") throw new Error("Unavailable");
       await port.open();
-      if (generation !== this.outputGeneration || this.disposed) return;
+      if (generation !== this.outputGeneration || this.disposed) {
+        // A newer choice replaced this one, and may itself use this port.
+        if (this.selectedOutputId !== id) closeOutput(port);
+        return;
+      }
       if (port.state !== "connected") throw new Error("Disconnected");
       this.duet.setOutput(port);
       this.outputMessage = `Teacher duet plays on ${port.name || "MIDI output"} (same channel as your piano).`;
     } catch {
       if (generation !== this.outputGeneration || this.disposed) return;
-      this.outputMessage =
-        "Could not open piano output. Choose it again to retry.";
+      if (port) closeOutput(port);
+      this.loseOutput(
+        "Could not open the piano output. Choose it again under Duet sound to retry.",
+      );
     }
     this.callbacks.onChange();
+  }
+
+  /**
+   * Return the duet to the laptop. The selection goes back to Laptop too, so
+   * choosing the output again is a change that retries it.
+   */
+  private loseOutput(message: string) {
+    this.outputGeneration++;
+    this.duet.setOutput();
+    this.selectedOutputId = "";
+    this.outputMessage = message;
+    this.callbacks.onOutputLost();
   }
 
   private refresh(): void {
@@ -210,12 +226,8 @@ export class MidiConnection {
     if (
       this.selectedOutputId &&
       !this.outputs.some((p) => p.id === this.selectedOutputId)
-    ) {
-      this.outputGeneration++;
-      this.duet.setOutput();
-      this.outputMessage =
-        "Piano output disconnected. Choose its output again after reconnecting.";
-    }
+    )
+      this.loseOutput(OUTPUT_LOST);
     const inputs: MIDIInput[] = [];
     this.access.inputs.forEach((input) => {
       if (input.state === "connected") inputs.push(input);

@@ -229,13 +229,17 @@ selected output on the same MIDI channel as the latest key played on the piano
 (channel 1 until the first keypress); the student's physical keys remain live on
 the piano. The teacher still waits at each **Wait for me** gate and resumes when
 the student plays the requested note. Laptop mute does not mute MIDI output.
-Choose **Laptop** to return the teacher part to browser audio.
+Choose **Laptop** to return the teacher part to browser audio. If the piano's
+output disconnects or cannot open, playback stops and **Duet sound** goes back
+to Laptop; choose the piano again to retry.
 
 Keep the piano’s local keyboard sound enabled. The teacher follows the incoming
-piano channel automatically, so no separate multichannel setup is needed. Disable any MIDI-thru/loopback routing that returns outgoing
-teacher notes as input. The app sends only teacher notes, not student echoes,
-and sends note-offs for its own sounding notes on pause, seek, loop restart,
-song/output changes, and closing the studio. Playback uses the 20 ms practice
+piano channel automatically, so no separate multichannel setup is needed.
+Disable any MIDI-thru/loopback routing that returns outgoing teacher notes as
+input. The app sends only teacher notes, not student echoes. A repeated note
+that overlaps the one before it is played again, as written. The app sends
+note-offs for its own sounding notes on pause, seek, loop restart, song/output
+changes, and closing the studio, and closes an output it stops using. Playback uses the 20 ms practice
 clock; hardware latency and piano sound depend on the device. Output selection
 is per session and requires an explicit choice. Test on the physical piano to
 confirm its channel settings, tone, timing, and note releases.

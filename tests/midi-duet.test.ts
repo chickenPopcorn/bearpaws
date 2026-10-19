@@ -11,12 +11,18 @@ const note = (id: string, pitch: number, start: number, end: number): Note => ({
   track: 0,
   channel: 0,
 });
+const output = (send = vi.fn()) =>
+  ({
+    send,
+    close: vi.fn().mockResolvedValue(undefined),
+  }) as unknown as MIDIOutput & { close: ReturnType<typeof vi.fn> };
 function setup() {
   const send = vi.fn();
   const failed = vi.fn();
   const duet = new MidiDuet(failed);
-  duet.setOutput({ send } as unknown as MIDIOutput);
-  return { duet, send, failed };
+  const port = output(send);
+  duet.setOutput(port);
+  return { duet, send, failed, port };
 }
 describe("teacher MIDI output", () => {
   it("sends velocity-scaled teacher notes on channel 1 by default and releases only its notes", () => {
@@ -68,27 +74,48 @@ describe("teacher MIDI output", () => {
       [[0x90, 48, 64]],
     ]);
   });
-  it("does not cut off an overlapping note of the same pitch", () => {
+  it("restarts a sounding pitch at each new attack, and keeps it for the later note", () => {
     const { duet, send } = setup();
+    // Repeated notes under the pedal: the first still sounds at the second.
     const notes = [note("a", 48, 0, 2), note("b", 48, 1, 3)];
-    for (const position of [0, 1, 2]) duet.schedule(notes, position, 1, false);
-    expect(send).toHaveBeenCalledTimes(1);
+    duet.schedule(notes, 0, 1, false);
+    duet.schedule(notes, 1, 1, false);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+      [[0x90, 48, 64]],
+    ]);
+    // The first note's end must not cut off the second.
+    duet.schedule(notes, 2, 1, false);
+    expect(send).toHaveBeenCalledTimes(3);
     duet.schedule(notes, 3, 1, false);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
   });
-  it("silences the old output before switching and tolerates an unplugged output", () => {
-    const { duet, send, failed } = setup();
+  it("silences and closes the old output when switching or returning to laptop", () => {
+    const { duet, send, port } = setup();
     duet.schedule([note("a", 48, 0, 2)], 0, 1, false);
-    const next = vi.fn();
-    duet.setOutput({ send: next } as unknown as MIDIOutput);
+    const next = output();
+    duet.setOutput(next);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
-    next.mockImplementation(() => {
+    expect(port.close).toHaveBeenCalledOnce();
+    duet.setOutput();
+    expect(next.close).toHaveBeenCalledOnce();
+    expect(duet.connected).toBe(false);
+  });
+  it("drops and closes an unplugged output, and reports it after the tick", async () => {
+    const { duet, send, failed, port } = setup();
+    send.mockImplementation(() => {
       throw new Error("Disconnected");
     });
     expect(() =>
-      duet.schedule([note("a", 48, 0, 2)], 0, 1, false),
+      duet.schedule([note("a", 48, 0, 2), note("b", 52, 0, 2)], 0, 1, false),
     ).not.toThrow();
+    // The second note is not tried on the dropped output.
+    expect(send).toHaveBeenCalledOnce();
     expect(duet.connected).toBe(false);
+    expect(port.close).toHaveBeenCalledOnce();
+    expect(failed).not.toHaveBeenCalled();
+    await Promise.resolve();
     expect(failed).toHaveBeenCalledOnce();
   });
 });

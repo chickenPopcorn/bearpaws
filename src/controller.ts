@@ -125,26 +125,16 @@ export class Studio {
         }
         this.emit();
       },
-      onChange: () => {
+      onChange: () => this.emit(),
+      onOutputLost: () => {
+        // Playback, or a start still loading, routed the duet to the lost
+        // output and never prepared its laptop sound: stop, and let Play
+        // start over on the laptop.
+        if (this.destroyed || !(this.transport.playing || this.playbackPending))
+          return;
+        this.pause();
+        this.notice = "Piano output disconnected. Press Play to continue.";
         this.emit();
-        if (
-          this.midi?.selectedOutputId &&
-          !this.midi.duet.connected &&
-          this.midi.outputMessage
-        ) {
-          queueMicrotask(() => {
-            if (
-              !this.destroyed &&
-              this.transport.playing &&
-              !this.midi.duet.connected
-            ) {
-              this.pause();
-              this.notice =
-                "Piano output disconnected. Choose its output again, then press Play.";
-              this.emit();
-            }
-          });
-        }
       },
     });
   }

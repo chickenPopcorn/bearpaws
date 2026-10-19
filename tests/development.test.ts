@@ -1,12 +1,23 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const createClient = vi.hoisted(() => vi.fn(() => ({})));
 vi.mock("@supabase/supabase-js", () => ({ createClient }));
+let values: Map<string, string>;
+beforeEach(() => {
+  // Its own store: newer Node versions define an unusable localStorage
+  // global that hides happy-dom's.
+  values = new Map();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => values.get(k) ?? null,
+    setItem: (k: string, v: string) => values.set(k, v),
+    removeItem: (k: string) => values.delete(k),
+  });
+});
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.resetModules();
   createClient.mockClear();
-  localStorage.clear();
   window.history.replaceState({}, "", "/");
 });
 describe("local development account", () => {

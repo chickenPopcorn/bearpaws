@@ -1,11 +1,21 @@
 import type { Note } from "./song";
 
+/** Closing an unplugged port can reject; the port is dropped either way. */
+export function closeOutput(port: MIDIOutput) {
+  void port.close().catch(() => {});
+}
+
 /** Teacher-only output, on the student piano’s MIDI channel; never echoes or scores student input. */
 export class MidiDuet {
   private port?: MIDIOutput;
   private active = new Map<string, Note>();
   private cycle = -1;
   private channel = 0;
+  /** `lost` hears that the output stopped accepting notes. */
+  constructor(private lost: () => void = () => {}) {}
+  get connected() {
+    return !!this.port;
+  }
   /** Release on the old channel before following another input channel. */
   setChannel(channel: number) {
     if (
@@ -18,38 +28,43 @@ export class MidiDuet {
     this.stop();
     this.channel = channel;
   }
-  get connected() {
-    return !!this.port;
-  }
-  constructor(private failed: () => void = () => {}) {}
+  /** Silence and close the current output, then play on `port`, if any. */
   setOutput(port?: MIDIOutput) {
     if (port === this.port) return;
     this.stop();
+    const previous = this.port;
     this.port = port;
+    if (previous) closeOutput(previous);
   }
   private send(data: number[]) {
+    const port = this.port;
+    if (!port) return;
     try {
-      this.port?.send(data);
+      port.send(data);
     } catch {
-      // A disconnected output must not break the practice clock.
-      const port = this.port;
+      // An unplugged output must not break the practice clock. It can take
+      // no note-offs either, so its notes are simply forgotten.
       this.port = undefined;
-      for (const note of this.active.values()) {
-        try {
-          port?.send([0x80 | this.channel, note.pitch, 0]);
-        } catch {
-          /* Port is gone. */
-        }
-      }
       this.active.clear();
-      this.failed();
+      this.cycle = -1;
+      closeOutput(port);
+      // Report after the tick that is still scheduling.
+      queueMicrotask(this.lost);
     }
   }
+  private noteOff(pitch: number) {
+    this.send([0x80 | this.channel, pitch, 0]);
+  }
+  private sounding(pitch: number) {
+    for (const note of this.active.values())
+      if (note.pitch === pitch) return true;
+    return false;
+  }
   stop() {
-    for (const pitch of new Set([...this.active.values()].map((n) => n.pitch)))
-      this.send([0x80 | this.channel, pitch, 0]);
+    const pitches = new Set([...this.active.values()].map((n) => n.pitch));
     this.active.clear();
     this.cycle = -1;
+    for (const pitch of pitches) this.noteOff(pitch);
   }
   /** Called on the same 20 ms practice clock as the score, never ahead of a Wait gate. */
   schedule(
@@ -73,22 +88,24 @@ export class MidiDuet {
     for (const [id, n] of this.active) {
       if (wanted.has(id)) continue;
       this.active.delete(id);
-      if (![...this.active.values()].some((other) => other.pitch === n.pitch))
-        this.send([0x80 | this.channel, n.pitch, 0]);
+      // An overlapping note of the same pitch still owns the key.
+      if (!this.sounding(n.pitch)) this.noteOff(n.pitch);
     }
     for (const [id, n] of wanted) {
-      if (!this.port) break;
+      // A failed send has dropped the output.
+      if (!this.port) return;
       if (this.active.has(id)) continue;
-      const sounding = [...this.active.values()].some(
-        (other) => other.pitch === n.pitch,
-      );
+      // A new attack on a sounding pitch restarts it, as a pianist would.
+      if (this.sounding(n.pitch)) {
+        this.noteOff(n.pitch);
+        if (!this.port) return;
+      }
       this.active.set(id, n);
-      if (!sounding)
-        this.send([
-          0x90 | this.channel,
-          n.pitch,
-          Math.max(1, Math.min(127, Math.round(n.velocity * 127))),
-        ]);
+      this.send([
+        0x90 | this.channel,
+        n.pitch,
+        Math.max(1, Math.min(127, Math.round(n.velocity * 127))),
+      ]);
     }
   }
 }

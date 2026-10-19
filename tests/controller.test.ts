@@ -7,6 +7,8 @@ const env = vi.hoisted(() => ({
   now: 100,
   values: new Map<string, unknown>(),
   resets: [] as (() => void)[],
+  /** Each studio's report that its duet MIDI output was lost. */
+  outputLosses: [] as (() => void)[],
   unlockWait: null as Promise<void> | null,
   prepareWait: null as Promise<void> | null,
   /** What each studio does when another tab changes stored practice. */
@@ -44,8 +46,9 @@ vi.mock("../src/midi", () => ({
     duet = { connected: false, stop: vi.fn(), schedule: vi.fn() };
     selectOutput = vi.fn(async () => {});
     selectedId = "";
-    constructor(callbacks: { onReset(): void }) {
+    constructor(callbacks: { onReset(): void; onOutputLost(): void }) {
       env.resets.push(callbacks.onReset);
+      env.outputLosses.push(callbacks.onOutputLost);
     }
     connect = vi.fn(async () => {});
     autoConnect = vi.fn(async () => {});
@@ -196,6 +199,7 @@ beforeEach(() => {
   env.values.clear();
   env.watchers.clear();
   env.resets = [];
+  env.outputLosses = [];
   env.unlockWait = null;
   env.prepareWait = null;
   vi.spyOn(performance, "now").mockImplementation(() => env.now * 1000);
@@ -1532,6 +1536,25 @@ describe("teacher duet", () => {
     expect(studio.midi.duet.stop).toHaveBeenCalledOnce();
     studio.seek(0);
     expect(studio.midi.duet.stop).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels a start still loading when the duet's MIDI output is lost", async () => {
+    const studio = create(duetSong());
+    studio.mode("listen");
+    studio.duet();
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const starting = studio.play();
+    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
+    const signal = vi.mocked(studio.audio.prepare).mock.calls[0][1]!;
+    env.outputLosses.at(-1)!();
+    expect(signal.aborted).toBe(true);
+    expect(studio.notice).toMatch(/Piano output disconnected.*Press Play/);
+    finish();
+    await starting;
+    expect(studio.transport.playing).toBe(false);
   });
 
   it("sounds a duet note a Wait loop seek lands in", async () => {

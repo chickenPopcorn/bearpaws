@@ -645,14 +645,6 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
               onChange={(e) => void studio.duetOutput(e.target.value)}
             >
               <option value="">Laptop</option>
-              {studio.midi.selectedOutputId &&
-                !studio.midi.outputs.some(
-                  (p) => p.id === studio.midi.selectedOutputId,
-                ) && (
-                  <option value={studio.midi.selectedOutputId}>
-                    Disconnected output
-                  </option>
-                )}
               {studio.midi.outputs.map((port) => (
                 <option key={port.id} value={port.id}>
                   {port.name}
