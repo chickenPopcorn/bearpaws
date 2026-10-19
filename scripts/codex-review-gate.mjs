@@ -386,6 +386,13 @@ async function latestCodexReceipt(github, repo, number, sha) {
   return latest;
 }
 
+/**
+ * How long after a Code Review completes GitHub's views can still be missing
+ * the review it published. Only after this may the absence of a review count
+ * as a clean run; re-run the gate (workflow_dispatch) once it has passed.
+ */
+const SILENT_REVIEW_SETTLE_MS = 10 * 60 * 1000;
+
 async function codexThreadResolution(
   github,
   repo,
@@ -542,9 +549,13 @@ async function codexThreadResolution(
   } while (true);
   if (unresolved) return "failure";
   // Some connector versions record nothing at all for a clean Code Review: no
-  // findings flag and no review on GitHub. With no review published for this
-  // run, nothing remains to resolve once every Codex thread is resolved.
-  if (!findingsRecorded && !currentReview) return "success";
+  // findings flag and no review on GitHub. A review it did publish can take a
+  // moment to appear in GitHub's views, so absence counts as clean only once
+  // that has had time to settle, and every Codex thread is resolved.
+  if (!findingsRecorded && !currentReview)
+    return Date.now() - completed >= SILENT_REVIEW_SETTLE_MS
+      ? "success"
+      : "pending";
   return commentsComplete &&
     expectedFindings.size > 0 &&
     findings.size === expectedFindings.size &&

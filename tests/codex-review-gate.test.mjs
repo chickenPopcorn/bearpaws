@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCodexReviewGate } from "../scripts/codex-review-gate.mjs";
 
 const HEAD = "1".repeat(40);
@@ -926,12 +926,30 @@ describe("Codex review merge gate", () => {
       return state;
     };
 
-    it("passes once every Codex thread is resolved", async () => {
+    // Long enough after FINISH for GitHub's views to show a published review.
+    const SETTLED = Date.parse(FINISH) + 10 * 60 * 1000;
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("passes once every Codex thread is resolved and GitHub has settled", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED);
       const { run, reviewGraphql, threadGraphql } =
         setupFallback(silentState());
       reviewGraphql.mockResolvedValue(receiptPage([]));
       threadGraphql.mockResolvedValue(threadPage([]));
       await expect(run()).resolves.toMatchObject({ state: "success" });
+    });
+
+    it("stays pending while a published review may not be visible yet", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED - 1);
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
     });
 
     it("still fails while an older Codex finding is unresolved", async () => {
