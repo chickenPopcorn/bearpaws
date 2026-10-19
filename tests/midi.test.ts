@@ -428,6 +428,66 @@ describe("USB MIDI output selection", () => {
     expect(port.close).toHaveBeenCalledOnce();
   });
 
+  it("keeps the duet cursor when its input disconnects and its output remains", async () => {
+    const piano = input("in");
+    const { midi, access, change } = setup([piano]);
+    const port = {
+      id: "out",
+      state: "connected",
+      open: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn(),
+    } as unknown as MIDIOutput;
+    Object.defineProperty(access, "outputs", {
+      value: new Map([[port.id, port]]),
+    });
+    await midi.connect();
+    await midi.selectOutput("out");
+    const notes = [
+      {
+        id: "a",
+        pitch: 48,
+        start: 0,
+        end: 0.5,
+        soundEnd: 0.5,
+        velocity: 0.5,
+        track: 0,
+        channel: 0,
+      },
+      {
+        id: "b",
+        pitch: 50,
+        start: 1,
+        end: 2,
+        soundEnd: 2,
+        velocity: 0.5,
+        track: 0,
+        channel: 0,
+      },
+      {
+        id: "c",
+        pitch: 52,
+        start: 3,
+        end: 4,
+        soundEnd: 4,
+        velocity: 0.5,
+        track: 0,
+        channel: 0,
+      },
+    ];
+    midi.duet.schedule(notes, 0, 1, false, 0);
+    midi.duet.schedule(notes, 1.2, 1, false, 0);
+    Object.defineProperty(piano, "state", { value: "disconnected" });
+    change();
+    expect(midi.duet.connected).toBe(true);
+    expect(port.send).toHaveBeenLastCalledWith([0x80, 50, 0]);
+    vi.mocked(port.send).mockClear();
+    midi.duet.schedule(notes, 1.4, 1, false, 0);
+    expect(port.send).not.toHaveBeenCalled();
+    midi.duet.schedule(notes, 3, 1, false, 0);
+    expect(port.send).toHaveBeenCalledExactlyOnceWith([0x90, 52, 64]);
+  });
+
   it("follows the physical piano note channel but ignores note-offs and system messages", async () => {
     const piano = input("in");
     const { midi, access, send } = setup([piano]);

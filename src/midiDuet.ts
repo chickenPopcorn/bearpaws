@@ -79,13 +79,17 @@ export class MidiDuet {
   private sounding(pitch: number) {
     return [...this.active.values()].filter((note) => note.pitch === pitch);
   }
-  stop() {
+  /** Silence current keys without replaying earlier attacks when Listen continues. */
+  silence() {
     const pitches = new Set([...this.active.values()].map((n) => n.pitch));
     this.active.clear();
+    for (const pitch of pitches) this.noteOff(pitch);
+  }
+  stop() {
+    this.silence();
     this.started.clear();
     this.position = undefined;
     this.cycle = -1;
-    for (const pitch of pitches) this.noteOff(pitch);
   }
   /** Process every attack crossed by the clock, including notes shorter than a tick. */
   schedule(

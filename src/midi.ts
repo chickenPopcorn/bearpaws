@@ -299,7 +299,7 @@ export class MidiConnection {
     const input = this.input;
     this.input = undefined;
     if (input) {
-      this.duet.stop();
+      this.duet.silence();
       this.duet.setChannel(0);
       input.onmidimessage = null;
       // Closing a disconnected port can reject; cleanup must still clear held keys and pedals.
