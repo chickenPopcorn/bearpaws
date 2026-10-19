@@ -112,7 +112,7 @@ async function openSession(userId: string, email: string, name = "") {
 }
 
 /** Take the studio over from another tab. */
-export async function useHere() {
+export async function takeOverHere() {
   const userId = currentUser;
   if (!userId) return;
   await claim.claim(true);

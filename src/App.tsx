@@ -108,13 +108,7 @@ const Piano = memo(function Piano() {
     const rect = e.currentTarget.getBoundingClientRect(),
       x = (e.clientX - rect.left) / rect.width,
       y = e.clientY - rect.top;
-    const pitch = pianoKeyAt(
-      studio.song,
-      x,
-      y,
-      rect.height,
-      studio.duetNotes.length > 0,
-    );
+    const pitch = pianoKeyAt(studio.song, x, y, rect.height);
     if (pitch !== undefined) {
       e.currentTarget.setPointerCapture(e.pointerId);
       pointers.current.set(e.pointerId, pitch);

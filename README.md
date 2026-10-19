@@ -1,10 +1,14 @@
 # Paw Pal · MIDI piano practice
 
+[![Tests](https://github.com/chickenPopcorn/pawpal/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/chickenPopcorn/pawpal/actions/workflows/checks.yml)
+[![Code quality](https://github.com/chickenPopcorn/pawpal/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/chickenPopcorn/pawpal/actions/workflows/quality.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fpiano.pollos.us%2Fbadges%2Fcoverage.json)](https://github.com/chickenPopcorn/pawpal/actions/workflows/pages.yml)
+
 A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, browser storage, and Supabase accounts with Google sign-in. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
 
 ## Run locally
 
-Use Node.js 22.12+ (validated in this environment with Node 24.19) and npm.
+Use Node.js 22.13+ (validated in this environment with Node 24.19) and npm.
 
 ```sh
 npm ci
@@ -17,6 +21,9 @@ Open the printed local URL, normally `http://localhost:5173`. Desktop Chrome or 
 npm test               # Deterministic engine, MIDI lifecycle, controller, storage, audio/Canvas checks
 python3 -m unittest discover -s tests -p 'test_*.py' # Offline sample importer checks
 npm run test:watch     # Watch tests
+npm run test:coverage  # Tests with a coverage report in coverage/; fails below the floor in vite.config.ts
+npm run lint           # ESLint: TypeScript and React hook rules
+npm run format:check   # Check formatting without writing
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173
 npm run example        # Regenerate the original downloadable MIDI exercise
@@ -110,7 +117,7 @@ no guessed finger numbers.
 
 1. Choose a piece from George Bear’s Classes; use **Find a song** to filter them.
 2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. On later visits, saved browser permission automatically connects the first available MIDI input. When more than one input is available, a menu beside it chooses one. If the chosen input is unplugged, clicking Connect your piano picks any available input. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
-3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen plays your part for you and works without a piano. In Wait for me and Rhythm the app never plays your part: you do. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along, in every mode. As the book asks, the student part then usually moves up one octave; some pieces move it up two octaves or down one, and a few keep it as written. The waterfall, keyboard shortcuts and finger guide follow it, and the score keeps the written notes under an 8va, 15ma or 8vb mark. The waterfall shows the duet in yellow at quarter opacity behind your notes, and fits its keyboard to both parts; the duet is never fingered or scored, and Wait for me holds it at each of your notes until you play them.
+3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen plays your part for you and works without a piano. In Wait for me and Rhythm the app never plays your part: you do. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along, in every mode. As the book asks, the student part then usually moves up one octave; some pieces move it up two octaves or down one, and a few keep it as written. The waterfall, keyboard shortcuts and finger guide follow it, and the score keeps the written notes under an 8va, 15ma or 8vb mark. The waterfall shows the duet in yellow at quarter opacity behind your notes, wherever it falls on the keys your part uses; the duet is never fingered or scored, and Wait for me holds it at each of your notes until you play them.
 4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
 What the app plays depends on the mode:

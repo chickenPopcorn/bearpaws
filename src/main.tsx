@@ -8,7 +8,7 @@ import {
   settled,
   signOut,
   subscribeGate,
-  useHere,
+  takeOverHere,
   watchAuth,
 } from "./session";
 import { SignIn } from "./SignIn";
@@ -38,7 +38,7 @@ function Root() {
     return (
       <OpeningStudio
         error="Paw Pal is open in another tab. Practice there, or move it here."
-        action={{ label: "Use here", onClick: () => void useHere() }}
+        action={{ label: "Use here", onClick: () => void takeOverHere() }}
       />
     );
   if (current.status === "failed")

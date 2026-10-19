@@ -371,7 +371,9 @@ export async function loadLibrary(
       return (await response.json()) as unknown;
     } catch (error) {
       if (controller.signal.aborted)
-        throw new Error(`Library file ${path}: no response within 30 seconds`);
+        throw new Error(`Library file ${path}: no response within 30 seconds`, {
+          cause: error,
+        });
       throw error;
     } finally {
       clearTimeout(timer);
