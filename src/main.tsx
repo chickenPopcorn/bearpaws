@@ -1,6 +1,5 @@
 import React, {
   memo,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -24,7 +23,7 @@ import { LoopBoundInput } from "./LoopBoundInput";
 import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
-import { collectionForSong, songsInCollection } from "./collections";
+import { bookForSong, songsInBook } from "./books";
 import { BrowserStorageError, CloudSync } from "./cloud";
 import { OpeningStudio, SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
@@ -312,11 +311,6 @@ const PassagePanel = memo(function PassagePanel({
           {w}
         </p>
       ))}
-      {!song.library && (
-        <button className="text-button" onClick={() => void studio.remove()}>
-          Remove this local song
-        </button>
-      )}
     </section>
   );
 });
@@ -449,8 +443,6 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [connectTried, setConnectTried] = useState(false),
     [busy, setBusy] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
-  const openImport = useCallback(() => file.current?.click(), []);
   const fullscreen = usePianoFullscreen(() => {
     if (!studio.transport.playing && !busy) void startPlayback();
   });
@@ -462,15 +454,13 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
     selectedDevice = studio.midi.devices.find(
       (d) => d.id === studio.midi.selectedId,
     );
-  const collection = collectionForSong(studio.song);
-  const collectionSongs = songsInCollection(studio.songs, collection.id);
-  const songIndex = collectionSongs.findIndex(
-    (song) => song.id === studio.song.id,
-  );
-  const previousSong = collectionSongs[songIndex - 1];
-  const nextSong = collectionSongs[songIndex + 1];
+  const book = bookForSong(studio.song);
+  const bookSongs = songsInBook(studio.songs, book.id);
+  const songIndex = bookSongs.findIndex((song) => song.id === studio.song.id);
+  const previousSong = bookSongs[songIndex - 1];
+  const nextSong = bookSongs[songIndex + 1];
   useEffect(() => {
-    void studio.init();
+    studio.init();
     const down = (e: KeyboardEvent) => {
       if (
         (e.target as HTMLElement).closest(
@@ -646,24 +636,8 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
             selected={studio.song.id}
             savedSelection={studio.savedSelection}
             onSelect={selectSong}
-            onImport={openImport}
           />
-          <input
-            ref={file}
-            className="sr-only"
-            type="file"
-            accept=".mid,.midi,audio/midi,audio/x-midi"
-            aria-label="Import MIDI file"
-            onChange={(e) => {
-              if (e.target.files?.[0]) void studio.import(e.target.files[0]);
-              e.target.value = "";
-            }}
-          />
-          <p className="privacy">
-            Imported songs stay on this browser.
-            <br />
-            Progress syncs to your account.
-          </p>
+          <p className="privacy">Progress syncs to your account.</p>
           <div className="side-footer">
             <strong>One phrase at a time.</strong>Slow it down.
             <br />
@@ -693,16 +667,12 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                 ) : studio.song.lesson ? (
                   `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
                 ) : (
-                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`
+                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events`
                 )}
               </p>
             </div>
             <div className="song-tools">
-              <span className="chip">
-                {studio.song.library
-                  ? "Shared library"
-                  : "Saved on this browser"}
-              </span>
+              <span className="chip">{book.title}</span>
               {studio.song.library?.midi && (
                 <a
                   className="song-midi-download"
@@ -745,9 +715,8 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                     <strong className="fullscreen-song-title">
                       <SongTitle title={studio.song.title} />
                     </strong>
-                    <div className="fullscreen-collection">
-                      {collection.title} · {songIndex + 1} of{" "}
-                      {collectionSongs.length}
+                    <div className="fullscreen-book">
+                      {book.title} · {songIndex + 1} of {bookSongs.length}
                     </div>
                   </div>
                 )}
@@ -837,7 +806,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                   <div
                     className="song-navigation"
                     role="group"
-                    aria-label="Collection navigation"
+                    aria-label="Book navigation"
                   >
                     <button
                       aria-label="Previous song"
@@ -845,7 +814,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                       title={
                         previousSong
                           ? `Previous: ${previousSong.title} (Left arrow)`
-                          : "First song in this collection"
+                          : "First song in this book"
                       }
                       disabled={!previousSong || busy}
                       onClick={() => void navigateSong(previousSong)}
@@ -858,7 +827,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                       title={
                         nextSong
                           ? `Next: ${nextSong.title} (Right arrow)`
-                          : "Last song in this collection"
+                          : "Last song in this book"
                       }
                       disabled={!nextSong || busy}
                       onClick={() => void navigateSong(nextSong)}
@@ -1075,18 +1044,6 @@ async function openSession(userId: string, email: string) {
   cloud = sync;
   studio = new Studio(library, sync);
   sync.onChange = () => studio.emit();
-  // A saved import loads from browser storage. While the page as it was left
-  // is on screen, wait briefly for it, so the first render does not show
-  // another song.
-  if (
-    snapshotOnScreen &&
-    !library.some((song) => song.id === studio.savedSelection)
-  )
-    await Promise.race([
-      studio.init(),
-      new Promise((resolve) => setTimeout(resolve, 1000)),
-    ]);
-  if (currentUser !== userId) return;
   readyGate = { status: "ready", userId, email };
   setGate(readyGate);
 }

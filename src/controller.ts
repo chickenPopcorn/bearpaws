@@ -7,23 +7,12 @@ import {
 } from "./engine";
 import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
-import {
-  checkMidiSize,
-  parseSong,
-  type PedalSpan,
-  type Song,
-  type Hand,
-} from "./song";
+import type { PedalSpan, Song, Hand } from "./song";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
 import {
   settings,
   write,
   progress,
-  library,
-  saveSong,
-  deleteSong,
-  removeProgress,
-  songId,
   DAILY_GOAL_CHOICES,
   LEARNER_NAME_MAX,
   type Progress,
@@ -43,8 +32,6 @@ export class Studio {
   private audioPreparations = new Set<AbortController>();
   private virtualRequests = new Map<number, number>();
   private nextVirtualRequest = 0;
-  private lifecycleGeneration = 0;
-  private initialization: Promise<void> | undefined;
   private destroyed = false;
   private selectedNotes: Song["notes"] = [];
   scoringEpoch = 0;
@@ -52,7 +39,6 @@ export class Studio {
   // session belong to the previous pass.
   private passEpoch = -Infinity;
   /** The shared song library, in library order. */
-  readonly library: Song[];
   songs: Song[];
   song: Song;
   audio = new ReferenceAudio();
@@ -97,10 +83,8 @@ export class Studio {
     private sync?: SyncHooks,
   ) {
     if (!library.length) throw new Error("The song library is empty.");
-    this.library = [...library];
     this.songs = [...library];
-    // Loading writes the selection, so start on the saved library song (if
-    // any) rather than overwrite it before imported songs load, or fail to.
+    // Start on the saved song, if it is still in the library.
     this.song =
       this.songs.find((song) => song.id === this.savedSelection) ??
       this.songs[0];
@@ -196,49 +180,19 @@ export class Studio {
     this.revision++;
     for (const l of this.listeners) l();
   }
-  init(): Promise<void> {
-    if (this.initialization) return this.initialization;
-    if (this.timer !== null) return Promise.resolve();
+  /** Start the practice clock and look for a piano, again after destroy(). */
+  init() {
+    if (this.timer !== null) return;
     if (this.destroyed) {
       this.midi = this.createMidi();
       this.destroyed = false;
     }
-    const generation = ++this.lifecycleGeneration;
     void this.midi.autoConnect();
-    this.initialization = this.loadLibrary(generation).finally(() => {
-      if (generation === this.lifecycleGeneration)
-        this.initialization = undefined;
-    });
-    return this.initialization;
-  }
-  private async loadLibrary(generation: number) {
-    try {
-      const songs = await library();
-      if (generation !== this.lifecycleGeneration) return;
-      const shared = new Set(this.library.map((song) => song.id));
-      this.songs = [
-        ...this.library,
-        ...songs.filter((song) => !shared.has(song.id)),
-      ];
-      const selected = this.songs.find((s) => s.id === this.savedSelection);
-      // A saved built-in song is already active; reloading it would stop any
-      // practice that started before the library finished loading.
-      if (selected && selected.id !== this.song.id) this.load(selected);
-      this.emit();
-    } catch {
-      if (generation !== this.lifecycleGeneration) return;
-      this.storageNotice =
-        "Local song storage is unavailable. Imports work for this session.";
-      this.emit();
-    }
-    if (generation === this.lifecycleGeneration)
-      this.timer = setInterval(() => this.tick(), 20);
+    this.timer = setInterval(() => this.tick(), 20);
   }
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.lifecycleGeneration++;
-    this.initialization = undefined;
     this.cancelPlaybackPreparation();
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
@@ -698,59 +652,5 @@ export class Studio {
       this.notice = this.audio.error || SOUND_UNAVAILABLE;
       this.emit();
     }
-  }
-  async import(file: File) {
-    try {
-      checkMidiSize(file.size);
-      const bytes = new Uint8Array(await file.arrayBuffer()),
-        song = parseSong(
-          bytes,
-          file.name.replace(/\.midi?$/i, ""),
-          await songId(bytes),
-        );
-      try {
-        await saveSong(song);
-      } catch {
-        this.storageNotice =
-          "This song is available for this session; browser storage could not save it.";
-      }
-      this.songs = [...this.songs.filter((s) => s.id !== song.id), song];
-      this.save();
-      this.load(song);
-      this.notice =
-        song.tracks.filter((t) => t.count).length > 1
-          ? "Choose Left, Right, or Skip for each track below before playing."
-          : "Imported locally. Check the track assignment below.";
-      this.emit();
-    } catch (error) {
-      this.notice =
-        error instanceof Error
-          ? error.message
-          : "Unable to read this MIDI file.";
-      this.emit();
-    }
-  }
-  async remove() {
-    const id = this.song.id;
-    if (this.song.library) return;
-    this.pause();
-    try {
-      await deleteSong(id);
-    } catch {
-      this.notice = "This song could not be removed from local storage.";
-      this.emit();
-      return;
-    }
-    // IndexedDB deletion has committed. Progress cleanup must not undo the UI result.
-    this.sync?.forgetProgress(id);
-    try {
-      removeProgress(id);
-    } catch {
-      this.storageNotice =
-        "Song removed. Saved progress could not be cleared in this browser.";
-    }
-    this.songs = this.songs.filter((song) => song.id !== id);
-    if (this.song.id === id) this.load(this.songs[0]);
-    else this.emit();
   }
 }
