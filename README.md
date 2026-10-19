@@ -141,7 +141,7 @@ voice follows the SFZ preset.
 Sign-in with Google is required. Supabase (project `pawpal`) holds each user's settings and practice progress, and row-level security limits every row to the user who owns it:
 
 - `settings`: one row per user, the studio settings.
-- `progress`: per song, the position, track assignments, passage, number of starts, and best matched-note proportion.
+- `progress`: per song, the position, track assignments, passage, number of starts, and best matched-note proportion. Each account keeps at most 200 songs' progress, 16 KiB each (`progress_quota`), which a direct Data API caller cannot exceed either.
 
 The songs themselves come from the shared library (see above), which is the same for everyone and read-only. The app has no MIDI import. Songs imported by earlier versions stay in this browser's IndexedDB, untouched; the app no longer reads them.
 
