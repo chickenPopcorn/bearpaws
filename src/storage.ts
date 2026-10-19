@@ -4,6 +4,9 @@ import {
   normalizePianoSound,
   type PianoVoices,
 } from "./pianoSound";
+/** Daily practice goals to choose from, in minutes. */
+export const DAILY_GOAL_CHOICES = [5, 10, 15, 20, 30];
+export const LEARNER_NAME_MAX = 40;
 export interface Settings {
   mode: Mode;
   speed: number;
@@ -16,6 +19,10 @@ export interface Settings {
   ambience: number;
   /** The optional Accurate-Salamander voices that play. */
   pianoVoices: PianoVoices;
+  /** Who practices here, for the calendar's praise; may be blank. */
+  learnerName: string;
+  /** Minutes of practice that earn a day its star. */
+  dailyGoalMinutes: number;
 }
 export interface Progress {
   position: number;
@@ -37,6 +44,8 @@ export const defaults: Settings = {
   selected: "cadence-ode-to-joy-v1",
   ambience: DEFAULT_PIANO_SOUND.ambience,
   pianoVoices: { ...DEFAULT_PIANO_SOUND.voices },
+  learnerName: "",
+  dailyGoalMinutes: 5,
 };
 const storageKey = (key: string) => `cadence:${key}`;
 export function read<T>(key: string, fallback: T): T {
@@ -56,11 +65,43 @@ export function write(key: string, value: unknown) {
     return false;
   }
 }
-/** Throws when browser storage is blocked. */
-/** Remove a stored value. Throws when browser storage is blocked. */
-export function remove(key: string) {
-  localStorage.removeItem(storageKey(key));
+/** Every stored value whose key starts with `prefix`, skipping unreadable ones. */
+export function readAll(prefix: string): unknown[] {
+  const values: unknown[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(storageKey(prefix))) continue;
+      try {
+        values.push(JSON.parse(localStorage.getItem(key) || "null"));
+      } catch {}
+    }
+  } catch {}
+  return values;
 }
+/**
+ * Call `onChange` when another tab changes a stored value whose key starts
+ * with `prefix`, or clears storage. Returns a function that stops watching.
+ */
+export function watchStored(prefix: string, onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const listener = (event: StorageEvent) => {
+    if (event.key === null || event.key.startsWith(storageKey(prefix)))
+      onChange();
+  };
+  window.addEventListener("storage", listener);
+  return () => window.removeEventListener("storage", listener);
+}
+/** Returns false when browser storage is blocked. */
+export function remove(key: string) {
+  try {
+    localStorage.removeItem(storageKey(key));
+    return true;
+  } catch {
+    return false;
+  }
+}
+/** Throws when browser storage is blocked. */
 export function removeProgress(id: string) {
   localStorage.removeItem(storageKey(`progress:${id}`));
 }
@@ -110,6 +151,13 @@ export function settings(): Settings {
     selected: typeof s.selected === "string" ? s.selected : defaults.selected,
     ambience: sound.ambience,
     pianoVoices: sound.voices,
+    learnerName:
+      typeof s.learnerName === "string"
+        ? s.learnerName.slice(0, LEARNER_NAME_MAX)
+        : "",
+    dailyGoalMinutes: DAILY_GOAL_CHOICES.includes(s.dailyGoalMinutes)
+      ? s.dailyGoalMinutes
+      : defaults.dailyGoalMinutes,
   };
 }
 export function progress(id: string, duration: number): Progress {

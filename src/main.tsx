@@ -2,6 +2,7 @@ import React, {
   memo,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -28,6 +29,7 @@ import { StudioClaim } from "./studioClaim";
 import { OpeningStudio, SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
+import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
 import "./style.css";
 // One studio per signed-in session, created once the account's songs and
 // progress are on this browser. App only renders while it exists.
@@ -39,6 +41,9 @@ const downloadUrl = (midi: string, id: string) => {
   url.searchParams.set("download", `${id}.mid`);
   return url.toString();
 };
+const practiceDay = () => studio.practiceLog.today();
+const setLearnerName = (name: string) => studio.learnerName(name);
+const setDailyGoal = (minutes: number) => studio.dailyGoal(minutes);
 const stamp = (t: number) =>
   `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 // The studio is a singleton, so these stay stable and let memoized views skip
@@ -539,6 +544,13 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   const misses = p.recentMisses,
     stats = p.stats,
     recent = p.feedback.at(-1);
+  const today = useLocalDay(practiceDay);
+  // Totals change at most once a second, when a day gains a whole second.
+  const practiceRevision = studio.practiceLog.revision;
+  const practiceTotals = useMemo(
+    () => studio.practiceLog.totals(),
+    [practiceRevision, today],
+  );
   return (
     <div className="app">
       <header className="top">
@@ -612,6 +624,14 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
       )}
       <div className="body">
         <aside className="sidebar">
+          <PracticeCalendar
+            totals={practiceTotals}
+            today={today}
+            learnerName={s.learnerName}
+            goalMinutes={s.dailyGoalMinutes}
+            onLearnerName={setLearnerName}
+            onGoalMinutes={setDailyGoal}
+          />
           <SongLibrary
             songs={studio.songs}
             selected={studio.song.id}
