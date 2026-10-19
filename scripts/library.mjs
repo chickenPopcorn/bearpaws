@@ -193,8 +193,9 @@ async function push(bucket, validateIndex, validateSong) {
       files.push([out.midi, midiBytes, "audio/midi"]);
     }
   }
+  const indexBytes = Buffer.from(JSON.stringify(published, null, 2) + "\n");
   // The bucket refuses larger files, so stop before uploading any.
-  for (const [path, bytes] of files)
+  for (const [path, bytes] of [...files, ["index.json", indexBytes]])
     if (bytes.length > MAX_FILE)
       throw new Error(`${path} is larger than the bucket's 5 MiB file limit.`);
 
@@ -213,12 +214,7 @@ async function push(bucket, validateIndex, validateSong) {
   for (const [path, bytes, type] of files)
     await upload(path, bytes, type, FOREVER);
   // The index goes last, so it never lists a file that is not there yet.
-  await upload(
-    "index.json",
-    Buffer.from(JSON.stringify(published, null, 2) + "\n"),
-    "application/json",
-    BRIEF,
-  );
+  await upload("index.json", indexBytes, "application/json", BRIEF);
 
   // retired.json records when each unlisted file left the index. Files are
   // removed only once they have been unlisted for RETIRE_MS, however many
