@@ -2,7 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 import { SUPABASE_URL } from "./e2e/fake-supabase";
 
 // Its own port and build folder, so a running `npm run dev` or `npm run
-// build` is never mistaken for the e2e build.
+// build` is never mistaken for the e2e build. Every run builds afresh: a
+// server already on the port fails the run rather than being tested.
 const PORT = 4174;
 const OUT_DIR = "e2e/.dist";
 
@@ -25,7 +26,7 @@ export default defineConfig({
     // that e2e/fake-supabase.ts answers for.
     command: `vite build --outDir ${OUT_DIR} --emptyOutDir && vite preview --outDir ${OUT_DIR} --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 180_000,
     env: {
       VITE_SUPABASE_URL: SUPABASE_URL,

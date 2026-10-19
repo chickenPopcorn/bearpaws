@@ -12,4 +12,5 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
-      - run: npx tsc -b
+      # The app and its tests, then the browser tests (e2e/tsconfig.json).
+      - run: npx tsc -b . e2e
