@@ -52,9 +52,7 @@ Search the library by title or composer. **Download MIDI** saves the selected
 arrangement as a standard MIDI file.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
-with barlines. General MIDI players may ignore these text events; the library
-songs retain their fingering, but reimporting a MIDI treats it as an ordinary
-import without lesson metadata.
+with barlines. General MIDI players may ignore these text events.
 
 ### The song library
 
@@ -86,8 +84,8 @@ reads the bucket. A copy of three songs in `tests/fixtures/` serves the tests.
 The sheet-music timeline above the waterfall follows the current bar. Accepted
 notes fade to 50% opacity in practice modes; Listen marks the notes played by
 the reference audio. Disabled hands remain visible at half opacity. Written
-rhythms and rests are preserved for the built-in pieces; imported MIDI uses
-approximate note values derived from performed timing.
+rhythms and rests are preserved for the lessons; a song converted from plain
+MIDI uses approximate note values derived from performed timing.
 Click a note or drag across the score to change playback position. The focused
 score also supports Shift+arrow for a bar and Home/End. Left/Right arrow keys
 select the previous/next song in the current collection and start playback,
@@ -102,14 +100,13 @@ playback controls remain available in either view. The finger guide always shows
 animated bear paws directly from the source, with no saved display preference.
 Reduced-motion settings disable their animation.
 On both hands, 1 means thumb and 5 means little finger. Changing a track to the
-opposite hand hides its original fingering; imported MIDI is not assigned
-guessed finger numbers.
+opposite hand hides its original fingering; a song converted from plain MIDI
+gets no guessed finger numbers.
 
 1. Choose a beginner piece from the library; use **Find a song** to filter it.
 2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. On later visits, saved browser permission automatically connects the first available MIDI input. When more than one input is available, a menu beside it chooses one. If the chosen input is unplugged, clicking Connect your piano picks any available input. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
-3. Import `.mid` / `.midi` files. Assign each note-bearing track to **Left**, **Right**, or **Skip** under _Make it yours_. Multiple-track imports start unassigned. A single-track import starts assigned to Right; a single track cannot be split by pitch in this MVP.
-4. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Import and Listen work without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
-5. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
+3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen works without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
+4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
 **Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.
 
@@ -134,7 +131,7 @@ release harmonics, key release noise, pedal noise and pedal resonance on or
 off; these are remembered in this browser. Turning one off stops it at once.
 Turning one on during playback restarts playback at the same place so that its
 recordings can load. These
-voices follow the imported MIDI's sustain pedal (CC64); built-in lessons have
+voices follow a song's sustain pedal (CC64); built-in lessons have
 no pedal, so they use only release harmonics and key noise. See the
 [adaptation notes](public/audio/accurate-salamander/LICENSE.md) for how each
 voice follows the SFZ preset.
@@ -149,7 +146,7 @@ Sign-in with Google is required. Supabase (project `pawpal`) holds each user's s
 
 The practice calendar at the top of the sidebar shows this month: a star on each day with at least 5 minutes of practice, a dot on days with less, and a ring filling up for today. Practice time counts only while a song plays in Wait for me or Rhythm and a key was pressed within the last 15 seconds; Listen, paused time and a Wait gate left waiting do not count. Days follow the device's local calendar, and sign-in loads the last 92 days for the calendar and streak.
 
-The songs themselves come from the shared library (see above), which is the same for everyone and read-only. MIDI files you import are stored only in this browser (IndexedDB, normalized and keyed by a SHA-256 hash of their contents); they are never uploaded and do not appear on other devices. Removing an imported song removes it from the browser and its progress from your account. Signing out keeps imported songs.
+The songs themselves come from the shared library (see above), which is the same for everyone and read-only. The app has no MIDI import. Songs imported by earlier versions stay in this browser's IndexedDB, untouched; the app no longer reads them.
 
 The browser keeps the working copy of settings and progress in localStorage, and remembers which changes the account has not confirmed yet. At sign-in those unconfirmed changes upload; everything else takes the account's copy, so no device's clock decides which version wins (the server stamps each write). Changes upload about two seconds after they happen, one upload at a time; a request that takes over 30 seconds is aborted and retried. Signing out uploads waiting changes, then clears this browser's copy of the account's settings and progress; if Supabase cannot end the session, you stay signed in. Best proportion uses all eligible notes in the current passage, including upcoming notes.
 
@@ -164,7 +161,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 Deployment reads the same two names from the repository's GitHub Actions variables. The publishable key only allows what row-level security allows; never use the secret key here.
 
-Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Imported notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. Imports are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
+`npm run library:push` converts library MIDI files with the app's parser. Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Converted notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. MIDI files are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
 
 ## Architecture
 
@@ -174,7 +171,7 @@ Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, in
 - `src/midi.ts`: explicit Web MIDI permission/device selection and connection lifecycle.
 - `src/controller.ts`: shared practice timeline, transport actions and local progress.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
-- `src/storage.ts`: validated settings/progress and IndexedDB song library.
+- `src/storage.ts`: validated settings and progress.
 - `src/cloud.ts`, `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in and account sync.
 - `src/library.ts`, `scripts/library.mjs`: the shared song library and its pull/push script.
 - `src/main.tsx`: Practice studio: library, practice controls, piano and score.

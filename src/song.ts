@@ -71,7 +71,7 @@ export interface Song {
     bpm: number;
     handPositions: { left: string; right: string };
   };
-  /** Set on songs from the shared library bucket; imported songs have none. */
+  /** Set on songs from the shared library bucket. */
   library?: {
     collection: "classes" | "songs" | "pops";
     /** Public URL of the song's MIDI file, for its Download button. */

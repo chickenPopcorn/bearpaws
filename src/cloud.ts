@@ -110,18 +110,15 @@ interface PracticeRow {
 export interface SyncHooks {
   settings(settings: Settings): void;
   progress(songId: string, progress: Progress): void;
-  /** The song was removed from this browser, so its progress goes too. */
-  forgetProgress(songId: string): void;
   /** A practice session gained time. */
   practice(session: PracticeSession): void;
 }
 
 /**
  * Keeps one user's settings, practice progress and practice time in their
- * Supabase account.
- * Imported MIDI files never leave the browser. This browser's storage stays
- * the working copy: pull() fills it from the account at sign-in, and later
- * changes upload shortly after they happen, one upload at a time.
+ * Supabase account. This browser's storage stays the working copy: pull()
+ * fills it from the account at sign-in, and later changes upload shortly after
+ * they happen, one upload at a time.
  */
 export class CloudSync implements SyncHooks {
   private pendingSettings: Settings | null = null;
@@ -165,7 +162,7 @@ export class CloudSync implements SyncHooks {
       if (!write(key, value)) throw new BrowserStorageError();
     };
     // Another account's settings and progress must not show in, or upload
-    // to, this one. Imported songs belong to the browser and stay.
+    // to, this one.
     const owner = read<string | null>("owner", null);
     if (owner && owner !== this.userId) clearAccountData();
     // The first account on this browser adopts what was saved here before.
@@ -305,6 +302,7 @@ export class CloudSync implements SyncHooks {
     this.queued();
   }
 
+  /** Delete a song's saved progress from the account. */
   forgetProgress(songId: string) {
     if (this.stopped) return;
     // Deletes join the upload queue, so an upload already under way cannot
@@ -490,7 +488,6 @@ export class CloudSync implements SyncHooks {
    * Once signed out, syncing stops and this browser's copy of the account's
    * settings and progress is cleared, unless some changes could not be
    * uploaded: the next sign-in by the same account uploads them then.
-   * Imported songs stay on the browser.
    */
   async signOut() {
     await this.flush();
