@@ -1,7 +1,9 @@
 name: Codex review gate (merge queue)
 
 # A pull request enters the merge queue only after its own Codex review gate
-# passed, so the queue's merge commit gets the same required status here.
+# passed. The gate can change while it waits, so check it again here and copy
+# its current state to the queue's merge commit; anything but success drops
+# the pull request from the queue.
 # Trigger on merge_group only: a skipped job on a pull request would still add
 # a check run to its head, and that could satisfy the required check in place
 # of the real gate in codex-review-gate.yml.
@@ -9,17 +11,50 @@ on:
   merge_group:
 
 permissions:
+  pull-requests: read
   statuses: write
 
 jobs:
-  pass-merge-group:
+  check-queued-gate:
     runs-on: ubuntu-latest
     steps:
-      - run: >-
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA"
-          -f state=success
-          -f context="Codex review gate"
-          -f description="Each queued pull request passed its own Codex review gate."
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const CONTEXT = "Codex review gate";
+            const { head_ref, head_sha } = context.payload.merge_group;
+            // The queue names each group's branch after its newest pull request;
+            // the ones ahead of it were checked by their own groups.
+            const number = Number(head_ref.match(/\/pr-(\d+)-[0-9a-f]+$/)?.[1]);
+            let state = "failure";
+            let description = `No pull request found in ${head_ref}.`;
+            if (number) {
+              const { data: pull } = await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: number,
+              });
+              // Newest first. Only the gate workflow's own statuses count.
+              const statuses = await github.paginate(
+                github.rest.repos.listCommitStatusesForRef,
+                { ...context.repo, ref: pull.head.sha, per_page: 100 },
+              );
+              const gate = statuses.find(
+                (status) =>
+                  status.context === CONTEXT &&
+                  status.creator?.id === 41898282 &&
+                  status.creator?.login === "github-actions[bot]",
+              );
+              state = gate?.state === "success" ? "success" : "failure";
+              description =
+                state === "success"
+                  ? `#${number} passed its Codex review gate.`
+                  : `#${number}'s Codex review gate is ${gate?.state ?? "missing"}.`;
+            }
+            await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha: head_sha,
+              state,
+              context: CONTEXT,
+              description,
+            });
+            if (state !== "success") core.setFailed(description);

@@ -24,10 +24,14 @@ The `project main` ruleset requires `test-and-build` (the checks workflow) and
 also report on a merge queue's merge commits. The checks workflow runs on
 `merge_group`, and skips push runs on the queue's `gh-readonly-queue/*`
 branches, which would repeat it. A pull request joins the queue only after its
-own Codex review gate passed, so `codex-merge-group.yml` marks
-`Codex review gate` as passed on the queue's merge commit. That workflow runs on
-`merge_group` only. A job skipped on pull requests would leave a check run on
-the pull request that could stand in for the real gate.
+own Codex review gate passed. The gate can change while the pull request waits,
+so `codex-merge-group.yml` reads the pull request's gate again when the queue
+builds its merge commit and copies that state there; anything but success drops
+it from the queue. A review requested after that read can still finish after
+the merge, so take a pull request out of the queue before asking for another
+review. That workflow runs on `merge_group` only. A job skipped on pull
+requests would leave a check run on the pull request that could stand in for
+the real gate.
 
 The queue is not enabled yet. Merge these workflows into `main` first, then a
 repository admin turns it on:
