@@ -43,7 +43,8 @@ npm run format         # Format source, tests and documentation
 - `src/library.ts`, `scripts/library.mjs`: the shared song library and its pull/push script.
 - `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in.
 - `src/cloud.ts`, `src/studioClaim.ts`: account sync, one studio tab at a time.
-- `src/main.tsx`: Practice studio: library, practice controls, piano and score.
+- `src/main.tsx`, `src/session.ts`: page startup, and sign-in through to the open studio.
+- `src/App.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.
 

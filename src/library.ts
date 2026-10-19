@@ -1,4 +1,5 @@
 import type { Song } from "./song";
+import { lastIndexAtOrBefore } from "./timeline";
 
 /** A library request that takes longer than this fails, so startup can offer a retry. */
 const TIMEOUT_MS = 30000;
@@ -48,6 +49,57 @@ function fail(where: string, problem: string): never {
   throw new Error(`${where}: ${problem}`);
 }
 
+interface Span {
+  channel: number;
+  start: number;
+  end: number;
+  open?: true;
+}
+/** A sustain-pedal press inside a song `duration` seconds long. */
+const pedalSpan = (value: unknown, duration: number): value is Span =>
+  isRecord(value) &&
+  whole(value.channel) &&
+  finite(value.start) &&
+  finite(value.end) &&
+  // Left down at the end of the file, or absent.
+  (value.open === undefined || value.open === true) &&
+  (value.start as number) >= 0 &&
+  (value.end as number) >= (value.start as number) &&
+  (value.end as number) <= duration + 1e-6;
+
+/**
+ * A note of either part that sounds inside a song `duration` seconds long,
+ * in order: playback, scoring and the score all assume it. A silent note
+ * would still be a target to play.
+ */
+const soundingNote = (
+  value: unknown,
+  duration: number,
+): value is Record<string, unknown> & {
+  id: string;
+  pitch: number;
+  start: number;
+  end: number;
+  soundEnd: number;
+  channel: number;
+} =>
+  isRecord(value) &&
+  text(value.id) &&
+  whole(value.pitch) &&
+  (value.pitch as number) >= 0 &&
+  (value.pitch as number) <= 127 &&
+  finite(value.start) &&
+  finite(value.end) &&
+  finite(value.soundEnd) &&
+  finite(value.velocity) &&
+  (value.velocity as number) > 0 &&
+  (value.velocity as number) <= 1 &&
+  whole(value.channel) &&
+  (value.start as number) >= 0 &&
+  (value.end as number) >= (value.start as number) &&
+  (value.soundEnd as number) >= (value.end as number) &&
+  (value.soundEnd as number) <= duration + 1e-6;
+
 /** Check index.json and return it typed. Throws with the first problem found. */
 export function validateIndex(value: unknown): LibraryIndex {
   if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.songs))
@@ -94,6 +146,7 @@ export function validateSong(value: unknown, id: string): Song {
   if (!text(value.title)) fail(where, "missing title");
   if (!finite(value.duration) || (value.duration as number) <= 0)
     fail(where, "duration must be a positive number");
+  const duration = value.duration as number;
   if (!whole(value.ppq) || (value.ppq as number) <= 0)
     fail(where, "ppq must be a positive whole number");
   // The studio renders these fields directly, so each must have its type.
@@ -179,24 +232,9 @@ export function validateSong(value: unknown, id: string): Song {
     )
   )
     fail(where, "source needs composer, description, url and credit");
-  if (
-    value.pedals !== undefined &&
-    !(
-      Array.isArray(value.pedals) &&
-      value.pedals.every(
-        (p) =>
-          isRecord(p) &&
-          whole(p.channel) &&
-          finite(p.start) &&
-          finite(p.end) &&
-          // Left down at the end of the file, or absent.
-          (p.open === undefined || p.open === true) &&
-          (p.start as number) >= 0 &&
-          (p.end as number) >= (p.start as number) &&
-          (p.end as number) <= (value.duration as number) + 1e-6,
-      )
-    )
-  )
+  // Only a missing list means no pedal; null is not a list.
+  const pedals = value.pedals === undefined ? [] : value.pedals;
+  if (!Array.isArray(pedals) || !pedals.every((p) => pedalSpan(p, duration)))
     fail(
       where,
       "pedals must be a list of { channel, start, end } inside the song",
@@ -204,19 +242,17 @@ export function validateSong(value: unknown, id: string): Song {
   // Pedal lookup searches each channel's spans by start time.
   // One channel's pedal is down for one span at a time.
   // A span still down at the end of the file is the channel's last.
-  const pedalEnds = new Map<number, number>();
-  for (const p of (value.pedals ?? []) as {
-    channel: number;
-    start: number;
-    end: number;
-    open?: true;
-  }[]) {
-    if (p.start < (pedalEnds.get(p.channel) ?? 0))
+  const spans = new Map<number, Span[]>();
+  for (const p of pedals as Span[]) {
+    const list = spans.get(p.channel) ?? [];
+    const last = list.at(-1);
+    if (last && (last.open || p.start < last.end))
       fail(
         where,
         "pedals must be in start order on each channel, without overlaps",
       );
-    pedalEnds.set(p.channel, p.open ? Infinity : p.end);
+    list.push(p);
+    spans.set(p.channel, list);
   }
   if (!Array.isArray(value.tracks) || !value.tracks.length)
     fail(where, "missing tracks");
@@ -239,23 +275,17 @@ export function validateSong(value: unknown, id: string): Song {
   }
   if (!Array.isArray(value.notes) || !value.notes.length)
     fail(where, "missing notes");
-  // Scoring and rendering key on note ids, so each must be unique.
-  const notes = new Set<string>();
+  // Scoring, rendering and playback key on note ids, across both parts, so
+  // each must be unique.
+  const ids = new Set<string>();
+  const unique = (id: string) => {
+    if (ids.has(id)) fail(where, `duplicate note id ${id}`);
+    ids.add(id);
+  };
   for (const note of value.notes as unknown[]) {
     if (
-      !isRecord(note) ||
-      !text(note.id) ||
-      !whole(note.pitch) ||
-      (note.pitch as number) < 0 ||
-      (note.pitch as number) > 127 ||
-      !finite(note.start) ||
-      !finite(note.end) ||
-      !finite(note.soundEnd) ||
-      !finite(note.velocity) ||
-      // A silent note would still be a target to play.
-      (note.velocity as number) <= 0 ||
-      (note.velocity as number) > 1 ||
-      !whole(note.channel) ||
+      !soundingNote(note, duration) ||
+      note.start >= duration ||
       !tracks.has(note.track as number) ||
       (note.finger !== undefined &&
         ![1, 2, 3, 4, 5].includes(note.finger as number)) ||
@@ -263,47 +293,16 @@ export function validateSong(value: unknown, id: string): Song {
         !["left", "right"].includes(note.fingerHand as string)) ||
       (note.notatedBeats !== undefined &&
         (!finite(note.notatedBeats) || (note.notatedBeats as number) <= 0)) ||
-      (note.staccato !== undefined && typeof note.staccato !== "boolean") ||
-      // Every note sounds inside the song, in order: playback, scoring and
-      // the score all assume it.
-      (note.start as number) < 0 ||
-      (note.end as number) < (note.start as number) ||
-      (note.soundEnd as number) < (note.end as number) ||
-      (note.start as number) >= (value.duration as number) ||
-      (note.soundEnd as number) > (value.duration as number) + 1e-6
+      (note.staccato !== undefined && typeof note.staccato !== "boolean")
     )
       fail(where, `bad note ${isRecord(note) ? String(note.id) : ""}`);
-    if (notes.has(note.id as string))
-      fail(where, `duplicate note id ${note.id}`);
-    notes.add(note.id as string);
-  }
-  // A key released while its channel's pedal is down sounds until the pedal
-  // lifts, as parseSong records it: playback stops each note at soundEnd.
-  const spans = new Map<number, { start: number; end: number }[]>();
-  for (const p of (value.pedals ?? []) as {
-    channel: number;
-    start: number;
-    end: number;
-  }[])
-    if (spans.has(p.channel)) spans.get(p.channel)!.push(p);
-    else spans.set(p.channel, [p]);
-  for (const note of value.notes as {
-    id: string;
-    channel: number;
-    end: number;
-    soundEnd: number;
-  }[]) {
-    // Each channel's spans are in start order (checked above), so the span
-    // holding a release is the last that starts at or before it.
+    unique(note.id);
+    // A key released while its channel's pedal is down sounds until the
+    // pedal lifts, as parseSong records it: playback stops each note at
+    // soundEnd. Each channel's spans are in start order (checked above), so
+    // the span holding a release is the last that starts at or before it.
     const list = spans.get(note.channel) ?? [];
-    let low = 0,
-      high = list.length;
-    while (low < high) {
-      const middle = (low + high) >> 1;
-      if (list[middle].start <= note.end) low = middle + 1;
-      else high = middle;
-    }
-    const span = list[low - 1];
+    const span = list[lastIndexAtOrBefore(list, "start", note.end)];
     if (span && note.end < span.end && note.soundEnd < span.end - 1e-6)
       fail(where, `note ${note.id} stops before the pedal holding it lifts`);
   }
@@ -332,33 +331,15 @@ export function validateSong(value: unknown, id: string): Song {
         fail(where, `note ${note.id} leaves the keyboard with the duet`);
     for (const note of duet.notes as unknown[]) {
       if (
-        !isRecord(note) ||
-        !text(note.id) ||
-        !whole(note.pitch) ||
-        (note.pitch as number) < 0 ||
-        (note.pitch as number) > 127 ||
-        !finite(note.start) ||
-        !finite(note.end) ||
-        !finite(note.soundEnd) ||
-        !finite(note.velocity) ||
-        (note.velocity as number) <= 0 ||
-        (note.velocity as number) > 1 ||
-        !whole(note.channel) ||
+        !soundingNote(note, duration) ||
         !whole(note.track) ||
         // Never scored, waited for or fingered: not one of the student's.
         tracks.has(note.track as number) ||
         note.finger !== undefined ||
-        note.fingerHand !== undefined ||
-        (note.start as number) < 0 ||
-        (note.end as number) < (note.start as number) ||
-        (note.soundEnd as number) < (note.end as number) ||
-        (note.soundEnd as number) > (value.duration as number) + 1e-6
+        note.fingerHand !== undefined
       )
         fail(where, `bad duet note ${isRecord(note) ? String(note.id) : ""}`);
-      // Playback keys on note ids across both parts.
-      if (notes.has(note.id as string))
-        fail(where, `duplicate note id ${note.id}`);
-      notes.add(note.id as string);
+      unique(note.id);
     }
   }
   return value as unknown as Song;

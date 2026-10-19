@@ -1,5 +1,5 @@
 import data from "../public/audio/accurate-salamander/manifest.json";
-import { pianoLevel } from "./piano";
+import { midiVelocity, pianoKey, pianoLevel } from "./piano";
 import type { PianoVoice, PianoVoices } from "./pianoSound";
 import type { Note, PedalSpan } from "./song";
 import { lastIndexAtOrBefore } from "./timeline";
@@ -36,7 +36,10 @@ export interface PianoVoiceRegion {
 interface PianoVoiceGroup {
   label: string;
   controller: number;
-  /** The level the controller removes at its lowest enabled value. */
+  /**
+   * The level the controller removes at its lowest enabled value. The app
+   * plays each enabled voice at 127, where upstream removes nothing.
+   */
   controllerGainDb: number;
   regions: PianoVoiceRegion[];
 }
@@ -44,12 +47,6 @@ export const PIANO_VOICE_GROUPS = data.optionalVoices as unknown as Record<
   PianoVoice,
   PianoVoiceGroup
 >;
-/**
- * The controller value each enabled voice plays at. Upstream, any value from
- * 1 to 127 enables a voice, and volume_oncc lowers it by up to
- * controllerGainDb below 127; 127 keeps each group's own SFZ volume.
- */
-export const PIANO_VOICE_CONTROLLER = 127;
 /** Quieter voices are not worth a voice (-80 dB). */
 export const MIN_PIANO_VOICE_LEVEL = 1e-4;
 
@@ -81,9 +78,6 @@ export const liftTriggered = (region: PianoVoiceRegion) =>
   region.trigger === "release_key" ||
   region.trigger === "pedalUp";
 
-const midiVelocity = (velocity: number) =>
-  Math.round(Math.max(0, Math.min(1, velocity)) * 127);
-
 /**
  * Every region of `voice` that a key at this pitch and velocity triggers. A
  * pitch beyond the piano uses its nearest key, as its note does.
@@ -94,7 +88,7 @@ export function pianoVoiceRegions(
   velocity: number,
 ) {
   const value = midiVelocity(velocity),
-    key = Math.max(21, Math.min(108, Math.round(pitch)));
+    key = pianoKey(pitch);
   return PIANO_VOICE_GROUPS[voice].regions.filter(
     (region) =>
       key >= region.pitchMin &&
@@ -122,15 +116,10 @@ export function pedalNoiseRegion(down: boolean, draw: number) {
  */
 export function pianoVoiceLevel(event: PianoVoiceEvent, heldSeconds: number) {
   const { region } = event;
-  const group = PIANO_VOICE_GROUPS[region.voice];
-  const controllerDb =
-    group.controllerGainDb * (1 - PIANO_VOICE_CONTROLLER / 127);
   return pianoLevel(
     {
       gainDb:
-        region.gainDb +
-        controllerDb -
-        region.decayDbPerSecond * Math.max(0, heldSeconds),
+        region.gainDb - region.decayDbPerSecond * Math.max(0, heldSeconds),
     },
     region.voice === "pedalNoise" ? 1 : event.velocity,
   );

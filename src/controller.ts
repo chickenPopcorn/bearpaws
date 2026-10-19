@@ -5,7 +5,7 @@ import {
   TIMING_EPSILON,
   type Mode,
 } from "./engine";
-import { ReferenceAudio } from "./audio";
+import { PianoAudio } from "./audio";
 import { MidiConnection } from "./midi";
 import type { Note, PedalSpan, Song, Hand } from "./song";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
@@ -29,7 +29,6 @@ const NO_PEDALS: readonly PedalSpan[] = [];
 const NO_NOTES: Note[] = [];
 export class Studio {
   settings = settings();
-  savedSelection = this.settings.selected;
   private playGeneration = 0;
   private playbackPending = false;
   outputChanging = false;
@@ -48,7 +47,7 @@ export class Studio {
   song: Song;
   /** The song as printed. With Duet on, `song` has its student part moved up. */
   written: Song;
-  audio = new ReferenceAudio();
+  audio = new PianoAudio();
   input = new MidiState();
   transport: Transport;
   practice: Practice;
@@ -95,7 +94,7 @@ export class Studio {
     this.songs = [...library];
     // Start on the saved song, if it is still in the library.
     this.song =
-      this.songs.find((song) => song.id === this.savedSelection) ??
+      this.songs.find((song) => song.id === this.settings.selected) ??
       this.songs[0];
     this.written = this.song;
     this.transport = new Transport(this.song.duration);
@@ -209,10 +208,10 @@ export class Studio {
       ? 12 * this.written.duet.octaves
       : 0;
   }
-  /** Everything playback sounds: the student part in Listen, and the duet. */
-  private get playbackNotes(): readonly Note[] {
-    const student = this.listening ? this.notes : NO_NOTES;
-    return this.duetNotes.length ? [...student, ...this.duetNotes] : student;
+  /** What playback sounds with `duet`: the student part in Listen, and `duet`. */
+  private withStudent(duet: readonly Note[]): readonly Note[] {
+    if (!this.listening) return duet;
+    return duet.length ? [...this.notes, ...duet] : this.notes;
   }
   /** Whether playback sounds anything on the laptop, without a MIDI output. */
   private get audible() {
@@ -563,14 +562,14 @@ export class Studio {
     try {
       const p = this.position;
       // A MIDI output plays it all, so the laptop prepares nothing.
-      const played = this.inPassage(this.playbackNotes),
-        laptop = this.midi.player.connected ? NO_NOTES : played;
-      this.midiRouted = this.midi.player.connected && played.length > 0;
+      const routed = this.midi.player.connected,
+        played = this.inPassage(this.withStudent(this.duetNotes)),
+        laptop = routed ? NO_NOTES : played;
+      this.midiRouted = routed && played.length > 0;
       this.midi.player.stop();
       this.audio.stop();
       // Browser audio is not needed at all then, and may be unavailable.
-      if (!this.midi.player.connected)
-        await this.prepareAudio(laptop, generation, this.pedals);
+      if (!routed) await this.prepareAudio(laptop, generation, this.pedals);
       if (generation !== this.playGeneration) return;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
@@ -700,15 +699,11 @@ export class Studio {
    */
   private scheduleAudio() {
     const gate = this.waitGate,
-      duet =
+      notes = this.withStudent(
         gate === undefined
           ? this.duetNotes
           : this.duetNotes.filter((note) => note.start < gate - 0.001),
-      notes = this.listening
-        ? duet.length
-          ? [...this.notes, ...duet]
-          : this.notes
-        : duet;
+      );
     if (this.midi.player.connected) {
       this.midi.player.schedule(
         notes,
@@ -729,13 +724,7 @@ export class Studio {
         first === undefined
           ? notes
           : this.duetNotes.filter((note) => note.start < first - 0.001);
-    this.audio.schedule(
-      notes,
-      this.transport,
-      notes.length > 0 || next.length > 0,
-      this.pedals,
-      next,
-    );
+    this.audio.schedule(notes, this.transport, this.pedals, next);
   }
   receive(data: Uint8Array, timestamp: number) {
     // System real-time messages (clock, active sensing) can arrive dozens of
@@ -840,22 +829,6 @@ export class Studio {
           this.notice = this.audio.error || SOUND_UNAVAILABLE;
           this.emit();
         });
-    }
-  }
-  async preview() {
-    const generation = this.playGeneration;
-    const notes = [
-      ...new Map(this.practice.gate?.notes.map((n) => [n.pitch, n])).values(),
-    ];
-    try {
-      await this.prepareAudio(notes, generation);
-      if (generation !== this.playGeneration) return;
-      for (const n of notes)
-        this.audio.tone(n.pitch, n.velocity, this.audio.now(), 0.7);
-    } catch {
-      if (generation !== this.playGeneration) return;
-      this.notice = this.audio.error || SOUND_UNAVAILABLE;
-      this.emit();
     }
   }
 }

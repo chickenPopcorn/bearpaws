@@ -18,7 +18,7 @@ const env = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/audio", () => ({
-  ReferenceAudio: class {
+  PianoAudio: class {
     origin: number | null = null;
     now = () => (this.origin === null ? env.now : env.now - this.origin);
     eventTime(timestamp: number) {
@@ -611,7 +611,7 @@ describe("practice studio integration", () => {
     },
   );
 
-  it("keeps concurrent playback, preview, and virtual-key preparations until the session changes", async () => {
+  it("keeps concurrent playback and virtual-key preparations until the session changes", async () => {
     const studio = create(song([[60, 1]]));
     studio.mode("listen");
     let finish!: () => void;
@@ -620,10 +620,9 @@ describe("practice studio integration", () => {
     });
     const starting = studio.play();
     await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
-    const preview = studio.preview();
     studio.virtual(63, true);
     await vi.waitFor(() =>
-      expect(studio.audio.prepare).toHaveBeenCalledTimes(3),
+      expect(studio.audio.prepare).toHaveBeenCalledTimes(2),
     );
     const signals = vi
       .mocked(studio.audio.prepare)
@@ -632,32 +631,11 @@ describe("practice studio integration", () => {
     studio.pause();
     expect(signals.every((signal) => signal.aborted)).toBe(true);
     finish();
-    await Promise.all([starting, preview]);
+    await starting;
     expect(studio.transport.playing).toBe(false);
   });
 
-  it.each(["seek", "disconnect"] as const)(
-    "does not play a prepared chord after %s invalidates the preview",
-    async (change) => {
-      const studio = create(song([[60, 1]]));
-      let finish!: () => void;
-      env.prepareWait = new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      const preview = studio.preview();
-      await vi.waitFor(() =>
-        expect(studio.audio.prepare).toHaveBeenCalledOnce(),
-      );
-      if (change === "seek") studio.seek(2);
-      else env.resets.at(-1)!();
-      finish();
-      await preview;
-      expect(studio.audio.tone).not.toHaveBeenCalled();
-      expect(studio.transport.playing).toBe(false);
-    },
-  );
-
-  it.each(["play", "preview", "virtual"] as const)(
+  it.each(["play", "virtual"] as const)(
     "reports sample preparation failure during %s without starting sound",
     async (action) => {
       const studio = create(song([[60, 1]]));
@@ -666,7 +644,7 @@ describe("practice studio integration", () => {
         new Error("Unable to load sample"),
       );
       if (action === "virtual") studio.virtual(60, true);
-      else await studio[action]();
+      else await studio.play();
       await vi.waitFor(() => expect(studio.notice).toMatch(/try.*again/i));
       expect(studio.audio.tone).not.toHaveBeenCalled();
       expect(studio.transport.playing).toBe(false);
@@ -692,7 +670,7 @@ describe("practice studio integration", () => {
     },
   );
 
-  it("moves only waiting reference notes to a new speed during playback", async () => {
+  it("moves only waiting notes to a new speed during playback", async () => {
     const studio = create(
       song([
         [60, 0],
@@ -936,24 +914,6 @@ describe("practice studio integration", () => {
       expect(studio.practice.hit.has("note-0")).toBe(true);
     },
   );
-
-  it("loads only the requested Wait chord when previewing a silent practice session", async () => {
-    const studio = create(
-      song([
-        [60, 0.5],
-        [63, 2.5],
-      ]),
-    );
-    await studio.play();
-    expect(studio.audio.prepare).not.toHaveBeenCalled();
-    await studio.preview();
-    // A preview plays no release, noise or resonance voices.
-    expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
-      [studio.notes[0]],
-      expect.any(AbortSignal),
-      undefined,
-    );
-  });
 
   it("starts on the saved song, or the first one once it leaves the library", () => {
     const songs = fixtureLibrary();
@@ -1395,19 +1355,6 @@ describe("practice studio integration", () => {
     },
   );
 
-  it("does not play a stale chord after the piano finishes loading", async () => {
-    const studio = create(song([[60, 0]]));
-    let finish!: () => void;
-    env.unlockWait = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-    const preview = studio.preview();
-    studio.seek(2);
-    finish();
-    await preview;
-    expect(studio.audio.tone).not.toHaveBeenCalled();
-  });
-
   it("does not sound a virtual key released while the piano was loading", async () => {
     const studio = create(song([[60, 0]]));
     let finish!: () => void;
@@ -1529,13 +1476,13 @@ describe("teacher duet", () => {
   const ids = (notes: readonly { id: string }[]) => notes.map((n) => n.id);
   /**
    * The notes the last audio schedule() call was given for this pass, or with
-   * `next` for a loop's next pass, if it was enabled.
+   * `next` for a loop's next pass.
    */
   const scheduled = (studio: Studio, next = false) => {
     const call = vi.mocked(studio.audio.schedule).mock.calls.at(-1);
     if (!call) return [];
-    const [notes, , enabled, , ahead] = call;
-    return enabled ? ids(next ? (ahead ?? notes) : notes) : [];
+    const [notes, , , ahead] = call;
+    return ids(next ? (ahead ?? notes) : notes);
   };
   /** The notes the last MIDI tick was given. */
   const sent = (studio: Studio) => {

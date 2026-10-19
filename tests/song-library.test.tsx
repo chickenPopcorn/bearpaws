@@ -217,8 +217,6 @@ describe("song library", () => {
   });
 
   it("keeps the startup-restored song folded, then reveals a later song change", async () => {
-    await render({ selected: songs[0].id, savedSelection: songs[2].id });
-    // The saved song loads after the first render, as the library does.
     await render({ selected: songs[2].id });
     expect(groupContent("lesson-3").hidden).toBe(true);
     expect(groupContent("recital-3").hidden).toBe(true);

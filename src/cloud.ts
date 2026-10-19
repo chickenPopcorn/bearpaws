@@ -4,7 +4,6 @@ import {
   localProgress,
   read,
   remove,
-  removeProgress,
   write,
   type Progress,
   type Settings,
@@ -216,17 +215,15 @@ export class CloudSync implements SyncHooks {
     }
     // Adoption fills only the room the account has left.
     let room = MAX_SONGS - remote.size;
-    for (const { id, progress } of missing)
+    for (const { id, progress } of missing) {
       if (remote.has(id)) continue;
-      else if (adopting) {
+      if (adopting) {
         if (room-- > 0) this.queue.progress[id] = progress as Progress;
-      } else
-        try {
-          // Not in the account, so not this account's.
-          removeProgress(id);
-        } catch {
-          throw new BrowserStorageError();
-        }
+        continue;
+      }
+      // Not in the account, so not this account's.
+      if (!remove(`progress:${id}`)) throw new BrowserStorageError();
+    }
     for (const [id, data] of remote) {
       this.syncedProgress.set(id, canon(data));
       store(`progress:${id}`, data);
@@ -287,9 +284,7 @@ export class CloudSync implements SyncHooks {
   private savePending(): boolean {
     if (this.detached) return true;
     if (this.pending) return write("pending", this.queue);
-    try {
-      remove("pending");
-    } catch {}
+    remove("pending");
     return true;
   }
 
@@ -430,7 +425,6 @@ export class CloudSync implements SyncHooks {
     await this.uploading;
   }
 
-  /** Stop syncing, such as when the session ended elsewhere. Nothing more is sent. */
   /**
    * Another tab took the studio over, and with it the queue in browser
    * storage. Changes from here on stay in memory for handOff() to send.
@@ -474,6 +468,7 @@ export class CloudSync implements SyncHooks {
     }
   }
 
+  /** Stop syncing, such as when the session ended elsewhere. Nothing more is sent. */
   stop() {
     this.stopped = true;
     if (this.timer !== null) clearTimeout(this.timer);

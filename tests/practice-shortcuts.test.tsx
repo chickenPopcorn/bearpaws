@@ -79,7 +79,6 @@ function FullscreenHarness({
 }) {
   const screen = usePianoFullscreen(onEnter);
   usePracticeShortcuts({
-    expanded: screen.expanded,
     busy: false,
     onEnter: () => void screen.enter(),
     onTogglePlayback,
@@ -122,7 +121,6 @@ async function key(
 }
 async function mount(overrides: Partial<ShortcutOptions> = {}) {
   const props: ShortcutOptions = {
-    expanded: false,
     busy: false,
     onEnter: vi.fn(),
     onTogglePlayback: vi.fn(),
@@ -249,11 +247,10 @@ describe("practice keyboard shortcuts", () => {
     expect(requestFullscreen).toHaveBeenCalledOnce();
   });
 
-  it("uses current callbacks, fullscreen state, and loading state after rerender", async () => {
+  it("uses current callbacks and loading state after rerender", async () => {
     const initial = await mount();
     const latest = {
       ...initial,
-      expanded: true,
       onEnter: vi.fn(),
       onTogglePlayback: vi.fn(),
       onPreviousSong: vi.fn(),
@@ -281,9 +278,7 @@ describe("practice keyboard shortcuts", () => {
     );
     expect(latest.onTogglePlayback).toHaveBeenCalledOnce();
 
-    await act(async () =>
-      root.render(<Harness {...latest} expanded={false} />),
-    );
+    await act(async () => root.render(<Harness {...latest} />));
     await key("Enter");
     expect(latest.onEnter).toHaveBeenCalledTimes(2);
   });
@@ -302,21 +297,18 @@ describe("practice keyboard shortcuts", () => {
     expect(props.onTogglePlayback).toHaveBeenCalledTimes(3);
   });
 
-  it.each([false, true])(
-    "navigates songs with Left and Right when fullscreen is %s",
-    async (expanded) => {
-      const props = await mount({ expanded });
-      expect((await key("ArrowLeft")).defaultPrevented).toBe(true);
-      expect(props.onPreviousSong).toHaveBeenCalledOnce();
-      expect(props.onNextSong).not.toHaveBeenCalled();
+  it("navigates songs with Left and Right", async () => {
+    const props = await mount();
+    expect((await key("ArrowLeft")).defaultPrevented).toBe(true);
+    expect(props.onPreviousSong).toHaveBeenCalledOnce();
+    expect(props.onNextSong).not.toHaveBeenCalled();
 
-      expect((await key("ArrowRight")).defaultPrevented).toBe(true);
-      expect(props.onPreviousSong).toHaveBeenCalledOnce();
-      expect(props.onNextSong).toHaveBeenCalledOnce();
-      expect(props.onEnter).not.toHaveBeenCalled();
-      expect(props.onTogglePlayback).not.toHaveBeenCalled();
-    },
-  );
+    expect((await key("ArrowRight")).defaultPrevented).toBe(true);
+    expect(props.onPreviousSong).toHaveBeenCalledOnce();
+    expect(props.onNextSong).toHaveBeenCalledOnce();
+    expect(props.onEnter).not.toHaveBeenCalled();
+    expect(props.onTogglePlayback).not.toHaveBeenCalled();
+  });
 
   it("consumes navigation arrows while busy or repeating without changing songs", async () => {
     const props = await mount();
@@ -403,66 +395,60 @@ describe("practice keyboard shortcuts", () => {
     expect(props.onNextSong).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])(
-    "preserves Enter and Space on ordinary focused controls when fullscreen is %s",
-    async (expanded) => {
-      const props = await mount({ expanded });
-      for (const selector of [
-        ".other-control",
-        ".other-link",
-        "summary",
-        '[role="button"]',
-      ]) {
-        const control = query(selector);
-        control.tabIndex = 0;
-        control.focus();
-        expect(document.activeElement).toBe(control);
-        // Happy DOM does not synthesize native keyboard clicks; both phases
-        // must remain uncancelled for the browser to activate these controls.
-        for (const name of ["Enter", " "]) {
-          expect(
-            (await key(name, {}, document.activeElement!)).defaultPrevented,
-          ).toBe(false);
-          expect(
-            (await key(name, {}, document.activeElement!, "keyup"))
-              .defaultPrevented,
-          ).toBe(false);
-        }
-        // Nested content must retain the same native activation behavior.
+  it("preserves Enter and Space on ordinary focused controls", async () => {
+    const props = await mount();
+    for (const selector of [
+      ".other-control",
+      ".other-link",
+      "summary",
+      '[role="button"]',
+    ]) {
+      const control = query(selector);
+      control.tabIndex = 0;
+      control.focus();
+      expect(document.activeElement).toBe(control);
+      // Happy DOM does not synthesize native keyboard clicks; both phases
+      // must remain uncancelled for the browser to activate these controls.
+      for (const name of ["Enter", " "]) {
         expect(
-          (await key("Enter", {}, control.querySelector("span")!))
+          (await key(name, {}, document.activeElement!)).defaultPrevented,
+        ).toBe(false);
+        expect(
+          (await key(name, {}, document.activeElement!, "keyup"))
             .defaultPrevented,
         ).toBe(false);
       }
-      expect(props.onEnter).not.toHaveBeenCalled();
-      expect(props.onTogglePlayback).not.toHaveBeenCalled();
-      expect(props.onPreviousSong).not.toHaveBeenCalled();
-      expect(props.onNextSong).not.toHaveBeenCalled();
-    },
-  );
+      // Nested content must retain the same native activation behavior.
+      expect(
+        (await key("Enter", {}, control.querySelector("span")!))
+          .defaultPrevented,
+      ).toBe(false);
+    }
+    expect(props.onEnter).not.toHaveBeenCalled();
+    expect(props.onTogglePlayback).not.toHaveBeenCalled();
+    expect(props.onPreviousSong).not.toHaveBeenCalled();
+    expect(props.onNextSong).not.toHaveBeenCalled();
+  });
 
-  it.each([false, true])(
-    "keeps explicit Play shortcuts when fullscreen is %s",
-    async (expanded) => {
-      const props = await mount({ expanded });
-      const play = query(".play");
-      play.focus();
-      expect((await key("Enter", {}, play)).defaultPrevented).toBe(true);
-      expect(props.onTogglePlayback).toHaveBeenCalledOnce();
-      await key("Enter", { repeat: true }, play);
-      expect(props.onTogglePlayback).toHaveBeenCalledOnce();
-      expect((await key(" ", {}, play)).defaultPrevented).toBe(true);
-      expect((await key(" ", {}, play, "keyup")).defaultPrevented).toBe(true);
-      expect(props.onTogglePlayback).toHaveBeenCalledTimes(2);
-      expect(props.onEnter).not.toHaveBeenCalled();
+  it("keeps explicit Play shortcuts", async () => {
+    const props = await mount();
+    const play = query(".play");
+    play.focus();
+    expect((await key("Enter", {}, play)).defaultPrevented).toBe(true);
+    expect(props.onTogglePlayback).toHaveBeenCalledOnce();
+    await key("Enter", { repeat: true }, play);
+    expect(props.onTogglePlayback).toHaveBeenCalledOnce();
+    expect((await key(" ", {}, play)).defaultPrevented).toBe(true);
+    expect((await key(" ", {}, play, "keyup")).defaultPrevented).toBe(true);
+    expect(props.onTogglePlayback).toHaveBeenCalledTimes(2);
+    expect(props.onEnter).not.toHaveBeenCalled();
 
-      await act(async () => root.render(<Harness {...props} busy />));
-      await key("Enter", {}, query(".play"));
-      await key(" ", {}, query(".play"));
-      await key(" ", {}, query(".play"), "keyup");
-      expect(props.onTogglePlayback).toHaveBeenCalledTimes(2);
-    },
-  );
+    await act(async () => root.render(<Harness {...props} busy />));
+    await key("Enter", {}, query(".play"));
+    await key(" ", {}, query(".play"));
+    await key(" ", {}, query(".play"), "keyup");
+    expect(props.onTogglePlayback).toHaveBeenCalledTimes(2);
+  });
 
   it("leaves focused composite widgets in charge of their navigation and activation keys", async () => {
     const props = await mount();
@@ -539,7 +525,7 @@ describe("practice keyboard shortcuts", () => {
   });
 
   it("retains Enter for other controls in fullscreen and removes listeners on unmount", async () => {
-    const props = await mount({ expanded: true });
+    const props = await mount();
     for (const selector of [
       ".other-control span",
       ".other-link span",

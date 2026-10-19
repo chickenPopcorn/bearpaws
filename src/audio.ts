@@ -23,13 +23,13 @@ import {
   type PianoVoiceEvent,
 } from "./pianoVoices";
 import { firstIndexAtOrAfter } from "./timeline";
-export const MAX_REFERENCE_VOICES = 64;
+export const MAX_PIANO_VOICES = 64;
 /**
  * Release, noise and resonance voices may hold at most this many of the
  * voices, and never take one from a note: a note at the cap takes one of
  * theirs first.
  */
-export const MAX_OPTIONAL_VOICES = MAX_REFERENCE_VOICES / 2;
+export const MAX_OPTIONAL_VOICES = MAX_PIANO_VOICES / 2;
 export const MAX_PIANO_CACHE_BYTES = 512 * 1024 * 1024;
 type PianoNote = Pick<Note, "pitch" | "velocity">;
 const NO_PEDALS: readonly PedalSpan[] = [];
@@ -112,7 +112,7 @@ interface VoiceRequest {
 }
 class PianoMemoryError extends Error {}
 /** Audio and MIDI timestamps share performance.timeOrigin. Frames never advance time. */
-export class ReferenceAudio {
+export class PianoAudio {
   context: AudioContext | null = null;
   samples = new Map<string, AudioBuffer>();
   voices = new Set<Voice>();
@@ -516,7 +516,7 @@ export class ReferenceAudio {
    * including after a stop.
    */
   private admit(when: number, now: number, optional: boolean) {
-    if (this.voices.size + this.fading.size >= 2 * MAX_REFERENCE_VOICES)
+    if (this.voices.size + this.fading.size >= 2 * MAX_PIANO_VOICES)
       return false;
     const due = when <= now + DUE_SECONDS;
     if (optional) {
@@ -526,8 +526,7 @@ export class ReferenceAudio {
         return false;
     }
     return (
-      this.voices.size < MAX_REFERENCE_VOICES ||
-      (due && this.steal(now, optional))
+      this.voices.size < MAX_PIANO_VOICES || (due && this.steal(now, optional))
     );
   }
   /**
@@ -585,7 +584,7 @@ export class ReferenceAudio {
     for (const voice of this.voices)
       if (voice.start <= now) this.retime(voice, now, Infinity);
   }
-  stop(releasePrepared = true, resetRoom = true) {
+  stop(releasePrepared = true) {
     if (releasePrepared) {
       this.playbackFiles.clear();
       this.playback = undefined;
@@ -601,7 +600,7 @@ export class ReferenceAudio {
     // Rebuilding the room flushes its tail. Skip it when there is no tail,
     // such as while dragging the playhead with nothing playing.
     try {
-      if (resetRoom && this.roomUsed && this.output) {
+      if (this.roomUsed && this.output) {
         // Fading voices would feed the fresh room and leave a new tail of the
         // old passage. They finish on the dry path, which is unchanged.
         for (const voice of this.fading)
@@ -774,22 +773,23 @@ export class ReferenceAudio {
         source?.disconnect();
         gain?.disconnect();
       } catch {}
-      this.error = "Reference sound could not start. Pause and try Play again.";
+      this.error = "Piano sound could not start. Pause and try Play again.";
     }
     return true;
   }
   /**
    * Schedule the notes that start within the lookahead. Near a loop's end,
-   * the next pass starts from `ahead`, which defaults to the same notes.
+   * the next pass starts from `ahead`, which defaults to the same notes. With
+   * no notes in either, nothing sounds, not even the pedal's noise.
    */
   schedule(
     notes: readonly Note[],
     transport: Transport,
-    enabled: boolean,
     pedals: readonly PedalSpan[] = NO_PEDALS,
     ahead: readonly Note[] = notes,
   ) {
-    if (!enabled || !transport.playing || !this.context) return;
+    if ((!notes.length && !ahead.length) || !transport.playing || !this.context)
+      return;
     const now = this.now(),
       position = transport.at(now),
       loop = transport.loop;

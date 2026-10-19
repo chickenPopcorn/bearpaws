@@ -165,18 +165,36 @@ function fittedSize(
   const { width } = noteLabel(c, text, size, weight);
   return width > maxWidth ? (size * maxWidth) / width : size;
 }
+/** What the waterfall and keyboard show. */
+export interface PianoScene {
+  song: Song;
+  /** The notes of the hands being practiced. */
+  notes: Note[];
+  position: number;
+  input: MidiState;
+  practice: Practice;
+  /** Note names on the notes and keys. */
+  names: boolean;
+  /** Wait for me is holding at a chord: mark its notes and keys. */
+  waiting: boolean;
+  /** Listen: light the keys it plays. */
+  listen: boolean;
+  /** The teacher duet while Duet is on, drawn only on the student's keys. */
+  duet?: readonly Note[];
+}
 export function draw(
   canvas: HTMLCanvasElement,
-  song: Song,
-  notes: Note[],
-  position: number,
-  input: MidiState,
-  practice: Practice,
-  names: boolean,
-  waiting: boolean,
-  listen: boolean,
-  /** The teacher duet while Duet is on, drawn only on the student's keys. */
-  duet: readonly Note[] = [],
+  {
+    song,
+    notes,
+    position,
+    input,
+    practice,
+    names,
+    waiting,
+    listen,
+    duet = [],
+  }: PianoScene,
 ) {
   const rect = canvas.getBoundingClientRect(),
     dpr = window.devicePixelRatio || 1,
@@ -261,7 +279,8 @@ export function draw(
     waitGroups.set(group, expected);
   }
   const hands = new Map(song.tracks.map((track) => [track.id, track.hand]));
-  const reference = new Map<number, Note>();
+  /** The keys Listen is playing now, by pitch. */
+  const listening = new Map<number, Note>();
   const rendered = new Set<string>();
   let selectedIds = selections.get(notes);
   if (!selectedIds) {
@@ -287,9 +306,9 @@ export function draw(
       listen &&
       n.start <= position &&
       n.soundEnd > position &&
-      !reference.has(n.pitch)
+      !listening.has(n.pitch)
     )
-      reference.set(n.pitch, n);
+      listening.set(n.pitch, n);
     collect(n, true);
   }
   for (const n of song.notes) {
@@ -315,7 +334,7 @@ export function draw(
   c.beginPath();
   c.rect(0, 0, width, fall);
   c.clip();
-  // Avoid thousands of blur operations on densely overlapping imported notes.
+  // Avoid thousands of blur operations on densely overlapping notes.
   const noteShadows = activeNotes.length + dimmedNotes.length <= 256;
   const noteRects: [number, number, number, number][] = [];
   const drawNote = (n: Note, active: boolean) => {
@@ -483,14 +502,14 @@ export function draw(
     const x = k.x * width,
       w = k.width * width,
       h = k.black ? BLACK_KEY_HEIGHT : keyHeight;
-    const ref = reference.get(k.pitch);
+    const heard = listening.get(k.pitch);
     const target = expected?.targets.get(k.pitch);
-    const hand = hands.get((ref || target)?.track ?? -1);
+    const hand = hands.get((heard || target)?.track ?? -1);
     const color = hand === "left" ? leftColor : rightColor;
     const textColor = hand === "left" ? leftText : rightText;
     c.fillStyle = input.down.has(k.pitch)
       ? "#7354cf"
-      : ref
+      : heard
         ? color
         : k.black
           ? paints.black
@@ -535,11 +554,11 @@ export function draw(
       c.arc(x + w - 8, fall + h - 11, 3, 0, Math.PI * 2);
       c.fill();
     }
-    const fingerNote = target || ref;
+    const fingerNote = target || heard;
     const finger = fingerNote && suggestedFinger(fingerNote, hand ?? "off");
     if (finger && w > 18) {
       c.fillStyle =
-        input.down.has(k.pitch) || k.black || ref ? "#fff" : textColor;
+        input.down.has(k.pitch) || k.black || heard ? "#fff" : textColor;
       c.font = `700 14px ${scoreFont}`;
       c.textAlign = "center";
       c.fillText(String(finger), x + w / 2, fall + (k.black ? 48 : h - 15));
@@ -549,7 +568,7 @@ export function draw(
         size = fittedSize(c, name, 12, 700, w - 4);
       if (size >= MIN_LABEL) {
         c.fillStyle =
-          input.down.has(k.pitch) || k.black || ref ? "#fff" : textColor;
+          input.down.has(k.pitch) || k.black || heard ? "#fff" : textColor;
         c.font = `700 ${size}px ${scoreFont}`;
         c.textAlign = "center";
         c.fillText(name, x + w / 2, fall + (k.black ? 26 : h - 35));
