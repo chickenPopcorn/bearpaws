@@ -181,6 +181,13 @@ export class PianoAudio {
     } catch (error) {
       this.playbackBlocked = true;
       this.error = "The piano sound could not load. Please try again.";
+      // A context that has never run would stop the practice clock at its
+      // currentTime. Let it go, so time goes on and a retry starts afresh.
+      if (!this.output && this.context.state !== "running") {
+        const context = this.context;
+        this.context = null;
+        void context.close().catch(() => {});
+      }
       throw error;
     }
   }

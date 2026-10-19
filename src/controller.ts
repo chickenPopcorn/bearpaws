@@ -488,6 +488,13 @@ export class Studio {
   }
   /** The metronome turns on and off; playback goes on. */
   click() {
+    // Turned on during playback, it counts in from here, as Play does. Play
+    // also starts browser audio for the clicks when the piano plays the music.
+    const recount =
+      !this.settings.click &&
+      this.settings.mode !== "wait" &&
+      (this.playing || this.playbackPending);
+    if (recount) this.pause();
     this.settings.click = !this.settings.click;
     if (!this.settings.click) {
       const now = this.audio.now();
@@ -500,6 +507,7 @@ export class Studio {
     }
     this.persist();
     this.emit();
+    if (recount) void this.play();
   }
   names(enabled: boolean) {
     this.settings.names = enabled;
@@ -636,13 +644,18 @@ export class Studio {
       this.audio.stop();
       // Browser audio is not needed for the music then, and may be
       // unavailable. The metronome still clicks on the laptop, if it can.
+      let clickable = true;
       if (!routed) await this.prepareAudio(laptop, generation, this.pedals);
       else if (this.clicking)
         await this.audio.unlock().catch(() => {
-          // The music plays on the piano without the click.
+          // The music plays on the piano at once, without a silent count-in.
           this.audio.error = "";
+          clickable = false;
         });
       if (generation !== this.playGeneration) return;
+      // Nothing waits from here on. The seeks below are this start's own,
+      // so they must not count in and start again.
+      this.playbackPending = false;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
       if (p >= this.song.duration)
@@ -654,7 +667,7 @@ export class Studio {
         this.seek(this.loopStart);
       this.audio.setPlaybackNotes(laptop, this.pedals);
       const now = this.audio.now();
-      if (this.clicking) {
+      if (this.clicking && clickable) {
         // A bar's count-in first. tick() starts playback where it ends.
         this.clickFrom = this.clicks.countIn(this.position);
         this.countIn = {

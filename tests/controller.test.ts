@@ -2027,9 +2027,41 @@ describe("metronome", () => {
     output(studio);
     vi.mocked(studio.audio.unlock).mockRejectedValue(new Error("No audio"));
     await studio.play();
-    run(studio, 2.2);
+    // At once: a count-in would be silent.
     expect(studio.transport.playing).toBe(true);
+    advance(studio, 0.5);
+    expect(studio.position).toBeCloseTo(0.5);
     expect(studio.notice).toBe("");
+  });
+  it("counts in when turned on during playback, starting browser audio for it", async () => {
+    const studio = create(song([[60, 0.5]]));
+    studio.mode("listen");
+    output(studio);
+    await studio.play();
+    expect(studio.audio.unlock).not.toHaveBeenCalled();
+    advance(studio, 1);
+    studio.click();
+    await vi.waitFor(() => expect(studio.playing).toBe(true));
+    expect(studio.audio.unlock).toHaveBeenCalledOnce();
+    expect(studio.transport.playing).toBe(false);
+    // From the third beat: the bar's first two, then on from there.
+    advance(studio, 1.05);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 0.1);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(1.05);
+  });
+  it("counts in once when Play starts over from the song's end", async () => {
+    const studio = clicking(song([[60, 0.5]]), "listen");
+    studio.loop(false);
+    studio.seek(4);
+    await studio.play();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(studio.audio.prepare).toHaveBeenCalledOnce();
+    expect(studio.progress.attempts).toBe(1);
+    expect(studio.position).toBe(0);
+    expect(studio.playing).toBe(true);
+    expect(studio.transport.playing).toBe(false);
   });
   it("cancels the count-in on pause, and counts again from a seek", async () => {
     const studio = clicking(song([[60, 0.5]]));
