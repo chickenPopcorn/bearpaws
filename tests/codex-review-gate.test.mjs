@@ -195,9 +195,9 @@ const findingComment = (overrides = {}) => ({
   ...overrides,
 });
 
-function setupFallback() {
+function setupFallback(state = nullCodeState()) {
   const fixture = setup(
-    [withTimes(nullCodeState())],
+    [withTimes(state)],
     [],
     [checkpoint({ rc: Date.parse(START) })],
   );
@@ -914,6 +914,51 @@ describe("Codex review merge gate", () => {
       },
     );
     expect(get).toHaveBeenCalledTimes(3);
+  });
+
+  describe("a clean Code Review that records no findings flag", () => {
+    // Some connector versions report has_any_findings and
+    // has_unresolved_findings as null, and publish no review, when the Code
+    // Review found nothing.
+    const silentState = () => {
+      const state = nullCodeState();
+      state.code_review.has_any_findings = null;
+      return state;
+    };
+
+    it("passes once every Codex thread is resolved", async () => {
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "success" });
+    });
+
+    it("still fails while an older Codex finding is unresolved", async () => {
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      const old = reviewThread({ isResolved: false });
+      old.comments.nodes[0].pullRequestReview = receipt({
+        id: "review-0",
+        commit: { oid: OLD_HEAD },
+        submittedAt: BEFORE,
+      });
+      threadGraphql.mockResolvedValue(threadPage([old]));
+      await expect(run()).resolves.toMatchObject({ state: "failure" });
+    });
+
+    it("verifies findings as usual when the run did publish a review", async () => {
+      const { run, threadGraphql } = setupFallback(silentState());
+      threadGraphql.mockResolvedValue(threadPage([]));
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+    });
+
+    it("requires an observed Code Review start", async () => {
+      const { run, github } = setup([withTimes(silentState())]);
+      await expect(run()).resolves.toMatchObject({ state: "pending" });
+      expect(github.graphql).not.toHaveBeenCalled();
+    });
   });
 
   it("requires an observed Code Review start before attempting null-metadata fallback", async () => {

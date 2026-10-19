@@ -289,7 +289,7 @@ function needsThreadResolution(summary, sha, checkpoint) {
   return (
     code?.commit_sha === sha &&
     code.status === "completed" &&
-    code.has_any_findings === true &&
+    (code.has_any_findings === true || code.has_any_findings === null) &&
     code.has_unresolved_findings === null &&
     checkpoint.rc > 0 &&
     security?.commit_sha === sha &&
@@ -393,6 +393,7 @@ async function codexThreadResolution(
   sha,
   started,
   completed,
+  findingsRecorded,
 ) {
   const latest = await latestCodexReceipt(github, repo, number, sha);
   // A dismissal changes GitHub's review decision, not the Codex task's
@@ -539,14 +540,17 @@ async function codexThreadResolution(
       throw new Error("Incomplete GitHub review-thread pagination.");
     seen.add(cursor);
   } while (true);
-  return unresolved
-    ? "failure"
-    : commentsComplete &&
-        expectedFindings.size > 0 &&
-        findings.size === expectedFindings.size &&
-        [...expectedFindings].every((id) => findings.has(id))
-      ? "success"
-      : "pending";
+  if (unresolved) return "failure";
+  // Some connector versions record nothing at all for a clean Code Review: no
+  // findings flag and no review on GitHub. With no review published for this
+  // run, nothing remains to resolve once every Codex thread is resolved.
+  if (!findingsRecorded && !currentReview) return "success";
+  return commentsComplete &&
+    expectedFindings.size > 0 &&
+    findings.size === expectedFindings.size &&
+    [...expectedFindings].every((id) => findings.has(id))
+    ? "success"
+    : "pending";
 }
 
 export async function runCodexReviewGate({ github, context, core }) {
@@ -623,8 +627,9 @@ export async function runCodexReviewGate({ github, context, core }) {
       pullRequest.head.sha === initialSha &&
       needsThreadResolution(summary, initialSha, checkpoint)
     ) {
-      // Some connector versions emit null after findings are resolved. Only
-      // that exact state may fall back to complete, trusted GitHub thread data.
+      // Some connector versions emit null after findings are resolved, or
+      // for a clean review. Only those states may fall back to complete,
+      // trusted GitHub thread data.
       threadResolution = await codexThreadResolution(
         github,
         repo,
@@ -632,6 +637,7 @@ export async function runCodexReviewGate({ github, context, core }) {
         initialSha,
         checkpoint.rc,
         reviewTime(summary, "code_review"),
+        summaryState(summary).code_review.has_any_findings === true,
       );
       ({ data: pullRequest } = await getPullRequest());
     }
