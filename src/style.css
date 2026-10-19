@@ -377,7 +377,7 @@ span.device {
 }
 /* Practice calendar: a star on each day that met the daily goal. */
 .practice-calendar {
-  margin: var(--space-2) 0;
+  margin: 0 0 var(--space-2);
   padding: var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);

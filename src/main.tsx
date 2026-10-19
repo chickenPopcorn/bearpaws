@@ -630,6 +630,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
       )}
       <div className="body">
         <aside className="sidebar">
+          <PracticeCalendar totals={practiceTotals} today={today} />
           <SongLibrary
             songs={studio.songs}
             selected={studio.song.id}
@@ -648,7 +649,6 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
               e.target.value = "";
             }}
           />
-          <PracticeCalendar totals={practiceTotals} today={today} />
           <p className="privacy">
             Imported songs stay on this browser.
             <br />
