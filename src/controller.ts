@@ -235,10 +235,11 @@ export class Studio {
     this.midi.dispose();
   }
   persist() {
-    if (!write("settings", this.settings))
+    const stored = write("settings", this.settings);
+    if (!stored)
       this.storageNotice =
         "Browser storage is full or blocked. Changes will last for this session.";
-    this.sync?.settings(this.settings);
+    this.sync?.settings(this.settings, stored);
   }
   /** `loaded`: this save is made as the song opens, before any practice. */
   save(loaded = false) {

@@ -83,6 +83,14 @@ function client(b: Backend) {
             ? reply(null, { message: "offline" })
             : reply(b[table][0] ?? null);
         },
+        in: async (_column: "song_id", ids: string[]) => {
+          await b.readGate;
+          return reply(
+            (b[table] as { song_id: string }[]).filter((row) =>
+              ids.includes(row.song_id),
+            ),
+          );
+        },
         order: (column: "song_id") => {
           let after: string | undefined;
           let count = Infinity;
@@ -450,6 +458,43 @@ describe("account sync", () => {
     ).toEqual({ theirs: { best: 7, updated: "t" } });
   });
 
+  it("keeps another account's marker when it cannot be set aside", async () => {
+    const OTHER = "22222222-2222-2222-2222-222222222222";
+    write("owner", USER);
+    write("progress:theirs", { best: 7, updated: "t" });
+    const foreign = { owner: OTHER, progress: { theirs: "t" }, deleted: {} };
+    write("unsynced", foreign);
+    refusedKey = `cadence:stash:${OTHER}`;
+    await expect(
+      new CloudSync(client(backend()), USER).pull(),
+    ).rejects.toBeInstanceOf(BrowserStorageError);
+    expect(read("unsynced", null)).toEqual(foreign);
+  });
+
+  it("lets a later removal win when setting changes aside again", async () => {
+    const OTHER = "22222222-2222-2222-2222-222222222222";
+    write(`stash:${OTHER}`, {
+      marker: { owner: OTHER, progress: { song: "a" }, deleted: {} },
+      settings: null,
+      progress: { song: { best: 2, updated: "a" } },
+    });
+    write("owner", OTHER);
+    write("unsynced", { owner: OTHER, progress: {}, deleted: { song: "b" } });
+    await new CloudSync(client(backend()), USER).pull();
+    const stash = read<{
+      marker: { progress: object; deleted: object };
+      progress: object;
+    }>(`stash:${OTHER}`, {
+      marker: { progress: {}, deleted: {} },
+      progress: {},
+    });
+    expect(stash.marker).toMatchObject({
+      progress: {},
+      deleted: { song: "b" },
+    });
+    expect(stash.progress).toEqual({});
+  });
+
   it("drops a restored stash even when that pull fails", async () => {
     const OTHER = "22222222-2222-2222-2222-222222222222";
     write(`stash:${USER}`, {
@@ -650,6 +695,18 @@ describe("account sync", () => {
     expect(sync.error).toMatch(/storage is full/);
     await vi.advanceTimersByTimeAsync(0);
     expect(b.calls).toEqual(["upsert progress"]);
+  });
+
+  it("uploads settings the browser could not store from memory, at once", async () => {
+    const b = backend();
+    write("settings", { mode: "wait" });
+    const sync = new CloudSync(client(b), USER);
+    sync.settings({ mode: "rhythm" } as never, false);
+    expect(sync.error).toMatch(/storage is full/);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts).toEqual([
+      ["settings", { user_id: USER, data: { mode: "rhythm" } }],
+    ]);
   });
 
   it("withdraws a settings change that returns to the account's", async () => {
@@ -877,6 +934,27 @@ describe("account sync", () => {
     expect(
       [...stored.keys()].filter((key) => key.startsWith("cadence:progress:")),
     ).toHaveLength(2500);
+  });
+
+  it("checks a song added behind a long scan before dropping its copy", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.progress = Array.from({ length: 2500 }, (_, i) => ({
+      song_id: `song-${String(i).padStart(4, "0")}`,
+      data: { best: 1 },
+    }));
+    write("progress:song-0500a", { best: 3 });
+    const api = client(b);
+    const from = api.from;
+    let reads = 0;
+    api.from = ((table: "progress") => {
+      // Another device adds the song behind the scan's cursor.
+      if (table === "progress" && ++reads === 2)
+        b.progress.push({ song_id: "song-0500a", data: { best: 6 } });
+      return from(table);
+    }) as never;
+    await new CloudSync(api, USER).pull();
+    expect(read("progress:song-0500a", null)).toEqual({ best: 6 });
   });
 
   it("sends nothing more once stopped", async () => {
