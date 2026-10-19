@@ -450,6 +450,7 @@ export class Studio {
   }
   learnerName(name: string) {
     this.settings.learnerName = name.slice(0, LEARNER_NAME_MAX);
+    this.settings.learnerNameChosen = true;
     this.persist();
     this.emit();
   }

@@ -83,6 +83,15 @@ it("keeps the learner's name and a daily goal from the choices", () => {
   });
   write("settings", { learnerName: 4, dailyGoalMinutes: "10" });
   expect(settings()).toMatchObject({ learnerName: "", dailyGoalMinutes: 5 });
+  // Only a saved true counts as a name someone chose.
+  expect(settings().learnerNameChosen).toBe(false);
+  write("settings", { learnerName: "", learnerNameChosen: true });
+  expect(settings()).toMatchObject({
+    learnerName: "",
+    learnerNameChosen: true,
+  });
+  write("settings", { learnerNameChosen: "yes" });
+  expect(settings().learnerNameChosen).toBe(false);
 });
 it("keeps both hands off when that was the saved choice", () => {
   write("settings", { left: false, right: false });

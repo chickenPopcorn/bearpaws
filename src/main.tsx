@@ -1179,7 +1179,12 @@ async function openStudio(userId: string, email: string) {
   studio = new Studio(songs, sync);
   sync.onChange = () => studio.emit();
   // Signed in, the learner has a name from the start: the account's.
-  if (!studio.settings.learnerName.trim() && currentName)
+  // Once only: a name cleared on purpose stays blank.
+  if (
+    !studio.settings.learnerNameChosen &&
+    !studio.settings.learnerName.trim() &&
+    currentName
+  )
     studio.learnerName(currentName);
   readyGate = { status: "ready", userId, email };
   setGate(readyGate);

@@ -77,6 +77,7 @@ vi.mock("../src/storage", () => ({
       resonance: true,
     },
     learnerName: "",
+    learnerNameChosen: false,
     dailyGoalMinutes: 5,
     ...((env.values.get("settings") as object) ?? {}),
   }),
@@ -1901,6 +1902,13 @@ describe("practice time", () => {
 
   it("saves the learner's name and a daily goal from the choices", () => {
     const studio = create();
+    expect(studio.settings.learnerNameChosen).toBe(false);
+    studio.learnerName("");
+    // Even a blank name counts as chosen, so it is kept.
+    expect(env.values.get("settings")).toMatchObject({
+      learnerName: "",
+      learnerNameChosen: true,
+    });
     studio.learnerName("George");
     studio.dailyGoal(15);
     studio.dailyGoal(7);
