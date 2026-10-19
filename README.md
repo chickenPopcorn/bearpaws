@@ -30,11 +30,12 @@ npm run format         # Format source, tests and documentation
 Paw Pal is for one learner: the library is **George Bear’s Classes**, one
 section per class book of _Music for Little Mozarts_:
 
-- **Music Recital Book 3**: twelve personal-practice pieces from the book, in
-  C and Middle C positions. Dancing Raindrops keeps its supplied chords and
-  articulation. The other eleven are transcriptions that keep the student
-  parts' printed rests, chords, staccato, dynamics, repeat and finger numbers,
-  without lyrics or teacher duet parts.
+- **Music Recital Book 3**: all 21 personal-practice pieces in the book (pages
+  4–31), in C and Middle C positions. Dancing Raindrops keeps its supplied
+  chords and articulation. The other twenty are transcriptions that keep the
+  student parts' printed rests, chords, staccato, dynamics, repeats and finger
+  numbers, without lyrics. Each piece also has its printed teacher duet,
+  stored with the song in the library bucket.
 - **Music Lesson Book 3**: no songs yet.
 
 Each song includes suggested finger numbers on the score, falling notes, active
@@ -59,7 +60,9 @@ The app loads them after sign-in:
   `classes` song may name its `book`: `recital-3` (the default) or `lesson-3`.
   Browsers check the index on every load; it is cached for 60 seconds.
 - `songs/<id>.<hash>.json` is each song in the app's format: notes, tracks,
-  tempo, suggested fingering and lesson text.
+  tempo, suggested fingering and lesson text, and for Recital Book 3 the
+  teacher duet (`duet`: its notes, and how many octaves the student part moves
+  with it).
 - `songs/<id>.<hash>.mid` is each song's MIDI file, for its Download button.
 
 Each file is named after its content hash and cached for a year, so a repeat
@@ -105,7 +108,7 @@ no guessed finger numbers.
 
 1. Choose a piece from George Bear’s Classes; use **Find a song** to filter them.
 2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. On later visits, saved browser permission automatically connects the first available MIDI input. When more than one input is available, a menu beside it chooses one. If the chosen input is unplugged, clicking Connect your piano picks any available input. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
-3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen works without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
+3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen works without a piano. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along. As the book asks, the student part then moves up one octave (two for Five O'Clock and Hush, Little Baby): the waterfall, keyboard shortcuts and finger guide follow it, and the score keeps the written notes under an 8va (15ma) mark. The duet is only heard: it is never drawn, fingered or scored, and Wait for me holds it at each of your notes until you play them.
 4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
 **Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.

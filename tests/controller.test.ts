@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
-import type { Song } from "../src/song";
+import type { Note, Song } from "../src/song";
 import { fixtureLibrary } from "./fixtures/library";
 
 const env = vi.hoisted(() => ({
@@ -31,6 +31,7 @@ vi.mock("../src/audio", () => ({
     setSound = vi.fn();
     stop = vi.fn();
     reschedule = vi.fn();
+    hold = vi.fn();
     schedule = vi.fn();
     tone = vi.fn();
   },
@@ -58,6 +59,7 @@ vi.mock("../src/storage", () => ({
     speed: 1,
     left: true,
     right: true,
+    duet: false,
     tolerance: 0.22,
     reference: true,
     names: true,
@@ -122,6 +124,53 @@ function song(pitches: [number, number][], id = "controller-fixture"): Song {
       channel: 0,
       velocity: 0.7,
     })),
+  };
+}
+/** Two student notes in C position and a teacher part an octave below them. */
+function duetSong(): Song {
+  const fixture = song(
+    [
+      [60, 1],
+      [64, 2],
+    ],
+    "duet-fixture",
+  );
+  const duet = (id: number, pitch: number, start: number) => ({
+    id: `duet-${id}`,
+    pitch,
+    start,
+    end: start + 0.4,
+    soundEnd: start + 0.4,
+    track: 2,
+    channel: 2,
+    velocity: 0.5,
+  });
+  return {
+    ...fixture,
+    notes: fixture.notes.map((note) => ({
+      ...note,
+      finger: note.pitch === 60 ? 1 : 3,
+      fingerHand: "right",
+    })),
+    lesson: {
+      composer: "",
+      description: "",
+      level: "",
+      bpm: 60,
+      handPositions: {
+        left: "C position · C3 (5) to G3 (1)",
+        right: "C position · C4 (1) to G4 (5)",
+      },
+    },
+    duet: {
+      octaves: 1,
+      notes: [
+        duet(0, 43, 0.5),
+        duet(1, 48, 1),
+        duet(2, 47, 1.5),
+        duet(3, 45, 2),
+      ],
+    },
   };
 }
 const active: Studio[] = [];
@@ -1341,6 +1390,192 @@ describe("practice studio integration", () => {
     expect(restored.settings.tolerance).toBe(0.35);
     expect(restored.song.tracks[0].hand).toBe("left");
     expect(restored.transport.loop).toEqual([0.5, 2.5]);
+  });
+});
+
+describe("teacher duet", () => {
+  const ids = (notes: readonly { id: string }[]) => notes.map((n) => n.id);
+  /** The notes the last audio schedule() call was given, if it was enabled. */
+  /**
+   * The notes the last audio schedule() call was given for this pass, or with
+   * `next` for a loop's next pass, if it was enabled.
+   */
+  const scheduled = (studio: Studio, next = false) => {
+    const calls = vi.mocked(studio.audio.schedule).mock.calls;
+    const [notes, , enabled, , ahead] = calls.at(-1)!;
+    return enabled ? ids(next ? (ahead ?? notes) : notes) : [];
+  };
+
+  it("starts off, and moves the student part up the printed octaves when on", () => {
+    const studio = create(duetSong());
+    expect(studio.settings.duet).toBe(false);
+    expect(studio.octaveShift).toBe(0);
+    expect(studio.duetNotes).toEqual([]);
+    expect(studio.song).toBe(studio.written);
+
+    studio.duet();
+    expect(studio.settings.duet).toBe(true);
+    expect(env.values.get("settings")).toMatchObject({ duet: true });
+    expect(studio.octaveShift).toBe(12);
+    expect(studio.song.notes.map((n) => [n.id, n.pitch, n.finger])).toEqual([
+      ["note-0", 72, 1],
+      ["note-1", 76, 3],
+    ]);
+    expect(studio.notes.map((n) => n.pitch)).toEqual([72, 76]);
+    expect(studio.practice.notes.map((n) => n.pitch)).toEqual([72, 76]);
+    expect(studio.song.lesson!.handPositions).toEqual({
+      left: "C position · C4 (5) to G4 (1)",
+      right: "C position · C5 (1) to G5 (5)",
+    });
+    // The sheet keeps the book's notes.
+    expect(studio.written.notes.map((n) => n.pitch)).toEqual([60, 64]);
+    expect(ids(studio.duetNotes)).toEqual([
+      "duet-0",
+      "duet-1",
+      "duet-2",
+      "duet-3",
+    ]);
+
+    studio.duet();
+    expect(studio.octaveShift).toBe(0);
+    expect(studio.notes.map((n) => n.pitch)).toEqual([60, 64]);
+  });
+
+  it("moves the student part down when the book asks for it lower", () => {
+    const fixture = duetSong();
+    const studio = create({
+      ...fixture,
+      duet: { ...fixture.duet!, octaves: -1 },
+    });
+    studio.duet();
+    expect(studio.octaveShift).toBe(-12);
+    expect(studio.notes.map((n) => n.pitch)).toEqual([48, 52]);
+    expect(studio.song.lesson!.handPositions.right).toBe(
+      "C position · C3 (1) to G3 (5)",
+    );
+  });
+
+  it("keeps a moved-up part through hand assignment and song changes", () => {
+    const studio = create(duetSong());
+    studio.duet();
+    studio.assign(0, "left");
+    expect(studio.song.tracks[0].hand).toBe("left");
+    expect(studio.written.tracks[0].hand).toBe("left");
+    expect(studio.notes.map((n) => n.pitch)).toEqual([72, 76]);
+    studio.load(song([[60, 1]]));
+    expect(studio.octaveShift).toBe(0);
+    expect(studio.duetNotes).toEqual([]);
+    expect(studio.notes.map((n) => n.pitch)).toEqual([60]);
+    studio.load(duetSong());
+    expect(studio.notes.map((n) => n.pitch)).toEqual([72, 76]);
+  });
+
+  it("never scores or waits for the duet part", async () => {
+    const studio = create(duetSong());
+    studio.duet();
+    studio.tolerance(0.3);
+    await studio.play();
+    expect(studio.practice.gate?.notes.map((n) => n.id)).toEqual(["note-0"]);
+    advance(studio, 1);
+    // The teacher's C3 at this gate is not the student's note.
+    midi(studio, [0x90, 48, 100]);
+    expect(studio.practice.feedback.at(-1)?.kind).toBe("wrong");
+    expect(studio.practice.gate?.start).toBe(1);
+    midi(studio, [0x90, 72, 100]);
+    expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+    expect(studio.practice.gate?.start).toBe(2);
+  });
+
+  it("holds the duet at each Wait gate and plays it on with the student's key", async () => {
+    const studio = create(duetSong());
+    studio.duet();
+    await studio.play();
+    advance(studio, 0.5);
+    expect(scheduled(studio)).toEqual(["duet-0"]);
+    advance(studio, 1);
+    expect(studio.position).toBe(1);
+    expect(studio.transport.held).toBe(true);
+    // Waiting at the first gate holds back the teacher's notes from there on.
+    expect(scheduled(studio)).toEqual(["duet-0"]);
+    // Its sounding notes hold while the learner takes their time.
+    expect(studio.audio.hold).toHaveBeenCalledOnce();
+    const cycle = studio.transport.cycle;
+    midi(studio, [0x90, 72, 100]);
+    // They are scheduled at once, without striking sounding notes again, and
+    // held notes end where they are written from here.
+    expect(scheduled(studio)).toEqual(["duet-0", "duet-1", "duet-2"]);
+    expect(studio.transport.cycle).toBe(cycle);
+    expect(studio.audio.reschedule).toHaveBeenCalledOnce();
+    advance(studio, 0.1);
+    expect(studio.audio.hold).toHaveBeenCalledOnce();
+  });
+
+  it("sounds a duet note a Wait loop seek lands in", async () => {
+    const studio = create(duetSong());
+    studio.duet();
+    studio.bounds(0.5, 2.5);
+    studio.seek(1.2);
+    await studio.play();
+    advance(studio, 0.01);
+    // The teacher's note from 1 to 1.4 is sounding here.
+    expect(scheduled(studio)).toEqual(["duet-0", "duet-1", "duet-2"]);
+  });
+
+  it("keeps the next loop pass's duet waiting at its first gate", async () => {
+    const studio = create(duetSong());
+    studio.duet();
+    studio.bounds(0.5, 2.5);
+    await studio.play();
+    advance(studio, 0.5);
+    midi(studio, [0x90, 72, 100]);
+    midi(studio, [0x80, 72, 0]);
+    advance(studio, 1);
+    midi(studio, [0x90, 76, 100]);
+    expect(studio.practice.gate).toBeUndefined();
+    // This pass plays on to its end, including the teacher's note sounding
+    // at the loop end, but the next pass may start only its notes before
+    // its first gate.
+    advance(studio, 0.2);
+    expect(scheduled(studio)).toEqual(["duet-0", "duet-1", "duet-2", "duet-3"]);
+    expect(scheduled(studio, true)).toEqual(["duet-0"]);
+    advance(studio, 0.25);
+    expect(scheduled(studio, true)).toEqual(["duet-0"]);
+  });
+
+  it("plays along in Listen and Rhythm, and only the duet with Rhythm's reference off", async () => {
+    const studio = create(duetSong());
+    const played = () =>
+      ids(
+        vi
+          .mocked(studio.audio.setPlaybackNotes)
+          .mock.calls.at(-1)![0] as readonly Note[],
+      );
+    studio.mode("listen");
+    await studio.play();
+    expect(played()).toEqual(["note-0", "note-1"]);
+    studio.duet();
+    await studio.play();
+    expect(played()).toEqual([
+      "note-0",
+      "note-1",
+      "duet-0",
+      "duet-1",
+      "duet-2",
+      "duet-3",
+    ]);
+    studio.mode("rhythm");
+    studio.reference(false);
+    await studio.play();
+    expect(played()).toEqual(["duet-0", "duet-1", "duet-2", "duet-3"]);
+    advance(studio, 0.6);
+    expect(scheduled(studio)).toEqual(["duet-0", "duet-1", "duet-2", "duet-3"]);
+  });
+
+  it("schedules nothing in Wait without a duet, as before", async () => {
+    const studio = create(duetSong());
+    await studio.play();
+    advance(studio, 0.5);
+    expect(scheduled(studio)).toEqual([]);
   });
 });
 

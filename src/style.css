@@ -891,6 +891,17 @@ h1 {
 .swatch.left {
   background: #51b3a5;
 }
+.swatch.duet {
+  background: #d99a3e;
+}
+.duet-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -960,6 +971,13 @@ h1 {
   font-family: "Bravura";
   font-weight: 400;
   stroke: none;
+}
+.sheet-octave {
+  fill: #51465f;
+  font-family: var(--score-font);
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 700;
 }
 .sheet-note-right {
   color: #7a5ec5;
