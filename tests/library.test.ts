@@ -304,6 +304,62 @@ describe("song library", () => {
     expect(() => validateSong(change(ode()), ode().id)).toThrow(problem);
   });
 
+  // Five O'Clock's teacher duet is printed two octaves below the student part.
+  const fiveOClock = () => structuredClone(fixtures[2].song);
+  const withDuetNote = (song: Song, change: object) => ({
+    ...song,
+    duet: {
+      ...song.duet!,
+      notes: [{ ...song.duet!.notes[0], ...change }, ...song.duet!.notes],
+    },
+  });
+  it.each([
+    [
+      "a duet three octaves away",
+      (song: Song) => ({ ...song, duet: { ...song.duet!, octaves: 3 } }),
+      /duet needs octaves/,
+    ],
+    [
+      "an empty duet",
+      (song: Song) => ({ ...song, duet: { ...song.duet!, notes: [] } }),
+      /duet needs octaves/,
+    ],
+    [
+      "a duet note on a student track",
+      (song: Song) => withDuetNote(song, { id: "extra", track: 0 }),
+      /bad duet note extra/,
+    ],
+    [
+      "a fingered duet note",
+      (song: Song) => withDuetNote(song, { id: "extra", finger: 1 }),
+      /bad duet note extra/,
+    ],
+    [
+      "a duet note sounding past the end",
+      (song: Song) =>
+        withDuetNote(song, { id: "extra", soundEnd: song.duration + 1 }),
+      /bad duet note extra/,
+    ],
+    [
+      "a duet note sharing a student note's id",
+      (song: Song) => withDuetNote(song, { id: song.notes[0].id }),
+      /duplicate note id/,
+    ],
+    [
+      "a student part the duet moves off the keyboard",
+      (song: Song) => ({
+        ...song,
+        notes: [{ ...song.notes[0], pitch: 120 }, ...song.notes.slice(1)],
+      }),
+      /leaves the keyboard with the duet/,
+    ],
+  ])("rejects a song with %s", (_, change, problem) => {
+    expect(fiveOClock().duet!.octaves).toBe(2);
+    expect(() => validateSong(change(fiveOClock()), fiveOClock().id)).toThrow(
+      problem,
+    );
+  });
+
   it("loads only George Bear’s Classes, each song with its book and download", async () => {
     const classes = index();
     // Five O'Clock names its book; Dancing Raindrops does not.

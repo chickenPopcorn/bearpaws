@@ -172,10 +172,14 @@ const PracticeControls = memo(function PracticeControls({
   mode,
   left,
   right,
+  duet,
+  hasDuet,
 }: {
   mode: Mode;
   left: boolean;
   right: boolean;
+  duet: boolean;
+  hasDuet: boolean;
 }) {
   const tabs = useRef<HTMLDivElement>(null);
   const indicator = useActiveIndicator(tabs, mode);
@@ -222,6 +226,19 @@ const PracticeControls = memo(function PracticeControls({
             {hand === "left" ? "Left" : "Right"}
           </button>
         ))}
+        <button
+          aria-pressed={duet && hasDuet}
+          disabled={!hasDuet}
+          title={
+            hasDuet
+              ? "Teacher duet plays along. Your piano is never scored on it."
+              : "This song has no duet part"
+          }
+          onClick={() => studio.duet()}
+        >
+          <span className="swatch duet" />
+          Duet
+        </button>
       </div>
     </div>
   );
@@ -389,7 +406,12 @@ const PracticeReview = memo(function PracticeReview({
     </section>
   );
 });
-const KeyboardHelp = memo(function KeyboardHelp() {
+const KeyboardHelp = memo(function KeyboardHelp({
+  shift,
+}: {
+  /** Semitones the keys move with the student part, as with Duet on. */
+  shift: number;
+}) {
   const [showKeys, setShowKeys] = useState(false);
   return (
     <details
@@ -407,32 +429,35 @@ const KeyboardHelp = memo(function KeyboardHelp() {
       </p>
       {showKeys && (
         <div className="accessible-keys">
-          {Object.entries(shortcuts).map(([key, pitch]) => (
-            <button
-              key={key}
-              aria-label={`Play ${noteName(pitch)}`}
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId);
-                studio.virtual(pitch, true);
-              }}
-              onPointerUp={() => studio.virtual(pitch, false)}
-              onPointerCancel={() => studio.virtual(pitch, false)}
-              onLostPointerCapture={() => studio.virtual(pitch, false)}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
-                  e.preventDefault();
+          {Object.entries(shortcuts).map(([key, written]) => {
+            const pitch = written + shift;
+            return (
+              <button
+                key={key}
+                aria-label={`Play ${noteName(pitch)}`}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId);
                   studio.virtual(pitch, true);
-                }
-              }}
-              onKeyUp={(e) => {
-                if (e.key === "Enter" || e.key === " ")
-                  studio.virtual(pitch, false);
-              }}
-            >
-              {noteName(pitch)}
-              <small>{key.toUpperCase()}</small>
-            </button>
-          ))}
+                }}
+                onPointerUp={() => studio.virtual(pitch, false)}
+                onPointerCancel={() => studio.virtual(pitch, false)}
+                onLostPointerCapture={() => studio.virtual(pitch, false)}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
+                    e.preventDefault();
+                    studio.virtual(pitch, true);
+                  }
+                }}
+                onKeyUp={(e) => {
+                  if (e.key === "Enter" || e.key === " ")
+                    studio.virtual(pitch, false);
+                }}
+              >
+                {noteName(pitch)}
+                <small>{key.toUpperCase()}</small>
+              </button>
+            );
+          })}
         </div>
       )}
     </details>
@@ -474,11 +499,13 @@ function App() {
       const pitch = shortcuts[e.key.toLowerCase()];
       if (pitch !== undefined) {
         e.preventDefault();
-        studio.virtual(pitch, true);
+        // With Duet on, the keys follow the student part up.
+        studio.virtual(pitch + studio.octaveShift, true);
       }
     };
     const up = (e: KeyboardEvent) => {
-      const pitch = shortcuts[e.key.toLowerCase()];
+      const key = shortcuts[e.key.toLowerCase()];
+      const pitch = key === undefined ? undefined : key + studio.octaveShift;
       if (pitch !== undefined && studio.input.down.has(pitch)) {
         studio.virtual(pitch, false);
       }
@@ -711,7 +738,13 @@ function App() {
                     </div>
                   </div>
                 )}
-                <PracticeControls mode={s.mode} left={s.left} right={s.right} />
+                <PracticeControls
+                  mode={s.mode}
+                  left={s.left}
+                  right={s.right}
+                  duet={s.duet}
+                  hasDuet={!!studio.song.duet}
+                />
                 <div
                   className="transport-buttons"
                   role="group"
@@ -833,6 +866,15 @@ function App() {
                   {stageNotice}
                 </div>
               )}
+              {studio.duetNotes.length > 0 && (
+                <p className="duet-note">
+                  <span className="swatch duet" /> Duet: the teacher part plays
+                  along.{" "}
+                  {studio.octaveShift
+                    ? `Play ${Math.abs(studio.octaveShift) > 12 ? "two octaves" : "one octave"} ${studio.octaveShift > 0 ? "higher" : "lower"}, as the book shows.`
+                    : "Play as written."}
+                </p>
+              )}
               {s.mode === "wait" && (
                 <p className="sr-only" aria-live="polite">
                   {describeWaitTarget(
@@ -844,7 +886,8 @@ function App() {
                 </p>
               )}
               <SheetTimeline
-                song={studio.song}
+                song={studio.written}
+                octaves={studio.octaveShift / 12}
                 position={studio.position}
                 mode={s.mode}
                 hit={p.hit}
@@ -936,7 +979,7 @@ function App() {
               loopEnd={studio.loopEnd}
             />
           </section>
-          <KeyboardHelp />
+          <KeyboardHelp shift={studio.octaveShift} />
           <footer>
             Practice stays on this browser.{" "}
             <span>USB MIDI · Desktop Chrome / Edge · HTTPS required</span>

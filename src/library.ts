@@ -315,6 +315,52 @@ export function validateSong(value: unknown, id: string): Song {
     if (track.count !== owned)
       fail(where, `track ${track.id} count is ${track.count}, not ${owned}`);
   }
+  if (value.duet !== undefined) {
+    // The teacher part plays along with Duet on, and the student part moves
+    // by its octaves (see Studio.octaveShift), so both must stay on the keys.
+    const duet = value.duet;
+    if (
+      !isRecord(duet) ||
+      ![-1, 0, 1, 2].includes(duet.octaves as number) ||
+      !Array.isArray(duet.notes) ||
+      !duet.notes.length
+    )
+      fail(where, "duet needs octaves (-1 to 2) and notes");
+    const shift = 12 * (duet.octaves as number);
+    for (const note of value.notes as { id: string; pitch: number }[])
+      if (note.pitch + shift < 0 || note.pitch + shift > 127)
+        fail(where, `note ${note.id} leaves the keyboard with the duet`);
+    for (const note of duet.notes as unknown[]) {
+      if (
+        !isRecord(note) ||
+        !text(note.id) ||
+        !whole(note.pitch) ||
+        (note.pitch as number) < 0 ||
+        (note.pitch as number) > 127 ||
+        !finite(note.start) ||
+        !finite(note.end) ||
+        !finite(note.soundEnd) ||
+        !finite(note.velocity) ||
+        (note.velocity as number) <= 0 ||
+        (note.velocity as number) > 1 ||
+        !whole(note.channel) ||
+        !whole(note.track) ||
+        // Never scored, waited for or fingered: not one of the student's.
+        tracks.has(note.track as number) ||
+        note.finger !== undefined ||
+        note.fingerHand !== undefined ||
+        (note.start as number) < 0 ||
+        (note.end as number) < (note.start as number) ||
+        (note.soundEnd as number) < (note.end as number) ||
+        (note.soundEnd as number) > (value.duration as number) + 1e-6
+      )
+        fail(where, `bad duet note ${isRecord(note) ? String(note.id) : ""}`);
+      // Playback keys on note ids across both parts.
+      if (notes.has(note.id as string))
+        fail(where, `duplicate note id ${note.id}`);
+      notes.add(note.id as string);
+    }
+  }
   return value as unknown as Song;
 }
 

@@ -55,6 +55,15 @@ export interface Song {
    * songs without pedal data, including songs saved before it was recorded.
    */
   pedals?: PedalSpan[];
+  /**
+   * A teacher part that plays along with Duet on. It is kept apart from
+   * `notes` and `tracks`, so it is never scored, waited for, drawn or fingered.
+   */
+  duet?: {
+    notes: Note[];
+    /** How many octaves the student part moves with it: negative is lower. */
+    octaves: number;
+  };
   /** Legacy lesson bar length, in quarter-note beats. */
   beatsPerBar?: number;
   leadInBeats?: number;

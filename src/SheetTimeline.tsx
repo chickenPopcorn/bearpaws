@@ -41,6 +41,8 @@ interface SheetTimelineProps {
   selectedNotes: Note[];
   from?: number;
   onSeek?: (seconds: number) => void;
+  /** Octaves from the written notes that the student plays: negative is lower. */
+  octaves?: number;
 }
 
 interface ScoreViewport {
@@ -249,6 +251,7 @@ export function SheetTimeline({
   selectedNotes,
   from = 0,
   onSeek,
+  octaves = 0,
 }: SheetTimelineProps) {
   const svg = useRef<SVGSVGElement>(null);
   const clipId = useId();
@@ -623,6 +626,17 @@ export function SheetTimeline({
         <text className="sheet-clef" x={36} y={182} fontSize={40}>
           {"\uE062"}
         </text>
+        {octaves !== 0 && (
+          // The book writes the student part as usual and asks for it higher
+          // or lower.
+          <g className="sheet-octave" aria-hidden="true">
+            {[56, 230].map((y) => (
+              <text key={y} x={30} y={y}>
+                {`${Math.abs(octaves) > 1 ? "15m" : "8v"}${octaves > 0 ? "a" : "b"}`}
+              </text>
+            ))}
+          </g>
+        )}
         <g className="sheet-time-signature" textAnchor="middle" fontSize={40}>
           {[74, 182].map((top) => (
             <g key={top}>
