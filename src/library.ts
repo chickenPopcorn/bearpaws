@@ -285,16 +285,25 @@ export function validateSong(value: unknown, id: string): Song {
     start: number;
     end: number;
   }[])
-    spans.set(p.channel, [...(spans.get(p.channel) ?? []), p]);
+    if (spans.has(p.channel)) spans.get(p.channel)!.push(p);
+    else spans.set(p.channel, [p]);
   for (const note of value.notes as {
     id: string;
     channel: number;
     end: number;
     soundEnd: number;
   }[]) {
-    const span = (spans.get(note.channel) ?? [])
-      .filter((p) => p.start <= note.end)
-      .at(-1);
+    // Each channel's spans are in start order (checked above), so the span
+    // holding a release is the last that starts at or before it.
+    const list = spans.get(note.channel) ?? [];
+    let low = 0,
+      high = list.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (list[middle].start <= note.end) low = middle + 1;
+      else high = middle;
+    }
+    const span = list[low - 1];
     if (span && note.end < span.end && note.soundEnd < span.end - 1e-6)
       fail(where, `note ${note.id} stops before the pedal holding it lifts`);
   }

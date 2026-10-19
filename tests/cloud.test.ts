@@ -23,8 +23,8 @@ interface Backend {
   failWrites: boolean;
   /** Writes to reject, by label, such as "upsert settings". */
   failLabels: string[];
-  /** Songs the account has no room for, as the progress_quota trigger refuses. */
-  overQuota: string[];
+  /** The account's song limit: an upload with more new songs is refused whole. */
+  limit: number;
   /** "abort": writes answer only when aborted. "manual": when release() runs. */
   hang: "no" | "abort" | "manual";
   release: () => void;
@@ -45,7 +45,7 @@ function backend(): Backend {
     calls: [],
     failWrites: false,
     failLabels: [],
-    overQuota: [],
+    limit: Infinity,
     hang: "no",
     release: () => {},
     signOutError: null,
@@ -75,14 +75,20 @@ function client(b: Backend) {
             resolve(reply(null));
           };
         });
-      const rows = Array.isArray(upsert[1]) ? upsert[1] : [];
-      if (
-        rows.some((row: { song_id: string }) =>
-          b.overQuota.includes(row.song_id),
-        )
-      )
+      const rows = (Array.isArray(upsert[1]) ? upsert[1] : []) as {
+        song_id: string;
+        data: unknown;
+      }[];
+      const added = rows.filter(
+        (row) => !b.progress.some((have) => have.song_id === row.song_id),
+      );
+      if (b.progress.length + added.length > b.limit)
         return Promise.resolve(
           reply(null, { code: "23514", message: "limit reached" }),
+        );
+      if (upsert[0] === "progress" && b.limit !== Infinity)
+        b.progress.push(
+          ...added.map(({ song_id, data }) => ({ song_id, data })),
         );
       const fails = b.failWrites || b.failLabels.includes(label);
       if (!fails) b.upserts.push(upsert);
@@ -93,45 +99,53 @@ function client(b: Backend) {
   });
   const fake = {
     from: (table: "settings" | "progress") => ({
-      select: () => ({
-        maybeSingle: async () => {
-          b.calls.push(`read ${table}`);
-          await b.readGate;
-          return b.failReads
-            ? reply(null, { message: "offline" })
-            : reply(b[table][0] ?? null);
-        },
-        in: async (_column: "song_id", ids: string[]) => {
-          b.calls.push(`read ${table}`);
-          await b.readGate;
-          return reply(
-            (b[table] as { song_id: string }[]).filter((row) =>
-              ids.includes(row.song_id),
-            ),
-          );
-        },
-        order: (column: "song_id") => {
-          let after: string | undefined;
-          let count = Infinity;
-          const query = {
-            gt: (_column: string, value: string) => ((after = value), query),
-            limit: (n: number) => ((count = n), query),
-            then: (
-              resolve: (value: unknown) => unknown,
-              reject: (error: unknown) => unknown,
-            ) =>
-              (async () => {
+      select: (_columns?: string, options?: { count?: string }) =>
+        options?.count
+          ? Promise.resolve({ data: null, error: null, count: b[table].length })
+          : {
+              maybeSingle: async () => {
                 b.calls.push(`read ${table}`);
                 await b.readGate;
-                const rows = [...(b[table] as { song_id: string }[])]
-                  .sort((x, y) => (x[column] < y[column] ? -1 : 1))
-                  .filter((row) => after === undefined || row[column] > after);
-                return reply(rows.slice(0, count));
-              })().then(resolve, reject),
-          };
-          return query;
-        },
-      }),
+                return b.failReads
+                  ? reply(null, { message: "offline" })
+                  : reply(b[table][0] ?? null);
+              },
+              in: async (_column: "song_id", ids: string[]) => {
+                b.calls.push(`read ${table}`);
+                await b.readGate;
+                return reply(
+                  (b[table] as { song_id: string }[]).filter((row) =>
+                    ids.includes(row.song_id),
+                  ),
+                );
+              },
+              order: (column: "song_id") => {
+                let after: string | undefined;
+                let count = Infinity;
+                const query = {
+                  gt: (_column: string, value: string) => (
+                    (after = value),
+                    query
+                  ),
+                  limit: (n: number) => ((count = n), query),
+                  then: (
+                    resolve: (value: unknown) => unknown,
+                    reject: (error: unknown) => unknown,
+                  ) =>
+                    (async () => {
+                      b.calls.push(`read ${table}`);
+                      await b.readGate;
+                      const rows = [...(b[table] as { song_id: string }[])]
+                        .sort((x, y) => (x[column] < y[column] ? -1 : 1))
+                        .filter(
+                          (row) => after === undefined || row[column] > after,
+                        );
+                      return reply(rows.slice(0, count));
+                    })().then(resolve, reject),
+                };
+                return query;
+              },
+            },
       upsert: (rows: unknown) => write(`upsert ${table}`, [table, rows]),
     }),
     auth: {
@@ -449,10 +463,17 @@ describe("uploading changes", () => {
   it("drops new songs a full account refuses, and still saves the songs it has", async () => {
     const b = backend();
     write("owner", USER);
-    b.progress = [{ song_id: "known", data: { best: 1 } }];
+    // A full account: 200 songs, "known" among them.
+    b.progress = [
+      { song_id: "known", data: { best: 1 } },
+      ...Array.from({ length: 199 }, (_, i) => ({
+        song_id: `song-${i}`,
+        data: { best: 1 },
+      })),
+    ];
     const sync = new CloudSync(client(b), USER);
     await sync.pull();
-    b.overQuota = ["new"];
+    b.limit = 200;
     sync.progress("known", { best: 2 } as never);
     sync.progress("new", { best: 1 } as never);
     await vi.advanceTimersByTimeAsync(2000);
@@ -467,6 +488,28 @@ describe("uploading changes", () => {
     expect(sync.error).toMatch(/200 songs/);
   });
 
+  it("keeps the new songs that still fit when one upload holds too many", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.progress = Array.from({ length: 199 }, (_, i) => ({
+      song_id: `song-${i}`,
+      data: { best: 1 },
+    }));
+    b.limit = 200;
+    const sync = new CloudSync(client(b), USER);
+    await sync.pull();
+    sync.progress("a", { best: 1 } as never);
+    sync.progress("b", { best: 1 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(1);
+    // One slot was left: the first new song takes it, the second is dropped.
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "a", data: { best: 1 } },
+    ]);
+    expect(queue()).toBeNull();
+    expect(sync.error).toMatch(/200 songs/);
+  });
+
   it("keeps a known song's waiting save when a full account refuses it at sign-in", async () => {
     const b = backend();
     write("owner", USER);
@@ -474,8 +517,14 @@ describe("uploading changes", () => {
       owner: USER,
       progress: { known: { best: 9 }, new: { best: 1 } },
     });
-    b.progress = [{ song_id: "known", data: { best: 2 } }];
-    b.overQuota = ["new"];
+    b.progress = [
+      { song_id: "known", data: { best: 2 } },
+      ...Array.from({ length: 199 }, (_, i) => ({
+        song_id: `song-${i}`,
+        data: { best: 1 },
+      })),
+    ];
+    b.limit = 200;
     const sync = new CloudSync(client(b), USER);
     await sync.pull();
     // The account says which songs it has, so only the new one is dropped.
@@ -544,6 +593,23 @@ describe("uploading changes", () => {
       ["progress", [{ user_id: USER, song_id: "song", data: { best: 2 } }]],
     ]);
     expect(queued()).toEqual(["other"]);
+  });
+
+  it("keeps trying to hand its progress off while the account refuses it", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    sync.detach();
+    sync.progress("song", { best: 2 } as never);
+    b.failWrites = true;
+    const handing = sync.handOff();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.calls).toEqual(["upsert progress"]);
+    b.failWrites = false;
+    await vi.advanceTimersByTimeAsync(15000);
+    await handing;
+    expect(b.upserts).toEqual([
+      ["progress", [{ user_id: USER, song_id: "song", data: { best: 2 } }]],
+    ]);
   });
 
   it("keeps the queue across a reload, for the same account only", () => {

@@ -22,6 +22,8 @@ const FULL_ACCOUNT =
   "This account has progress for 200 songs, its limit, so progress for new songs is not saved.";
 /** Postgres refused a row a check rejects, here the progress_quota trigger. */
 const CHECK_VIOLATION = "23514";
+/** How many times handOff() tries, RETRY_MS apart: about an hour. */
+const HANDOFF_ATTEMPTS = 240;
 /** Songs one account keeps progress for (see the progress_quota trigger). */
 const MAX_SONGS = 200;
 const STORAGE_FULL =
@@ -127,7 +129,10 @@ export class CloudSync implements SyncHooks {
   private stopped = false;
   /** Another tab owns the studio and the stored queue; see detach(). */
   private detached = false;
-  /** The account refused a new song for its 200-song limit this session. */
+  /**
+   * The account refused a new song for its 200-song limit this session. It
+   * is then full, so the notice stays.
+   */
   private full = false;
   error = "";
   /** Called when error changes. */
@@ -368,9 +373,6 @@ export class CloudSync implements SyncHooks {
         this.syncedSettings = canon(settings);
         if (this.queue.settings === settings) delete this.queue.settings;
       }
-      // A new song the account accepted means it has room again.
-      if (progressOk && progress.some(([id]) => !this.syncedProgress.has(id)))
-        this.full = false;
       if (progressOk)
         for (const [id, data] of progress) {
           this.syncedProgress.set(id, canon(data));
@@ -381,16 +383,32 @@ export class CloudSync implements SyncHooks {
       // the account which songs it has: before pull() reads it, this browser
       // does not know.
       else if (quotaReached) {
+        // One refused insert undoes the whole upload, so some new songs may
+        // still fit: keep as many as the account has room for, in order.
         const ids = progress.map(([id]) => id);
-        const existing = await timed(() =>
-          this.client.from("progress").select("song_id").in("song_id", ids),
-        ).catch(() => null);
-        if (existing && !existing.error) {
+        const [existing, total] = await Promise.all([
+          timed(() =>
+            this.client.from("progress").select("song_id").in("song_id", ids),
+          ),
+          timed(() =>
+            this.client
+              .from("progress")
+              .select("song_id", { count: "exact", head: true }),
+          ),
+        ]).catch(() => [null, null] as const);
+        if (
+          existing &&
+          !existing.error &&
+          total &&
+          !total.error &&
+          total.count !== null
+        ) {
           const have = new Set(
             (existing.data as { song_id: string }[]).map((row) => row.song_id),
           );
+          let room = MAX_SONGS - total.count;
           for (const id of ids)
-            if (!have.has(id)) delete this.queue.progress[id];
+            if (!have.has(id) && room-- <= 0) delete this.queue.progress[id];
         } else quotaReached = false;
       }
       if (this.stopped) return;
@@ -434,20 +452,26 @@ export class CloudSync implements SyncHooks {
     this.stop();
     const progress = Object.entries(this.queue.progress);
     if (!progress.length) return;
-    try {
-      await timed((signal) =>
-        this.client
-          .from("progress")
-          .upsert(
-            progress.map(([song_id, data]) => ({
-              user_id: this.userId,
-              song_id,
-              data,
-            })),
-          )
-          .abortSignal(signal),
-      );
-    } catch {}
+    // Only this tab holds these changes, so keep trying while it is open.
+    for (let attempt = 0; attempt < HANDOFF_ATTEMPTS; attempt++) {
+      if (attempt)
+        await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+      try {
+        const { error } = await timed((signal) =>
+          this.client
+            .from("progress")
+            .upsert(
+              progress.map(([song_id, data]) => ({
+                user_id: this.userId,
+                song_id,
+                data,
+              })),
+            )
+            .abortSignal(signal),
+        );
+        if (!error) return;
+      } catch {}
+    }
   }
 
   stop() {
