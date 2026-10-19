@@ -123,13 +123,20 @@ export class MidiDuet {
     }
     const from = this.position;
     this.position = position;
-    for (const note of notes) {
+    // In time order, so a later attack on a pitch always wins its key.
+    const due = notes
+      .filter(
+        (n) =>
+          !this.played.has(n.id) &&
+          n.start <= position &&
+          n.soundEnd > n.start &&
+          // Notes the clock is inside, and notes a late tick passed whole.
+          // A seek or new pass (no last tick) does not replay finished notes.
+          (n.soundEnd > position || (from !== undefined && n.start > from)),
+      )
+      .sort((a, b) => a.start - b.start);
+    for (const note of due) {
       if (!this.port) return;
-      if (this.played.has(note.id) || note.start > position) continue;
-      // Play notes the clock is inside, and notes a late tick passed whole.
-      // A seek or new pass (no last tick) does not replay finished notes.
-      const passed = from !== undefined && note.start > from;
-      if (note.soundEnd <= position && !passed) continue;
       this.played.add(note.id);
       const others = this.sounding(note.pitch);
       this.active.set(note.id, note);

@@ -181,6 +181,26 @@ describe("teacher MIDI output", () => {
     expect(send).toHaveBeenCalledTimes(4);
   });
 
+  it("skips a zero-length note a late tick passes, and plays notes in time order", () => {
+    const { duet, send } = setup();
+    // Out of order on purpose: "late" starts after "early" on the same key.
+    const notes = [
+      note("late", 48, 0.05, 1),
+      note("early", 48, 0.03, 1),
+      note("zero", 52, 0.04, 0.04),
+    ];
+    duet.schedule(notes, 0.02, 1, false);
+    duet.schedule(notes, 0.1, 1, false);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+      [[0x90, 48, 64]],
+    ]);
+    // The later note owns the key until it ends.
+    duet.schedule(notes, 0.5, 1, false);
+    expect(send).toHaveBeenCalledTimes(3);
+  });
+
   it("does not leave a zero-duration event sounding", () => {
     const { duet, send } = setup();
     duet.schedule([note("zero", 48, 0, 0)], 0, 1, false);
