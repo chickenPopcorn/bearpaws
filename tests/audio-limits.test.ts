@@ -497,6 +497,32 @@ describe("bounded reference audio", () => {
     // 0.05 of the song remains before the note, played at half speed.
     expect(nodes[3].start.mock.calls[0][0]).toBeCloseTo(0.15);
   });
+  it("holds sounding notes at a Wait gate, then releases them where they end from there", () => {
+    const { audio, transport, context, nodes } = fixture();
+    audio.schedule([note(1, 60, 2)], transport, true);
+    const gain = context.createGain.mock.results[0].value.gain;
+    const releaseTime = gain.setTargetAtTime.mock.calls[0][2];
+    context.currentTime = 1;
+    transport.update(1, 1);
+    audio.hold();
+    // No release: the note rings on to the end of its recording.
+    expect(gain.cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(1);
+    expect(gain.setTargetAtTime).toHaveBeenCalledOnce();
+    expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(20, 1);
+    // The learner plays three seconds later; one second of the note remains.
+    context.currentTime = 4;
+    transport.resume(1, 4);
+    audio.reschedule(transport);
+    expect(gain.setTargetAtTime).toHaveBeenLastCalledWith(
+      0,
+      expect.closeTo(5),
+      releaseTime,
+    );
+    expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(
+      5 + releaseTime * 7 + 0.02,
+    );
+  });
+
   it("keeps a just-struck note's full level when its release moves", () => {
     const { audio, transport, context } = fixture();
     audio.schedule([note(1, 60, 2)], transport, true);

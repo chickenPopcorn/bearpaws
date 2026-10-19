@@ -31,6 +31,7 @@ vi.mock("../src/audio", () => ({
     setSound = vi.fn();
     stop = vi.fn();
     reschedule = vi.fn();
+    hold = vi.fn();
     schedule = vi.fn();
     tone = vi.fn();
   },
@@ -1526,11 +1527,28 @@ describe("teacher duet", () => {
     expect(studio.transport.held).toBe(true);
     // Waiting at the first gate holds back the teacher's notes from there on.
     expect(scheduled(studio)).toEqual(["duet-0"]);
+    // Its sounding notes hold while the learner takes their time.
+    expect(studio.audio.hold).toHaveBeenCalledOnce();
     const cycle = studio.transport.cycle;
     midi(studio, [0x90, 72, 100]);
-    // They are scheduled at once, without striking sounding notes again.
+    // They are scheduled at once, without striking sounding notes again, and
+    // held notes end where they are written from here.
     expect(scheduled(studio)).toEqual(["duet-0", "duet-1", "duet-2"]);
     expect(studio.transport.cycle).toBe(cycle);
+    expect(studio.audio.reschedule).toHaveBeenCalledOnce();
+    advance(studio, 0.1);
+    expect(studio.audio.hold).toHaveBeenCalledOnce();
+  });
+
+  it("sounds a duet note a Wait loop seek lands in", async () => {
+    const studio = create(duetSong());
+    studio.duet();
+    studio.bounds(0.5, 2.5);
+    studio.seek(1.2);
+    await studio.play();
+    advance(studio, 0.01);
+    // The teacher's note from 1 to 1.4 is sounding here.
+    expect(scheduled(studio)).toEqual(["duet-0", "duet-1", "duet-2"]);
   });
 
   it("keeps the next loop pass's duet waiting at its first gate", async () => {

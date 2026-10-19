@@ -345,8 +345,11 @@ export class Studio {
     this.transport.setSpeed(speed, now);
     this.settings.speed = speed;
     // Sounding notes ring on; only notes that have not started change speed.
-    if (this.transport.playing) this.audio.reschedule(this.transport);
-    else this.audio.stop();
+    if (this.transport.playing) {
+      this.audio.reschedule(this.transport);
+      // Notes held at a Wait gate keep waiting.
+      if (this.transport.held) this.audio.hold();
+    } else this.audio.stop();
     this.persist();
     this.emit();
   }
@@ -533,7 +536,8 @@ export class Studio {
   }
   tick(now = this.audio.now()) {
     const playing = this.transport.playing,
-      cycle = this.transport.cycle;
+      cycle = this.transport.cycle,
+      held = this.transport.held;
     if (playing) {
       this.position = this.transport.update(now, this.waitGate);
       if (cycle !== this.transport.cycle) {
@@ -546,6 +550,9 @@ export class Studio {
         this.transport.seek(this.loopStart, this.passEpoch);
         this.position = this.transport.update(now, this.waitGate);
       }
+      // The duet's sounding notes wait at a gate with the learner.
+      if (this.transport.held && !held && this.duetNotes.length)
+        this.audio.hold();
       // Practice time counts while someone plays along: not in Listen, and
       // not once the keys have been quiet for a while, such as a Wait gate
       // left waiting. Each playback run needs its own key press, so one from
@@ -598,8 +605,9 @@ export class Studio {
     const reference = this.referenceAudible ? this.notes : NO_NOTES,
       gate = this.waitGate,
       // A Wait loop's next pass is scheduled ahead, before its gates come
-      // back: it may only start the notes before its first gate. The notes
-      // from there up to here have played in this pass already.
+      // back: it may only start the notes before its first gate. Notes from
+      // there that have ended played in this pass already; one still
+      // sounding here, as after a seek, sounds on.
       first =
         this.settings.mode === "wait" && this.transport.loop
           ? this.practice.groups[0]?.start
@@ -612,7 +620,7 @@ export class Studio {
                 (gate === undefined || note.start < gate - 0.001) &&
                 (first === undefined ||
                   note.start < first - 0.001 ||
-                  note.start >= this.position - 0.001),
+                  note.soundEnd > this.position),
             );
     this.audio.schedule(
       duet.length ? [...reference, ...duet] : reference,
@@ -671,8 +679,12 @@ export class Studio {
         if (advanced) {
           this.transport.resume(this.position, now);
           this.notice = "";
-          // The duet's notes at this gate sound with the student's key.
-          this.scheduleAudio();
+          if (this.duetNotes.length) {
+            // Held duet notes end where they are written from here, and its
+            // notes at this gate sound with the student's key.
+            this.audio.reschedule(this.transport);
+            this.scheduleAudio();
+          }
         }
       }
     }

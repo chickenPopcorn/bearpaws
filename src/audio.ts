@@ -568,9 +568,20 @@ export class ReferenceAudio {
     );
     try {
       voice.gain.gain.cancelAndHoldAtTime(hold);
-      voice.gain.gain.setTargetAtTime(0, voice.releaseAt, voice.releaseTime);
+      // A held voice rings on until it is retimed again.
+      if (Number.isFinite(voice.releaseAt))
+        voice.gain.gain.setTargetAtTime(0, voice.releaseAt, voice.releaseTime);
       voice.source.stop(voice.end);
     } catch {}
+  }
+  /**
+   * Keep sounding notes held while the transport waits, as at a Wait gate.
+   * reschedule() releases them where their notes end once it moves on.
+   */
+  hold() {
+    const now = this.now();
+    for (const voice of this.voices)
+      if (voice.start <= now) this.retime(voice, now, Infinity);
   }
   stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) {
