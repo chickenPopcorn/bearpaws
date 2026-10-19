@@ -182,9 +182,15 @@ span.device {
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
 }
+/* Quieter than Connect your piano beside it: white, with muted text. */
 .account {
   font-size: var(--text-sm);
+  background: #fff;
+  color: var(--muted);
+}
+.account:hover {
   background: #f7f6fa;
+  color: var(--text-2);
 }
 /* The sign-in page, and the page shown while the studio loads or cannot. */
 .signin {
@@ -372,13 +378,34 @@ span.device {
   color: var(--muted);
   padding-top: 1px;
 }
-/* Practice calendar: a star on each day that met the daily goal. */
+/* Practice calendar: a star on each day that met the daily goal. It is set
+   entirely in the score serif, like the song title. */
 .practice-calendar {
   margin: 0 0 var(--space-2);
   padding: var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: #fbfaff;
+  font-family: var(--score-font);
+}
+.practice-calendar input,
+.practice-calendar select,
+.practice-calendar button {
+  font-family: inherit;
+}
+/* Whose practice it is: the calendar's title, with the month beneath. */
+.practice-learner {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--text);
+}
+.has-learner .practice-calendar-head strong {
+  font-size: var(--text-sm);
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  color: var(--muted);
 }
 /* The streak drops below the month when the sidebar is narrow. */
 .practice-calendar-head {
@@ -390,9 +417,7 @@ span.device {
   margin-bottom: var(--space-2);
   font-size: var(--text-md);
 }
-/* The month in the score serif, like the song title. */
 .practice-calendar-head strong {
-  font-family: var(--score-font);
   font-size: 19px;
   font-weight: 400;
   letter-spacing: -0.02em;
@@ -410,11 +435,36 @@ span.device {
   width: 14px;
   height: 14px;
 }
+/* Seven days, then the week's stamp. */
 .practice-days {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, 1fr) 1.15fr;
   gap: 3px;
   text-align: center;
+}
+.practice-stamp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  border: 1.5px dashed #d8d3e6;
+  border-radius: 50%;
+  aspect-ratio: 1;
+}
+.practice-stamp-mark {
+  width: 70%;
+  height: 70%;
+  filter: grayscale(1);
+  opacity: 0.3;
+}
+.practice-stamp.earned {
+  border: 2px solid #e0a030;
+  background: #fcefd6;
+  transform: rotate(-10deg);
+}
+.practice-stamp.earned .practice-stamp-mark {
+  filter: none;
+  opacity: 1;
 }
 .practice-weekday {
   font-size: var(--text-caps);
@@ -484,6 +534,10 @@ span.device {
   margin: 0;
   font-size: var(--text-xs);
   color: var(--muted);
+}
+.practice-today strong {
+  font-weight: 700;
+  color: var(--text-2);
 }
 .practice-edit {
   flex: none;
@@ -826,6 +880,28 @@ h1 {
 }
 .practice-toolbar .speed input {
   width: 80px;
+}
+/* Below a wide window the controls tighten, so they still fit one row in a
+   typical laptop window. The slider keeps its "Playback speed" tooltip. */
+@media (max-width: 1439px) {
+  .work-main:not(.piano-expanded) .practice-toolbar {
+    column-gap: 12px;
+  }
+  .work-main:not(.piano-expanded) .practice-toolbar :is(.tabs, .hands) button {
+    padding: 0 10px;
+  }
+  .work-main:not(.piano-expanded) .practice-toolbar .speed-label {
+    display: none;
+  }
+  .work-main:not(.piano-expanded) .practice-toolbar .speed input {
+    width: 64px;
+  }
+}
+/* Narrower still, the score's "Bar · Beat" readout stands in for the time. */
+@media (max-width: 1339px) {
+  .work-main:not(.piano-expanded) .practice-toolbar .time {
+    display: none;
+  }
 }
 .fullscreen-song-title {
   display: block;
@@ -1667,6 +1743,12 @@ footer a {
 .fullscreen-toggle > span {
   font-size: 16px;
   line-height: 1;
+}
+/* Just the icon outside full screen: a square like the transport buttons. */
+.work-main:not(.piano-expanded) .fullscreen-toggle {
+  justify-content: center;
+  width: 40px;
+  padding: 0;
 }
 .work-main.piano-expanded {
   position: fixed;
