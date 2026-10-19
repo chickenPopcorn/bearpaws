@@ -75,31 +75,43 @@ describe("piano keyboard geometry and pointer input", () => {
 });
 
 describe("keyboard with the teacher duet", () => {
-  it("adds the duet's octaves to the keys only when asked", () => {
+  const note = (id: string, pitch: number, track: number) => ({
+    id,
+    pitch,
+    start: 0,
+    end: 1,
+    soundEnd: 1,
+    velocity: 0.5,
+    track,
+    channel: track,
+  });
+  it("adds the duet's notes to the keys only when asked", () => {
     const duetSong: Song = {
       ...song,
-      notes: [],
-      duet: {
-        octaves: 1,
-        notes: [
-          {
-            id: "bass",
-            pitch: 31,
-            start: 0,
-            end: 1,
-            soundEnd: 1,
-            velocity: 0.5,
-            track: 2,
-            channel: 2,
-          },
-        ],
-      },
+      notes: [note("melody", 79, 1)],
+      duet: { octaves: 1, notes: [note("bass", 31, 2)] },
     };
     expect(range(duetSong)).toEqual([48, 84]);
-    expect(range(duetSong, true)).toEqual([24, 84]);
+    // G1 to G5: no empty octave under the bass, none over the melody.
+    expect(range(duetSong, true)).toEqual([31, 79]);
     const height = 400;
-    // The leftmost white key is C1 with the duet, C3 without.
+    // The leftmost white key is G1 with the duet, C3 without.
     expect(pianoKeyAt(duetSong, 0.001, height - 1, height)).toBe(48);
-    expect(pianoKeyAt(duetSong, 0.001, height - 1, height, true)).toBe(24);
+    expect(pianoKeyAt(duetSong, 0.001, height - 1, height, true)).toBe(31);
+    expect(pianoKeyAt(duetSong, 0.999, height - 1, height, true)).toBe(79);
+  });
+  it("ends the duet's keys on white keys past black-key notes", () => {
+    const duetSong: Song = {
+      ...song,
+      notes: [note("melody", 82, 1)],
+      duet: { octaves: 1, notes: [note("bass", 30, 2)] },
+    };
+    // F#1 and A#5 sit between F1 and B5.
+    expect(range(duetSong, true)).toEqual([29, 83]);
+    const keys = keyLayout(...range(duetSong, true));
+    for (const key of keys) {
+      expect(key.x).toBeGreaterThanOrEqual(0);
+      expect(key.x + key.width).toBeLessThanOrEqual(1 + 1e-9);
+    }
   });
 });
