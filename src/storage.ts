@@ -14,6 +14,8 @@ export interface Settings {
   right: boolean;
   /** The teacher duet plays along, for songs that have one. */
   duet: boolean;
+  /** A metronome clicks each beat, after a count-in, outside Wait for me. */
+  click: boolean;
   tolerance: number;
   names: boolean;
   selected: string;
@@ -52,6 +54,7 @@ export const defaults: Settings = {
   left: true,
   right: true,
   duet: false,
+  click: false,
   tolerance: 0.22,
   names: true,
   selected: "cadence-ode-to-joy-v1",
@@ -159,6 +162,7 @@ export function settings(): Settings {
     left: !!s.left,
     right: !!s.right,
     duet: !!s.duet,
+    click: !!s.click,
     names: !!s.names,
     selected: typeof s.selected === "string" ? s.selected : defaults.selected,
     ambience: sound.ambience,

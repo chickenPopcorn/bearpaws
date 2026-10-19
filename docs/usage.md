@@ -57,7 +57,7 @@ no guessed finger numbers.
 
 1. Choose a piece from George Bear’s Classes; use **Find a song** to filter them.
 2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. See [MIDI and USB pianos](midi.md) for reconnecting and choosing an input.
-3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen plays your part for you and works without a piano. In Wait for me and Rhythm the app never plays your part: you do. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along, in every mode (see [Duet](#duet)).
+3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen plays your part for you and works without a piano. In Wait for me and Rhythm the app never plays your part: you do. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along, in every mode (see [Duet](#duet)). In Listen and Rhythm, the **Metronome** button beside the loop button clicks every beat after a count-in (see [Metronome](#metronome)).
 4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
 ## Modes
@@ -91,6 +91,31 @@ octave shift. The duet never widens it. The waterfall shows the duet in yellow
 at quarter opacity behind your notes, wherever it falls on the keys your part
 uses; the duet is never fingered or scored, and Wait for me holds it at each of
 your notes until you play them.
+
+## Metronome
+
+The **Metronome** button beside the loop button clicks every beat of the
+song, in Listen and Rhythm. It is off until turned on, and the choice is
+remembered. Each bar's first beat clicks higher. The click follows the
+song's tempo and time signature, so it clicks each quarter in 4/4 and 3/4
+and each eighth in 6/8, and it slows down and speeds up with **Speed**.
+
+With the metronome on, Play first counts in: the clicks from the start of
+the bar up to where playback starts, or the whole bar before it when that
+leaves fewer than two clicks, as on a bar's first beat. From the start of a
+lesson in 4/4 the count is "1, 2, 3", and the song's lead-in beat is "4". The
+music, the score and the waterfall stay still during the count. Pause stops
+it, a seek counts in again from the new place, even during playback, and a
+loop goes on to its next pass without one. Turning the metronome off during
+the count starts the music at once, and turning it on during playback counts
+in from there. In Rhythm, a note played early as the count ends scores as
+early, as it would during playback.
+
+Wait for me has no metronome: the music waits for you there, so there is no
+beat to keep. The click is a short tone that leaves out the piano's room, and
+it always plays on the laptop, even when the music plays on a USB piano (see
+[MIDI and USB pianos](midi.md#play-the-apps-sound-on-a-usb-piano)). Keep the
+laptop's sound on to hear it.
 
 ## Limits
 

@@ -83,6 +83,7 @@ function fixture(loaded = true) {
     sampleRate,
     destination: {},
     resume: vi.fn(async () => {}),
+    close: vi.fn(async () => {}),
     createBufferSource,
     createGain,
     createConvolver: vi.fn(() => ({
@@ -180,9 +181,23 @@ describe("bounded piano audio", () => {
 
   it("can retry after the browser rejects an audio unlock", async () => {
     const { audio, context } = fixture();
+    context.state = "suspended";
     context.resume.mockRejectedValueOnce(new Error("Permission denied"));
     await expect(audio.unlock()).rejects.toThrow("Permission denied");
     expect(audio.error).toMatch(/piano sound could not load/);
+    // The practice clock keeps going without a context that never ran.
+    expect(audio.context).toBeNull();
+    expect(context.close).toHaveBeenCalledOnce();
+    vi.spyOn(performance, "now").mockReturnValue(5000);
+    expect(audio.now()).toBe(5);
+    // A retry makes a new one.
+    context.state = "running";
+    vi.stubGlobal(
+      "AudioContext",
+      vi.fn(function () {
+        return context;
+      }),
+    );
     expect(context.createDynamicsCompressor).not.toHaveBeenCalled();
     audio.tone(60, 0.8, 0, 1);
     expect(context.createBufferSource).not.toHaveBeenCalled();

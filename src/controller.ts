@@ -26,6 +26,12 @@ import {
 } from "./storage";
 import type { SyncHooks } from "./cloud";
 import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
+import {
+  createClickTrack,
+  Metronome,
+  type ClickClock,
+  type ClickTrack,
+} from "./metronome";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
 /** How hard on-screen keys and computer shortcuts strike, from 0 to 1. */
 const KEY_VELOCITY = 0.6;
@@ -39,6 +45,8 @@ const unstamped = ({ updated: _updated, ...rest }: Progress) =>
 const savedBeat = (beat: number) => Math.round(beat * 1e6) / 1e6;
 const NO_PEDALS: readonly PedalSpan[] = [];
 const NO_NOTES: Note[] = [];
+/** How long after Play the count-in's first click sounds, in seconds. */
+const COUNT_IN_DELAY = 0.1;
 export class Studio {
   settings = settings();
   private playGeneration = 0;
@@ -60,6 +68,17 @@ export class Studio {
   /** The song as printed. With Duet on, `song` has its student part moved up. */
   written: Song;
   audio = new PianoAudio();
+  private metronome = new Metronome();
+  /** The current song's metronome clicks. */
+  private clicks: ClickTrack;
+  /**
+   * The count-in before playback starts: song time `from` at audio-clock
+   * time `anchor`, counting at the transport's speed up to `to`, where
+   * playback starts.
+   */
+  private countIn: { from: number; to: number; anchor: number } | null = null;
+  /** Where the metronome's current pass begins: a play position or loop start. */
+  private clickFrom = 0;
   input = new MidiState();
   transport: Transport;
   practice: Practice;
@@ -112,6 +131,7 @@ export class Studio {
       this.songs.find((song) => song.id === this.settings.selected) ??
       this.songs[0];
     this.written = this.song;
+    this.clicks = createClickTrack(this.song);
     this.transport = new Transport(this.song.duration);
     this.practice = new Practice(this.song.notes);
     this.loopEnd = this.song.duration;
@@ -136,7 +156,7 @@ export class Studio {
       onReset: () => {
         this.input.clear();
         if (this.settings.mode !== "listen") {
-          if (this.transport.playing || this.playbackPending) {
+          if (this.playing || this.playbackPending) {
             this.pause();
             this.notice =
               "Piano connection changed. Press Play when you are ready.";
@@ -153,7 +173,7 @@ export class Studio {
         if (
           this.destroyed ||
           !this.midiRouted ||
-          !(this.transport.playing || this.playbackPending)
+          !(this.playing || this.playbackPending)
         )
           return;
         this.pause();
@@ -175,7 +195,7 @@ export class Studio {
   private async followOutput(id: string, change: () => Promise<void>) {
     this.outputChanging = true;
     this.emit();
-    const resume = this.transport.playing || this.playbackPending;
+    const resume = this.playing || this.playbackPending;
     this.pause();
     const generation = this.playGeneration;
     try {
@@ -236,6 +256,17 @@ export class Studio {
       (this.listening || this.duetNotes.length > 0)
     );
   }
+  /**
+   * Whether the metronome clicks: not in Wait for me, where the music waits
+   * for the student instead of keeping a beat.
+   */
+  get clicking() {
+    return this.settings.click && this.settings.mode !== "wait";
+  }
+  /** Whether playback runs, or counts in to start. */
+  get playing() {
+    return this.transport.playing || this.countIn !== null;
+  }
   /** Wait mode holds the transport at the next chord. */
   private get waitGate() {
     return this.settings.mode === "wait"
@@ -249,9 +280,12 @@ export class Studio {
     this.practice = new Practice(this.scoringNotes, this.transport.loop);
     this.practice.reset(this.position);
   }
+  /** Cancel a start still loading or counting in, and the clicks to come. */
   private cancelPlaybackPreparation() {
     this.playGeneration++;
     this.playbackPending = false;
+    this.countIn = null;
+    this.metronome.stop(this.audio.now());
     for (const preparation of this.audioPreparations) preparation.abort();
     this.audioPreparations.clear();
   }
@@ -349,6 +383,7 @@ export class Studio {
     this.midi.player.stop();
     this.audio.stop();
     this.written = { ...song, tracks: song.tracks.map((t) => ({ ...t })) };
+    this.clicks = createClickTrack(song);
     this.settings.selected = song.id;
     this.persist();
     this.clock = createBeatClock(song.ppq, song.tempos);
@@ -458,19 +493,51 @@ export class Studio {
   speed(speed: number) {
     const now = this.audio.now();
     if (this.transport.playing) this.tick(now);
+    // A count-in carries on from where it is, at the new speed.
+    if (this.countIn)
+      this.countIn = {
+        ...this.countIn,
+        from: this.countInPosition(now),
+        anchor: now,
+      };
     this.transport.setSpeed(speed, now);
     this.settings.speed = speed;
     // Sounding notes ring on; only notes that have not started change speed.
     if (this.transport.playing) {
       this.audio.reschedule(this.transport);
+      this.metronome.reschedule(now);
       // Notes held at a Wait gate keep waiting.
       if (this.transport.held) this.audio.hold();
-    } else {
+    } else if (this.countIn) this.metronome.reschedule(now);
+    else {
       this.midi.player.stop();
       this.audio.stop();
     }
     this.persist();
     this.emit();
+  }
+  /** The metronome turns on and off; playback goes on. */
+  click() {
+    // Turned on during playback, it counts in from here, as Play does. Play
+    // also starts browser audio for the clicks when the piano plays the music.
+    const recount =
+      !this.settings.click &&
+      this.settings.mode !== "wait" &&
+      (this.playing || this.playbackPending);
+    if (recount) this.pause();
+    this.settings.click = !this.settings.click;
+    if (!this.settings.click) {
+      const now = this.audio.now();
+      this.metronome.stop(now);
+      // A count-in has nothing left to count: play from here at once.
+      if (this.countIn) {
+        this.countIn = null;
+        this.transport.play(now);
+      }
+    }
+    this.persist();
+    this.emit();
+    if (recount) void this.play();
   }
   names(enabled: boolean) {
     this.settings.names = enabled;
@@ -507,8 +574,7 @@ export class Studio {
     // loading should not wait for those of one turned off. Play on from here
     // once the right ones load, as for a loop change.
     const resume =
-      this.audible &&
-      (this.playbackPending || (enabled && this.transport.playing));
+      this.audible && (this.playbackPending || (enabled && this.playing));
     if (resume) this.pause();
     this.settings.pianoVoices = {
       ...this.settings.pianoVoices,
@@ -520,6 +586,10 @@ export class Studio {
     if (resume) void this.play();
   }
   seek(position: number) {
+    // With the metronome on, playback counts in again from the new position,
+    // as Play does. A start still loading or counting in starts over too.
+    const recount = this.clicking && (this.playing || this.playbackPending);
+    if (recount) this.pause();
     this.cancelPlaybackPreparation();
     this.midi.player.stop();
     this.audio.stop(!this.transport.playing);
@@ -530,10 +600,12 @@ export class Studio {
       );
     this.transport.seek(position, this.audio.now());
     this.position = this.transport.at(this.audio.now());
+    this.clickFrom = this.position;
     this.restartScoring();
     this.notice = "";
     this.save();
     this.emit();
+    if (recount) void this.play();
   }
   pause() {
     this.midiRouted = false;
@@ -545,6 +617,8 @@ export class Studio {
     this.position = this.transport.position;
     this.midi.player.stop();
     this.audio.stop();
+    // After the last tick, which can schedule a click ahead.
+    this.metronome.stop(now);
     this.save();
     this.emit();
   }
@@ -598,9 +672,20 @@ export class Studio {
       this.midiRouted = routed && played.length > 0;
       this.midi.player.stop();
       this.audio.stop();
-      // Browser audio is not needed at all then, and may be unavailable.
+      // Browser audio is not needed for the music then, and may be
+      // unavailable. The metronome still clicks on the laptop, if it can.
+      let clickable = true;
       if (!routed) await this.prepareAudio(laptop, generation, this.pedals);
+      else if (this.clicking)
+        await this.audio.unlock().catch(() => {
+          // The music plays on the piano at once, without a silent count-in.
+          this.audio.error = "";
+          clickable = false;
+        });
       if (generation !== this.playGeneration) return;
+      // Nothing waits from here on. The seeks below are this start's own,
+      // so they must not count in and start again.
+      this.playbackPending = false;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
       if (p >= this.song.duration)
@@ -611,7 +696,19 @@ export class Studio {
       )
         this.seek(this.loopStart);
       this.audio.setPlaybackNotes(laptop, this.pedals);
-      this.transport.play(this.audio.now());
+      const now = this.audio.now();
+      if (this.clicking && clickable) {
+        // A bar's count-in first. tick() starts playback where it ends.
+        this.clickFrom = this.clicks.countIn(this.position);
+        this.countIn = {
+          from: this.clickFrom,
+          to: this.position,
+          anchor: now + COUNT_IN_DELAY,
+        };
+      } else {
+        this.clickFrom = this.position;
+        this.transport.play(now);
+      }
       this.progress.attempts++;
       this.notice = "";
       this.save();
@@ -633,7 +730,7 @@ export class Studio {
   }
   loop(enabled: boolean) {
     // The new scope may need recordings that the previous loop did not load.
-    const resume = this.transport.playing || this.playbackPending;
+    const resume = this.playing || this.playbackPending;
     if (resume) this.pause();
     this.loopEnabled = enabled;
     this.syncLoop();
@@ -641,8 +738,7 @@ export class Studio {
     if (resume) void this.play();
   }
   bounds(start: number, end: number) {
-    const resume =
-      this.loopEnabled && (this.transport.playing || this.playbackPending);
+    const resume = this.loopEnabled && (this.playing || this.playbackPending);
     if (resume) this.pause();
     this.loopStart = Math.max(0, Math.min(this.song.duration - 0.2, start));
     this.loopEnd = Math.max(
@@ -657,7 +753,40 @@ export class Studio {
     this.emit();
     if (resume) void this.play();
   }
+  /** Where a count-in has reached, in song time: before 0 for the song's start. */
+  private countInPosition(now: number) {
+    const { from, anchor } = this.countIn!;
+    return from + (now - anchor) * this.transport.speed;
+  }
+  /** Sound the metronome's clicks up to `clock`, if it is on. */
+  private clickTick(clock: ClickClock, now: number) {
+    if (!this.clicking) return;
+    this.metronome.tick(this.clicks, clock, now, this.audio.context);
+  }
+  /** Count in, and once the count reaches the play position, play from there. */
+  private countInTick(now: number) {
+    const countIn = this.countIn!,
+      start =
+        countIn.anchor + (countIn.to - countIn.from) / this.transport.speed;
+    if (now >= start) {
+      this.countIn = null;
+      // From the moment the count ended, so the beat carries on in time.
+      this.transport.play(start);
+      return;
+    }
+    this.clickTick(
+      {
+        position: this.countInPosition(now),
+        speed: this.transport.speed,
+        pass: this.transport.cycle,
+        start: countIn.from,
+        loop: this.transport.loop,
+      },
+      now,
+    );
+  }
   tick(now = this.audio.now()) {
+    if (this.countIn) this.countInTick(now);
     const playing = this.transport.playing,
       cycle = this.transport.cycle,
       held = this.transport.held;
@@ -672,6 +801,7 @@ export class Studio {
         // records the first Wait hold at its true arrival time.
         this.transport.seek(this.loopStart, this.passEpoch);
         this.position = this.transport.update(now, this.waitGate);
+        this.clickFrom = this.loopStart;
       }
       // The duet's sounding notes wait at a gate with the learner.
       if (this.transport.held && !held && this.duetNotes.length)
@@ -697,6 +827,16 @@ export class Studio {
           this.settings.speed,
         );
       this.scheduleAudio();
+      this.clickTick(
+        {
+          position: this.position,
+          speed: this.transport.speed,
+          pass: this.transport.cycle,
+          start: this.clickFrom,
+          loop: this.transport.loop,
+        },
+        now,
+      );
       if (this.audio.error) this.notice = this.audio.error;
       const total = this.practice.notes.filter(
         (n) => n.start >= this.practice.from - 0.001,
@@ -813,6 +953,24 @@ export class Studio {
             this.scheduleAudio();
           }
         }
+      } else if (this.countIn && this.settings.mode === "rhythm") {
+        // A press as the count-in ends can be early for the first notes. In
+        // song time it falls that far before the play position.
+        const { from, to, anchor } = this.countIn,
+          speed = this.transport.speed,
+          early = anchor + (to - from) / speed - event;
+        if (
+          event >= this.scoringEpoch &&
+          early <= this.settings.tolerance + TIMING_EPSILON
+        )
+          this.practice.input(
+            edge.pitch,
+            to - early * speed,
+            "rhythm",
+            this.settings.tolerance,
+            speed,
+            this.input.down,
+          );
       }
     }
     this.emit();

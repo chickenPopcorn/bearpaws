@@ -890,7 +890,7 @@ h1 {
 }
 /* Below a wide window the controls tighten, so they still fit one row in a
    typical laptop window. The slider keeps its "Playback speed" tooltip. */
-@media (max-width: 1439px) {
+@media (max-width: 1479px) {
   .work-main:not(.piano-expanded) .practice-toolbar {
     column-gap: 12px;
   }
@@ -905,9 +905,18 @@ h1 {
   }
 }
 /* Narrower still, the score's "Bar · Beat" readout stands in for the time. */
-@media (max-width: 1339px) {
+@media (max-width: 1379px) {
   .work-main:not(.piano-expanded) .practice-toolbar .time {
     display: none;
+  }
+}
+/* And the groups and their buttons draw closer, down to a 1220 px window. */
+@media (max-width: 1259px) {
+  .work-main:not(.piano-expanded) .practice-toolbar {
+    column-gap: 8px;
+  }
+  .work-main:not(.piano-expanded) .practice-toolbar :is(.tabs, .hands) button {
+    padding: 0 8px;
   }
 }
 .fullscreen-song-title {
@@ -1168,6 +1177,10 @@ h1 {
 .square[aria-pressed="true"] {
   color: var(--accent);
   background: var(--soft);
+}
+/* Off in Wait for me, which has no beat to keep. */
+.metronome:disabled {
+  cursor: default;
 }
 .speed {
   font-size: var(--text-sm);

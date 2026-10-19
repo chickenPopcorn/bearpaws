@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
+import { Metronome } from "../src/metronome";
+import type { Mode } from "../src/engine";
 import type { Note, Song } from "../src/song";
 import { fixtureLibrary } from "./fixtures/library";
 
@@ -2037,5 +2039,195 @@ describe("practice time", () => {
     const saved = { learnerName: "George", dailyGoalMinutes: 15 };
     expect(studio.settings).toMatchObject(saved);
     expect(env.values.get("settings")).toMatchObject(saved);
+  });
+});
+
+describe("metronome", () => {
+  /** A studio in `mode` with the metronome on. The fixture is 4/4 at 120 BPM. */
+  function clicking(fixture: Song, mode: Mode = "rhythm") {
+    const studio = create(fixture);
+    studio.mode(mode);
+    studio.click();
+    return studio;
+  }
+  /** Advance in practice ticks of 20 ms. */
+  function run(studio: Studio, seconds: number) {
+    for (let t = 0; t < seconds - 1e-9; t += 0.02) advance(studio, 0.02);
+  }
+  it("is remembered, and stays off in Wait for me", async () => {
+    const studio = create(song([[60, 0.5]]));
+    studio.click();
+    expect(env.values.get("settings")).toMatchObject({ click: true });
+    // Wait for me keeps no beat, so Play starts at once.
+    expect(studio.clicking).toBe(false);
+    await studio.play();
+    expect(studio.transport.playing).toBe(true);
+    studio.mode("listen");
+    expect(studio.clicking).toBe(true);
+  });
+  it("counts in a bar, then plays from where the count ends", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    // From the first beat, the whole bar before it: 2 s, after a short delay.
+    expect(studio.playing).toBe(true);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 2.05);
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.position).toBe(0);
+    advance(studio, 0.07);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(0.02);
+  });
+  it("clicks on the laptop while the piano plays the music", async () => {
+    const tick = vi.spyOn(Metronome.prototype, "tick");
+    const studio = clicking(song([[60, 0.5]]), "listen");
+    output(studio);
+    await studio.play();
+    // Browser audio starts for the click alone: no piano samples load.
+    expect(studio.audio.unlock).toHaveBeenCalledOnce();
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    run(studio, 2.7);
+    expect(studio.transport.playing).toBe(true);
+    const positions = tick.mock.calls.map(([, clock]) => clock.position);
+    // The count-in, from a bar before the song, then the song.
+    expect(positions[0]).toBeCloseTo(-2.08);
+    expect(positions.at(-1)).toBeCloseTo(0.6);
+    // Turned off, it stops; the music plays on.
+    studio.click();
+    const calls = tick.mock.calls.length;
+    run(studio, 1);
+    expect(tick).toHaveBeenCalledTimes(calls);
+    expect(studio.transport.playing).toBe(true);
+  });
+  it("plays on the piano without the click when browser audio cannot start", async () => {
+    const studio = clicking(song([[60, 0.5]]), "listen");
+    output(studio);
+    vi.mocked(studio.audio.unlock).mockRejectedValue(new Error("No audio"));
+    await studio.play();
+    // At once: a count-in would be silent.
+    expect(studio.transport.playing).toBe(true);
+    advance(studio, 0.5);
+    expect(studio.position).toBeCloseTo(0.5);
+    expect(studio.notice).toBe("");
+  });
+  it("counts in when turned on during playback, starting browser audio for it", async () => {
+    const studio = create(song([[60, 0.5]]));
+    studio.mode("listen");
+    output(studio);
+    await studio.play();
+    expect(studio.audio.unlock).not.toHaveBeenCalled();
+    advance(studio, 1);
+    studio.click();
+    await vi.waitFor(() => expect(studio.playing).toBe(true));
+    expect(studio.audio.unlock).toHaveBeenCalledOnce();
+    expect(studio.transport.playing).toBe(false);
+    // From the third beat: the bar's first two, then on from there.
+    advance(studio, 1.05);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 0.1);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(1.05);
+  });
+  it("counts in once when Play starts over from the song's end", async () => {
+    const studio = clicking(song([[60, 0.5]]), "listen");
+    studio.loop(false);
+    studio.seek(4);
+    await studio.play();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(studio.audio.prepare).toHaveBeenCalledOnce();
+    expect(studio.progress.attempts).toBe(1);
+    expect(studio.position).toBe(0);
+    expect(studio.playing).toBe(true);
+    expect(studio.transport.playing).toBe(false);
+  });
+  it("cancels the count-in on pause, and counts again from a seek", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    advance(studio, 1);
+    studio.pause();
+    expect(studio.playing).toBe(false);
+    advance(studio, 2);
+    expect(studio.transport.playing).toBe(false);
+    await studio.play();
+    advance(studio, 1);
+    // From the third beat: the bar's first two, 1 s.
+    studio.seek(1);
+    await vi.waitFor(() => expect(studio.playing).toBe(true));
+    advance(studio, 1.05);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 0.1);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(1.05);
+  });
+  it("plays at once when turned off during the count-in", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    advance(studio, 1);
+    studio.click();
+    expect(studio.transport.playing).toBe(true);
+    advance(studio, 0.5);
+    expect(studio.position).toBeCloseTo(0.5);
+  });
+  it("counts in again after a seek during playback", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    run(studio, 2.2);
+    expect(studio.transport.playing).toBe(true);
+    studio.seek(1);
+    await vi.waitFor(() => expect(studio.playing).toBe(true));
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.position).toBe(1);
+    // The bar's first two beats, 1 s, then playback from the seek.
+    advance(studio, 1.05);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 0.1);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(1.05);
+  });
+  it("cancels the clicks the last tick before a pause scheduled", async () => {
+    const tick = vi.spyOn(Metronome.prototype, "tick"),
+      stop = vi.spyOn(Metronome.prototype, "stop");
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    run(studio, 2.2);
+    studio.pause();
+    const last = (spy: typeof tick | typeof stop) =>
+      spy.mock.invocationCallOrder.at(-1)!;
+    expect(last(stop)).toBeGreaterThan(last(tick));
+  });
+  it("carries a count-in on at a new speed", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    advance(studio, 1.1);
+    // Halfway through the bar at full speed; the other half takes 2 s.
+    studio.speed(0.5);
+    advance(studio, 1.95);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 0.1);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(0.025);
+  });
+  it("scores a Rhythm press early for the first note as the count-in ends", async () => {
+    const studio = clicking(
+      song([
+        [60, 0],
+        [62, 0.5],
+      ]),
+    );
+    await studio.play();
+    advance(studio, 1);
+    // Long before the music: no score.
+    midi(studio, [0x90, 62, 100]);
+    midi(studio, [0x80, 62, 0]);
+    advance(studio, 1);
+    // 100 ms before playback starts.
+    midi(studio, [0x90, 60, 100]);
+    midi(studio, [0x80, 60, 0]);
+    expect(studio.practice.feedback).toMatchObject([
+      { kind: "early", pitch: 60, offset: expect.closeTo(-0.1) },
+    ]);
+    run(studio, 0.6);
+    expect(studio.practice.hit).toEqual(new Set(["note-0"]));
+    expect(studio.practice.missed).toEqual(new Set());
   });
 });

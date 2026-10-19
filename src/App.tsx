@@ -481,11 +481,11 @@ export function App({
   const [connectTried, setConnectTried] = useState(false),
     [busy, setBusy] = useState(false);
   const fullscreen = usePianoFullscreen(() => {
-    if (!studio.transport.playing && !busy) void startPlayback();
+    if (!studio.playing && !busy) void startPlayback();
   });
   const s = studio.settings,
     p = studio.practice,
-    playing = studio.transport.playing;
+    playing = studio.playing;
   const connected = studio.midi.status === "connected",
     connecting = studio.midi.status === "opening",
     selectedDevice = studio.midi.devices.find(
@@ -525,8 +525,7 @@ export function App({
     };
     const blur = () => {
       studio.releaseKeys();
-      if (studio.transport.playing && studio.settings.mode !== "listen")
-        studio.pause();
+      if (studio.playing && studio.settings.mode !== "listen") studio.pause();
       else studio.emit();
     };
     const hidden = () => {
@@ -564,7 +563,7 @@ export function App({
   };
   const toggle = async () => {
     if (busy) return;
-    if (studio.transport.playing) studio.pause();
+    if (studio.playing) studio.pause();
     else await startPlayback();
   };
   const navigateSong = async (song: Song | undefined) => {
@@ -823,6 +822,33 @@ export function App({
                     onClick={() => studio.loop(!studio.loopEnabled)}
                   >
                     ⇄
+                  </button>
+                  <button
+                    className="square metronome"
+                    aria-label="Metronome"
+                    title={
+                      s.mode === "wait"
+                        ? "No metronome in Wait for me: the music waits for you"
+                        : "Metronome: a click on every beat, after a bar's count-in"
+                    }
+                    aria-pressed={studio.clicking}
+                    disabled={s.mode === "wait"}
+                    onClick={() => studio.click()}
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      width="16"
+                      height="16"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M5.5 1.75h5l2.75 12.5H2.75z" />
+                      <path d="M8 11.25l3.75-6.5" />
+                    </svg>
                   </button>
                 </div>
                 <div className="playback-cluster">
