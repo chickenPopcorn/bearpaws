@@ -150,6 +150,21 @@ describe("song version", () => {
       expect(songVersion(retimed(song, microseconds))).toBe(songVersion(song));
   });
 
+  it("stays the same at another MIDI resolution", () => {
+    const song = ode();
+    // Exported at 960 ticks per beat: every tick doubles, every time stays.
+    const finer = {
+      ...song,
+      ppq: 960,
+      tempos: song.tempos.map((tempo) => ({ ...tempo, tick: tempo.tick * 2 })),
+    };
+    expect(songVersion(finer)).toBe(songVersion(song));
+    const [first, ...rest] = finer.notes;
+    // One tick later at 960 ticks per beat, where 750,000 µs is a beat.
+    const moved = [{ ...first, start: first.start + 0.75 / 960 }, ...rest];
+    expect(songVersion({ ...finer, notes: moved })).not.toBe(songVersion(song));
+  });
+
   it("follows the student's notes, not their order or the duet", () => {
     const song = fixtureLibrary()[1];
     const version = songVersion(song);

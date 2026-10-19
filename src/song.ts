@@ -181,24 +181,29 @@ export function tempoConverter(ppq: number, changes: Tempo[]) {
   return (tick: number) => clock.time(tick / ppq);
 }
 /**
- * A short hash of the student part's notes: each pitch and the tick it starts
- * on. A tempo change keeps it; a change to the notes does not. Saved progress
- * counts beats of one version (see storage.progress()).
+ * A short hash of the student part's notes: each pitch and the beat it starts
+ * on. A tempo change or another MIDI resolution keeps it; a change to the
+ * notes does not. Saved progress counts beats of one version (see
+ * storage.progress()).
  */
 export function songVersion(song: Song) {
   const ppq = song.ppq > 0 ? song.ppq : 480,
     clock = createBeatClock(ppq, song.tempos);
+  const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
   // Whole ticks, so float noise in the seconds cannot change the hash.
   const keys = song.notes
     .map((note) => [Math.round(clock.at(note.start) * ppq), note.pitch])
     .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   // 32-bit FNV-1a.
   let hash = 0x811c9dc5;
-  for (const [tick, pitch] of keys)
-    for (const char of `${tick}:${pitch};`) {
+  for (const [tick, pitch] of keys) {
+    // The beat as a fraction in lowest terms, the same at any resolution.
+    const divisor = gcd(tick, ppq);
+    for (const char of `${tick / divisor}/${ppq / divisor}:${pitch};`) {
       hash ^= char.charCodeAt(0);
       hash = Math.imul(hash, 0x01000193);
     }
+  }
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 export function parseSong(bytes: Uint8Array, title: string, id: string): Song {
