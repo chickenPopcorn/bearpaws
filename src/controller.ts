@@ -20,6 +20,8 @@ import {
 import type { SyncHooks } from "./cloud";
 import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
+/** How hard on-screen keys and computer shortcuts strike, from 0 to 1. */
+const KEY_VELOCITY = 0.6;
 /** A progress record's content, leaving out when it was saved. */
 const unstamped = ({ updated: _updated, ...rest }: Progress) =>
   JSON.stringify(rest);
@@ -31,7 +33,7 @@ export class Studio {
   private playGeneration = 0;
   private playbackPending = false;
   outputChanging = false;
-  private midiDuetRouted = false;
+  private midiRouted = false;
   private audioPreparations = new Set<AbortController>();
   private virtualRequests = new Map<number, number>();
   private nextVirtualRequest = 0;
@@ -128,13 +130,14 @@ export class Studio {
         this.emit();
       },
       onChange: () => this.emit(),
+      onOutputChosen: (id, opened) => void this.followOutput(id, () => opened),
       onOutputLost: () => {
-        // Playback, or a start still loading, routed the duet to the lost
-        // output and never prepared its laptop sound: stop, and let Play
+        // Playback, or a start still loading, sent its notes to the lost
+        // output and never prepared their laptop sound: stop, and let Play
         // start over on the laptop.
         if (
           this.destroyed ||
-          !this.midiDuetRouted ||
+          !this.midiRouted ||
           !(this.transport.playing || this.playbackPending)
         )
           return;
@@ -144,19 +147,24 @@ export class Studio {
       },
     });
   }
-  /**
-   * Route the duet to output `id`, or the laptop with "". Play waits until
-   * the choice settles (see play()), so no run starts on the old routing.
-   */
-  async duetOutput(id: string) {
+  /** Send all sound to output `id`, or to the laptop with "". */
+  async soundOutput(id: string) {
     if (this.outputChanging) return;
+    await this.followOutput(id, () => this.midi.selectOutput(id));
+  }
+  /**
+   * Pause while the output changes to `id` ("" is the laptop), then play on
+   * from here once the change settles, unless the output failed to open.
+   * Play waits for it too (see play()), so no run starts on the old routing.
+   */
+  private async followOutput(id: string, change: () => Promise<void>) {
     this.outputChanging = true;
     this.emit();
     const resume = this.transport.playing || this.playbackPending;
     this.pause();
     const generation = this.playGeneration;
     try {
-      await this.midi.selectOutput(id);
+      await change();
     } finally {
       this.outputChanging = false;
       this.emit();
@@ -165,7 +173,7 @@ export class Studio {
       resume &&
       !this.destroyed &&
       generation === this.playGeneration &&
-      (!id || this.midi.duet.connected)
+      (!id || this.midi.player.connected)
     )
       await this.play();
   }
@@ -176,12 +184,12 @@ export class Studio {
         (n.start >= this.loopStart - 0.001 && n.start < this.loopEnd),
     );
   }
-  /** Whether the reference recording plays in the current mode. */
-  private get referenceAudible() {
-    return (
-      this.settings.mode === "listen" ||
-      (this.settings.mode === "rhythm" && this.settings.reference)
-    );
+  /**
+   * Whether the app plays the student part: only Listen does. In Wait for me
+   * and Rhythm the student plays it.
+   */
+  private get listening() {
+    return this.settings.mode === "listen";
   }
   /** Notes that sound within the passage: all of them without a loop. */
   private inPassage(notes: readonly Note[]) {
@@ -190,10 +198,6 @@ export class Studio {
         !this.loopEnabled ||
         (note.start < this.loopEnd && note.soundEnd > this.loopStart),
     );
-  }
-  private get referenceNotes() {
-    if (!this.referenceAudible) return [];
-    return this.inPassage(this.notes);
   }
   /** The teacher part that plays along, with Duet on. */
   get duetNotes(): readonly Note[] {
@@ -205,16 +209,17 @@ export class Studio {
       ? 12 * this.written.duet.octaves
       : 0;
   }
-  /** Everything playback sounds: the reference, when audible, and the duet. */
-  private get playbackNotes() {
-    return [
-      ...this.referenceNotes,
-      ...(this.midi.duet.connected ? [] : this.inPassage(this.duetNotes)),
-    ];
+  /** Everything playback sounds: the student part in Listen, and the duet. */
+  private get playbackNotes(): readonly Note[] {
+    const student = this.listening ? this.notes : NO_NOTES;
+    return this.duetNotes.length ? [...student, ...this.duetNotes] : student;
   }
-  /** Whether playback sounds anything: the reference or the duet. */
+  /** Whether playback sounds anything on the laptop, without a MIDI output. */
   private get audible() {
-    return this.referenceAudible || this.duetNotes.length > 0;
+    return (
+      !this.midi.player.connected &&
+      (this.listening || this.duetNotes.length > 0)
+    );
   }
   /** Wait mode holds the transport at the next chord. */
   private get waitGate() {
@@ -278,7 +283,7 @@ export class Studio {
     this.save();
     // A restart begins a new playback run, which needs its own key press.
     this.lastPracticeTick = null;
-    this.midi.duet.stop();
+    this.midi.player.stop();
     this.audio.stop();
     this.midi.dispose();
     this.unwatchPractice();
@@ -320,7 +325,7 @@ export class Studio {
   load(song: Song) {
     this.cancelPlaybackPreparation();
     if (this.transport.playing) this.pause();
-    this.midi.duet.stop();
+    this.midi.player.stop();
     this.audio.stop();
     this.written = { ...song, tracks: song.tracks.map((t) => ({ ...t })) };
     this.settings.selected = song.id;
@@ -354,7 +359,7 @@ export class Studio {
   rebuild() {
     this.cancelPlaybackPreparation();
     this.refreshSelection();
-    this.midi.duet.stop();
+    this.midi.player.stop();
     this.audio.stop();
     this.restartScoring();
     this.transport.seek(this.position, this.audio.now());
@@ -432,7 +437,7 @@ export class Studio {
       // Notes held at a Wait gate keep waiting.
       if (this.transport.held) this.audio.hold();
     } else {
-      this.midi.duet.stop();
+      this.midi.player.stop();
       this.audio.stop();
     }
     this.persist();
@@ -460,17 +465,6 @@ export class Studio {
     this.persist();
     this.emit();
   }
-  reference(enabled: boolean) {
-    if (this.settings.reference === enabled) return;
-    const resume =
-      this.settings.mode === "rhythm" &&
-      (this.transport.playing || this.playbackPending);
-    if (resume) this.pause();
-    this.settings.reference = enabled;
-    this.persist();
-    this.emit();
-    if (resume) void this.play();
-  }
   sound(ambience: number) {
     const sound = normalizePianoSound({ ambience });
     this.settings.ambience = sound.ambience;
@@ -482,7 +476,7 @@ export class Studio {
     if (this.settings.pianoVoices[voice] === enabled) return;
     // A voice turned on mid-passage needs its recordings, and a passage still
     // loading should not wait for those of one turned off. Play on from here
-    // once the right ones load, as for the Rhythm reference.
+    // once the right ones load, as for a loop change.
     const resume =
       this.audible &&
       (this.playbackPending || (enabled && this.transport.playing));
@@ -498,7 +492,7 @@ export class Studio {
   }
   seek(position: number) {
     this.cancelPlaybackPreparation();
-    this.midi.duet.stop();
+    this.midi.player.stop();
     this.audio.stop(!this.transport.playing);
     if (this.loopEnabled)
       position = Math.min(
@@ -513,19 +507,22 @@ export class Studio {
     this.emit();
   }
   pause() {
-    this.midiDuetRouted = false;
+    this.midiRouted = false;
     this.cancelPlaybackPreparation();
     const now = this.audio.now();
     if (this.transport.playing) this.tick(now);
     this.lastPracticeTick = null;
     this.transport.pause(now);
     this.position = this.transport.position;
-    this.midi.duet.stop();
+    this.midi.player.stop();
     this.audio.stop();
     this.save();
     this.emit();
   }
-  /** The song's pedal, which the reference's optional voices follow. */
+  /**
+   * The song's sustain pedal. The laptop's optional voices follow it, and a
+   * MIDI output receives it as CC64.
+   */
   private get pedals(): readonly PedalSpan[] {
     return this.song.pedals ?? NO_PEDALS;
   }
@@ -549,7 +546,7 @@ export class Studio {
     }
   }
   async play() {
-    // duetOutput() resumes playback itself once the output has settled.
+    // followOutput() resumes playback itself once the output has settled.
     if (this.outputChanging) return;
     this.cancelPlaybackPreparation();
     const generation = this.playGeneration;
@@ -565,12 +562,15 @@ export class Studio {
     }
     try {
       const p = this.position;
-      const playbackNotes = this.playbackNotes;
-      this.midiDuetRouted =
-        this.midi.duet.connected && this.inPassage(this.duetNotes).length > 0;
-      this.midi.duet.stop();
+      // A MIDI output plays it all, so the laptop prepares nothing.
+      const played = this.inPassage(this.playbackNotes),
+        laptop = this.midi.player.connected ? NO_NOTES : played;
+      this.midiRouted = this.midi.player.connected && played.length > 0;
+      this.midi.player.stop();
       this.audio.stop();
-      await this.prepareAudio(playbackNotes, generation, this.pedals);
+      // Browser audio is not needed at all then, and may be unavailable.
+      if (!this.midi.player.connected)
+        await this.prepareAudio(laptop, generation, this.pedals);
       if (generation !== this.playGeneration) return;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
@@ -581,7 +581,7 @@ export class Studio {
         (this.position < this.loopStart || this.position >= this.loopEnd)
       )
         this.seek(this.loopStart);
-      this.audio.setPlaybackNotes(playbackNotes, this.pedals);
+      this.audio.setPlaybackNotes(laptop, this.pedals);
       this.transport.play(this.audio.now());
       this.progress.attempts++;
       this.notice = "";
@@ -680,7 +680,7 @@ export class Studio {
       if (!this.transport.playing) {
         // The transport has finished, but the final piano release can still
         // be ringing. Explicit pause/seek/song changes continue to stop audio.
-        this.midi.duet.stop();
+        this.midi.player.stop();
         this.audio.setPlaybackNotes([]);
         this.notice = "";
         this.save();
@@ -693,46 +693,48 @@ export class Studio {
     }
   }
   /**
-   * Schedule what sounds next. In Wait mode the duet waits too: its notes
-   * from the next gate on sound once the student plays that gate.
+   * Schedule what sounds next: the student part in Listen, and the duet, on
+   * the MIDI output if there is one and otherwise on the laptop. In Wait mode
+   * the duet waits too: its notes from the next gate on sound once the
+   * student plays that gate.
    */
   private scheduleAudio() {
-    const reference = this.referenceAudible ? this.notes : NO_NOTES,
-      gate = this.waitGate,
+    const gate = this.waitGate,
       duet =
         gate === undefined
           ? this.duetNotes
           : this.duetNotes.filter((note) => note.start < gate - 0.001),
-      // A Wait loop's next pass is scheduled ahead, before its gates come
-      // back, so it starts only the duet notes before its first gate.
-      first =
+      notes = this.listening
+        ? duet.length
+          ? [...this.notes, ...duet]
+          : this.notes
+        : duet;
+    if (this.midi.player.connected) {
+      this.midi.player.schedule(
+        notes,
+        this.position,
+        this.transport.cycle,
+        this.transport.held,
+        this.pedals,
+      );
+      return;
+    }
+    // A Wait loop's next pass is scheduled ahead, before its gates come
+    // back, so it starts only the duet notes before its first gate.
+    const first =
         this.settings.mode === "wait" && this.transport.loop
           ? this.practice.groups[0]?.start
           : undefined,
       next =
         first === undefined
-          ? duet
-          : this.duetNotes.filter((note) => note.start < first - 0.001),
-      withReference = (part: readonly Note[]) =>
-        part.length ? [...reference, ...part] : reference,
-      notes = withReference(duet);
-    this.midi.duet.schedule(
-      duet,
-      this.position,
-      this.transport.cycle,
-      this.transport.held,
-    );
-    const browserNotes = this.midi.duet.connected ? reference : notes;
-    this.audio.schedule(
-      browserNotes,
-      this.transport,
-      browserNotes.length > 0 || (!this.midi.duet.connected && next.length > 0),
-      this.pedals,
-      this.midi.duet.connected
-        ? reference
-        : next === duet
           ? notes
-          : withReference(next),
+          : this.duetNotes.filter((note) => note.start < first - 0.001);
+    this.audio.schedule(
+      notes,
+      this.transport,
+      notes.length > 0 || next.length > 0,
+      this.pedals,
+      next,
     );
   }
   receive(data: Uint8Array, timestamp: number) {
@@ -796,6 +798,15 @@ export class Studio {
     }
     this.emit();
   }
+  /**
+   * Let go of every key, as when the window loses focus and key-ups can no
+   * longer arrive. Keys held on screen or on the computer keyboard stop
+   * sounding on a MIDI output.
+   */
+  releaseKeys() {
+    for (const pitch of this.input.down) this.midi.player.keyUp(pitch);
+    this.input.clear();
+  }
   virtual(pitch: number, on: boolean) {
     const request = ++this.nextVirtualRequest;
     if (on) this.virtualRequests.set(pitch, request);
@@ -804,16 +815,25 @@ export class Studio {
       new Uint8Array([on ? 0x9f : 0x8f, pitch, on ? 90 : 0]),
       performance.now(),
     );
+    // While the output changes the key still counts, but makes no sound: it
+    // could only go to the output that is on its way out.
+    if (this.outputChanging) return;
+    // A MIDI output sounds the key on the piano for as long as it is held.
+    if (this.midi.player.connected) {
+      if (on) this.midi.player.keyDown(pitch, KEY_VELOCITY);
+      else this.midi.player.keyUp(pitch);
+      return;
+    }
     if (on) {
       const generation = this.playGeneration;
-      void this.prepareAudio([{ pitch, velocity: 0.6 }], generation)
+      void this.prepareAudio([{ pitch, velocity: KEY_VELOCITY }], generation)
         .then(() => {
           if (
             generation === this.playGeneration &&
             this.virtualRequests.get(pitch) === request &&
             this.input.down.has(pitch)
           )
-            this.audio.tone(pitch, 0.6, this.audio.now(), 0.4);
+            this.audio.tone(pitch, KEY_VELOCITY, this.audio.now(), 0.4);
         })
         .catch(() => {
           if (generation !== this.playGeneration) return;

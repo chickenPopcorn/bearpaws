@@ -783,11 +783,11 @@ export class ReferenceAudio {
    * the next pass starts from `ahead`, which defaults to the same notes.
    */
   schedule(
-    notes: Note[],
+    notes: readonly Note[],
     transport: Transport,
     enabled: boolean,
     pedals: readonly PedalSpan[] = NO_PEDALS,
-    ahead: Note[] = notes,
+    ahead: readonly Note[] = notes,
   ) {
     if (!enabled || !transport.playing || !this.context) return;
     const now = this.now(),
@@ -839,7 +839,7 @@ export class ReferenceAudio {
    * playback of the pass began, if not at the loop start.
    */
   private schedulePass(
-    notes: Note[],
+    notes: readonly Note[],
     pedals: readonly PedalSpan[],
     transport: Transport,
     now: number,

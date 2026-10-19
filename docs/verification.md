@@ -142,7 +142,11 @@ registration returned `Project owner is not linked to an account`.
 With the physical piano, check chords, repeated-note releases, CC64 sustain,
 disconnect/reconnect while holding keys, and timing feedback at multiple speeds.
 Confirm there are no stuck inputs and reconnection does not start practice by
-itself. Check reference audio through the intended speakers/headphones.
+itself. Check laptop audio through the intended speakers/headphones. With a
+piano that has a MIDI output, check that it is chosen as it connects and that
+Listen, the duet, on-screen keys and a pedalled song sound on the piano with
+nothing from the laptop, and that unplugging it stops playback and returns
+sound to the laptop.
 
 The GitHub PR's CI and review results are tracked on the PR; local success is
 not a substitute for those checks passing on its final revision.

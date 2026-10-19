@@ -87,8 +87,8 @@ up. The app itself only reads the bucket. A copy of three songs in
 `tests/fixtures/` serves the tests.
 
 The sheet-music timeline above the waterfall follows the current bar. Accepted
-notes fade to 50% opacity in practice modes; Listen marks the notes played by
-the reference audio. Disabled hands remain visible at half opacity. Written
+notes fade to 50% opacity in practice modes; Listen marks the notes as it plays
+them. Disabled hands remain visible at half opacity. Written
 rhythms and rests are preserved for the lessons; a song built from plain MIDI
 uses approximate note values derived from performed timing.
 Click a note or drag across the score to change playback position. The focused
@@ -110,20 +110,32 @@ no guessed finger numbers.
 
 1. Choose a piece from George Bear’s Classes; use **Find a song** to filter them.
 2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. On later visits, saved browser permission automatically connects the first available MIDI input. When more than one input is available, a menu beside it chooses one. If the chosen input is unplugged, clicking Connect your piano picks any available input. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
-3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen works without a piano. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along. As the book asks, the student part then usually moves up one octave; some pieces move it up two octaves or down one, and a few keep it as written. The waterfall, keyboard shortcuts and finger guide follow it, and the score keeps the written notes under an 8va, 15ma or 8vb mark. The waterfall shows the duet in yellow at quarter opacity behind your notes, and widens its keyboard to fit it; the duet is never fingered or scored, and Wait for me holds it at each of your notes until you play them.
+3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen plays your part for you and works without a piano. In Wait for me and Rhythm the app never plays your part: you do. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along, in every mode. As the book asks, the student part then usually moves up one octave; some pieces move it up two octaves or down one, and a few keep it as written. The waterfall, keyboard shortcuts and finger guide follow it, and the score keeps the written notes under an 8va, 15ma or 8vb mark. The waterfall shows the duet in yellow at quarter opacity behind your notes, and widens its keyboard to fit it; the duet is never fingered or scored, and Wait for me holds it at each of your notes until you play them.
 4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
-**Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.
+What the app plays depends on the mode:
+
+| Mode        | Duet off                 | Duet on                               |
+| ----------- | ------------------------ | ------------------------------------- |
+| Listen      | your part (chosen hands) | your part and the teacher duet        |
+| Wait for me | nothing                  | the teacher duet, which waits for you |
+| Rhythm      | nothing                  | the teacher duet                      |
+
+The only difference between Wait for me and Rhythm is that Wait for me stops at
+each note until you play it, and Rhythm does not.
+
+**Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.
 
 **Rhythm** keeps moving and matches note onsets using MIDI event timestamps. Timing tolerance is configurable (±120, ±220 or ±350 ms of real time, independent of playback speed). Feedback identifies missed/wrong notes and early/late matched notes; click a missed note to loop a short passage around it. This MVP scores pitch and onset timing, not fingering or held-note duration.
 
-Reference audio coalesces duplicate pitches at the same onset and allows at most 64 active or scheduled voices, including previews. Extremely dense material can omit excess reference voices; MIDI input and scoring remain independent. The waterfall coalesces duplicate note shapes and draws at most 4,096 distinct visible rectangles per frame; the full note set still drives scoring. Recent feedback is limited to 256 entries and six missed-note replay anchors, with full-passage note counts, wrong-press totals and average timing retained separately.
+Laptop audio coalesces duplicate pitches at the same onset and allows at most 64 active or scheduled voices, including previews. Extremely dense material can omit excess voices; MIDI input and scoring remain independent. The waterfall coalesces duplicate note shapes and draws at most 4,096 distinct visible rectangles per frame; the full note set still drives scoring. Recent feedback is limited to 256 entries and six missed-note replay anchors, with full-passage note counts, wrong-press totals and average timing retained separately.
 
-Your physical piano supplies live piano sound. The browser does not echo incoming USB notes; Listen, optional Rhythm reference, and on-screen previews use Accurate-Salamander Grand Piano 6.2a: all sixteen recorded intensity layers of a Yamaha C5, in lossless 24-bit stereo FLAC. The player preserves the source preset’s per-key tuning, attack offsets and volume balance, with natural release tails. Only the recordings needed for the selected notes and velocities load before playback; decoded samples are reused within a 512 MiB cache. Very large selections may need one hand or a shorter loop. The player also includes the preset's optional recorded details: string harmonics when a key is released with the pedal up, key release noise, pedal noise, and pseudo pedal resonance for notes struck with the pedal down. These load only for the notes and pedal changes that trigger them. The complete bundled sample bank is about 753 MiB, but it is not downloaded in full on page load. No external audio service is contacted. Recording credits, adaptation details and the CC BY 3.0 license are in [the sample credits](public/audio/accurate-salamander/CREDITS.md). Key-down highlights are separate from pedal-sustained sound (teal dots). Switching inputs or disconnecting clears key/pedal state and pauses Wait/Rhythm; Listen continues. Seek/restart and loop transitions clear transient input and cancel scheduled reference audio. Leaving the page hidden pauses playback to avoid invisible practice and background scheduling gaps.
+Your physical piano supplies live piano sound, and when it has a MIDI output it plays all of the app's sound too (see [below](#play-the-apps-sound-on-a-usb-piano)). The app never echoes incoming USB notes. Without a MIDI output, Listen, the duet and on-screen keys play on the laptop with Accurate-Salamander Grand Piano 6.2a: all sixteen recorded intensity layers of a Yamaha C5, in lossless 24-bit stereo FLAC. The player preserves the source preset’s per-key tuning, attack offsets and volume balance, with natural release tails. Only the recordings needed for the selected notes and velocities load before playback; decoded samples are reused within a 512 MiB cache. Very large selections may need one hand or a shorter loop. The player also includes the preset's optional recorded details: string harmonics when a key is released with the pedal up, key release noise, pedal noise, and pseudo pedal resonance for notes struck with the pedal down. These load only for the notes and pedal changes that trigger them. The complete bundled sample bank is about 753 MiB, but it is not downloaded in full on page load. No external audio service is contacted. Recording credits, adaptation details and the CC BY 3.0 license are in [the sample credits](public/audio/accurate-salamander/CREDITS.md). Key-down highlights are separate from pedal-sustained sound (teal dots). Switching inputs or disconnecting clears key/pedal state and pauses Wait/Rhythm; Listen continues. Seek/restart and loop transitions clear transient input and cancel scheduled playback. Leaving the page hidden pauses playback to avoid invisible practice and background scheduling gaps.
 
 ### Piano sound
 
 Open **Piano sound** in the settings row below the keyboard, beside Note names.
+It shapes the laptop's sound; a USB piano's MIDI output uses the piano's own.
 **Natural** is the only piano sound, with gentler compression and subtle stereo
 room ambience. Adjust **Room** while listening; its level is remembered in this
 browser, across songs.
@@ -167,14 +179,15 @@ After a refresh, the page as it was left shows again at once, but only while thi
 
 The practice calendar at the top of the sidebar shows this month under the learner's name ("George’s practice"): a star on each day that met the daily goal, a dot on days with less, and a ring filling up for today, with the current streak. Each week, Monday to Sunday, ends with a stamp that stays grey until all seven days have their star, counting days of a week that fall in the next or previous month. The goal is 5 minutes unless changed under **Edit** (5, 10, 15, 20 or 30), where the learner's name can also be changed; it starts as the first name on the signed-in Google account. Practice time counts only while a song plays in Wait for me or Rhythm and a key was pressed within the last 15 seconds; Listen, paused time and a Wait gate left waiting do not count. Days follow the device's local calendar. Playing time is kept in localStorage as sessions, one per page visit per day with seconds per song, for the last 92 days, today included. Each session has its own key, written only by the tab that plays it, so tabs on the same browser add up without overwriting each other.
 
-`npm run library:push` converts library MIDI files with the app's parser. Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Converted notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. MIDI files are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
+`npm run library:push` converts library MIDI files with the app's parser. Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Converted notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. MIDI files are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Playback does not reproduce General MIDI instruments, effects, or drum kits.
 
 ## Architecture
 
 - `src/song.ts`: SMF parsing, validation, binary-search tempo conversion, note normalization, original exercise.
 - `src/engine.ts`: deterministic transport, chord grouping, onset matching, and physical/sustained MIDI state.
-- `src/audio.ts`: Web Audio clock, timestamp conversion and cancellable reference scheduling.
-- `src/midi.ts`: explicit Web MIDI permission/device selection and connection lifecycle.
+- `src/audio.ts`: Web Audio clock, timestamp conversion and cancellable laptop playback scheduling.
+- `src/midi.ts`: explicit Web MIDI permission/device selection, automatic output choice and connection lifecycle.
+- `src/midiPlayer.ts`: the app's sound on a MIDI output, on the 20 ms practice clock.
 - `src/controller.ts`: shared practice timeline, transport actions and local progress.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings and progress.
@@ -210,29 +223,39 @@ compatibility. See the verification document for that distinction.
 
 The reference images and HTML remain unchanged in `docs/design/`.
 
-### Play the teacher duet on a USB piano
+### Play the app's sound on a USB piano
 
 In desktop Chrome or Edge, connect a piano that exposes a MIDI **output** as well
-as an input. Choose **Connect your piano**, then choose that piano under
-**Duet sound**. Turn **Duet** on and press Play. The teacher part goes to the
-selected output on the same MIDI channel as the latest key played on the piano
-(channel 1 until the first keypress); the student's physical keys remain live on
-the piano. The teacher still waits at each **Wait for me** gate and resumes when
-the student plays the requested note. Laptop mute does not mute MIDI output.
-Choose **Laptop** to return the teacher part to browser audio. If the piano's
-output disconnects or cannot open, playback stops and **Duet sound** goes back
-to Laptop; choose the piano again to retry.
+as an input. When it connects, all of the app's sound goes to the piano instead
+of the laptop: Listen's playback of your part, the teacher duet, keys played on
+screen or with computer shortcuts, and the song's sustain pedal (CC64). The app
+picks the output named like the piano's input, or else the only output there
+is; nothing needs choosing. **Sound** in the header shows the choice. Choose
+**Laptop** there to return all sound to the browser for the rest of the visit,
+or another output. The laptop plays nothing while a MIDI output is in use, and
+loads no piano samples for the notes it sends. A piano with no MIDI output keeps
+the laptop's sound. Laptop mute does not mute MIDI output.
 
-Keep the piano’s local keyboard sound enabled. The teacher follows the incoming
+Everything goes out on the same MIDI channel as the latest key played on the
+piano (channel 1 until the first keypress). The student's physical keys remain
+live on the piano and are never sent back to it. The teacher still waits at each
+**Wait for me** gate and resumes when the student plays the requested note. If
+the piano's output disconnects or cannot open, playback stops and **Sound** goes
+back to Laptop, so the next Play uses the laptop. The piano is chosen again when
+it reconnects; choose it under **Sound** to retry sooner.
+
+Keep the piano’s local keyboard sound enabled. The app follows the incoming
 piano channel automatically, so no separate multichannel setup is needed.
-Disable any MIDI-thru/loopback routing that returns outgoing teacher notes as
-input. The app sends only teacher notes, not student echoes. A repeated note
-that overlaps the one before it is played again, as written. The app sends
-note-offs for its own sounding notes on pause, seek, loop restart, song/output
-changes, and closing the studio, and closes an output it stops using. Teacher
-notes go out on the 20 ms practice clock: each tick releases the notes it has
-passed and strikes the ones it has reached, and a tick that runs late still
-plays the notes it passed, for one tick. Hardware latency and piano sound depend
-on the device. Output selection
-is per session and requires an explicit choice. Test on the physical piano to
-confirm its channel settings, tone, timing, and note releases.
+Disable any MIDI-thru/loopback routing that returns outgoing notes as input. A
+repeated note that overlaps the one before it is played again, as written.
+Each note ends where its sound ends on the laptop; the pedal adds the piano's
+own resonance, and since it shares your channel it also holds notes you play
+while it is down. On-screen keys and computer shortcuts sound for as long as
+they are held, and come up when the window loses focus. The app sends note-offs
+for its own sounding notes and lifts its pedal on pause, seek, loop restart,
+song/output changes and closing the studio, and closes an output it stops
+using. Notes go out on the 20 ms practice clock: each tick releases the notes
+it has passed and strikes the ones it has reached, and a tick that runs late
+still plays the notes it passed, for one tick. Hardware latency and piano sound
+depend on the device. Test on the physical piano to confirm its channel
+settings, tone, timing, pedal and note releases.
