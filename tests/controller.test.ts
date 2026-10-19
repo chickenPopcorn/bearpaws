@@ -41,6 +41,8 @@ vi.mock("../src/midi", () => ({
     status = "disconnected";
     message = "No piano";
     devices = [];
+    duet = { connected: false, stop: vi.fn(), schedule: vi.fn() };
+    selectOutput = vi.fn(async () => {});
     selectedId = "";
     constructor(callbacks: { onReset(): void }) {
       env.resets.push(callbacks.onReset);
@@ -1508,6 +1510,28 @@ describe("teacher duet", () => {
     expect(studio.audio.reschedule).toHaveBeenCalledOnce();
     advance(studio, 0.1);
     expect(studio.audio.hold).toHaveBeenCalledOnce();
+  });
+
+  it("routes only the teacher to MIDI, waits at gates and silences output on pause and seek", async () => {
+    const studio = create(duetSong());
+    Object.defineProperty(studio.midi.duet, "connected", { value: true });
+    studio.duet();
+    await studio.play();
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    advance(studio, 1);
+    expect(scheduled(studio)).toEqual([]);
+    let call = vi.mocked(studio.midi.duet.schedule).mock.calls.at(-1)!;
+    expect(ids(call[0])).toEqual(["duet-0"]);
+    expect(call[3]).toBe(true);
+    midi(studio, [0x90, 72, 100]);
+    call = vi.mocked(studio.midi.duet.schedule).mock.calls.at(-1)!;
+    expect(ids(call[0])).toEqual(["duet-0", "duet-1", "duet-2"]);
+    expect(call[3]).toBe(false);
+    vi.mocked(studio.midi.duet.stop).mockClear();
+    studio.pause();
+    expect(studio.midi.duet.stop).toHaveBeenCalledOnce();
+    studio.seek(0);
+    expect(studio.midi.duet.stop).toHaveBeenCalledTimes(2);
   });
 
   it("sounds a duet note a Wait loop seek lands in", async () => {

@@ -31,6 +31,7 @@ import { OpeningStudio } from "./OpeningStudio";
 import { SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
+import { localDevelopment } from "./development";
 import "./style.css";
 // One studio per signed-in session, created once the account's songs and
 // progress are on this browser. App only renders while it exists.
@@ -635,17 +636,52 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
             </button>
           )}
         </div>
+        {connected && (
+          <label>
+            Duet sound
+            <select
+              aria-label="Duet sound"
+              value={studio.midi.selectedOutputId}
+              onChange={(e) => void studio.duetOutput(e.target.value)}
+            >
+              <option value="">Laptop</option>
+              {studio.midi.selectedOutputId &&
+                !studio.midi.outputs.some(
+                  (p) => p.id === studio.midi.selectedOutputId,
+                ) && (
+                  <option value={studio.midi.selectedOutputId}>
+                    Disconnected output
+                  </option>
+                )}
+              {studio.midi.outputs.map((port) => (
+                <option key={port.id} value={port.id}>
+                  {port.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button
           className="account"
           title={email ? `Signed in as ${email}` : undefined}
           onClick={onSignOut}
         >
-          Sign out
+          {localDevelopment ? "Leave local studio" : "Sign out"}
         </button>
       </header>
       <p className="sr-only" role="status">
         {studio.midi.message}
       </p>
+      {studio.midi.outputMessage && (
+        <p className="connection" role="status">
+          {studio.midi.outputMessage}
+        </p>
+      )}
+      {localDevelopment && (
+        <p className="connection">
+          Local development · sample songs · practice stays in this browser
+        </p>
+      )}
       {/* After a click, say why the piano is not connected yet. */}
       {connectTried && !connected && !connecting && (
         <p className="connection">{studio.midi.message}</p>
@@ -1171,6 +1207,13 @@ async function endSession(sync: CloudSync) {
 }
 
 async function signOut() {
+  if (localDevelopment) {
+    studio.destroy();
+    const url = new URL(window.location.href);
+    url.searchParams.delete("local");
+    window.location.assign(url);
+    return;
+  }
   if (!cloud) return;
   const sync = cloud;
   // Close the studio first: its final save joins the upload, and nothing can
@@ -1225,7 +1268,29 @@ async function leaveFailedSignIn() {
   setGate({ status: "signed-out", error: "" });
 }
 
-if (supabase) {
+if (localDevelopment) {
+  // Fixture data and this branch are removed from the production build.
+  void import("../tests/fixtures/library")
+    .then(({ fixtureLibrary }) => {
+      const songs = fixtureLibrary().map((song) => ({
+        ...song,
+        library: { book: "recital-3" as const },
+      }));
+      studio = new Studio(songs);
+      currentUser = "local-developer";
+      setGate({
+        status: "ready",
+        userId: currentUser,
+        email: "Local developer",
+      });
+    })
+    .catch(() =>
+      setGate({
+        status: "failed",
+        error: "Local sample songs could not load. Reload to try again.",
+      }),
+    );
+} else if (supabase) {
   // Supabase asks that auth callbacks not await its own calls directly.
   supabase.auth.onAuthStateChange((_event, session) => {
     setTimeout(
@@ -1270,6 +1335,15 @@ function Root() {
     );
   return (
     <SignIn
+      onLocal={
+        import.meta.env.DEV
+          ? () => {
+              const url = new URL(window.location.href);
+              url.searchParams.set("local", "1");
+              window.location.assign(url);
+            }
+          : undefined
+      }
       error={current.error}
       onSignIn={async () => {
         const { error } = await signInWithGoogle();

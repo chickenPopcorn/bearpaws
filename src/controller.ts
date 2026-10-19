@@ -125,8 +125,41 @@ export class Studio {
         }
         this.emit();
       },
-      onChange: () => this.emit(),
+      onChange: () => {
+        this.emit();
+        if (
+          this.midi?.selectedOutputId &&
+          !this.midi.duet.connected &&
+          this.midi.outputMessage
+        ) {
+          queueMicrotask(() => {
+            if (
+              !this.destroyed &&
+              this.transport.playing &&
+              !this.midi.duet.connected
+            ) {
+              this.pause();
+              this.notice =
+                "Piano output disconnected. Choose its output again, then press Play.";
+              this.emit();
+            }
+          });
+        }
+      },
     });
+  }
+  async duetOutput(id: string) {
+    const resume = this.transport.playing || this.playbackPending;
+    this.pause();
+    const generation = this.playGeneration;
+    await this.midi.selectOutput(id);
+    if (
+      resume &&
+      !this.destroyed &&
+      generation === this.playGeneration &&
+      (!id || this.midi.duet.connected)
+    )
+      await this.play();
   }
   get scoringNotes() {
     return this.notes.filter(
@@ -166,7 +199,10 @@ export class Studio {
   }
   /** Everything playback sounds: the reference, when audible, and the duet. */
   private get playbackNotes() {
-    return [...this.referenceNotes, ...this.inPassage(this.duetNotes)];
+    return [
+      ...this.referenceNotes,
+      ...(this.midi.duet.connected ? [] : this.inPassage(this.duetNotes)),
+    ];
   }
   /** Whether playback sounds anything: the reference or the duet. */
   private get audible() {
@@ -234,6 +270,7 @@ export class Studio {
     this.save();
     // A restart begins a new playback run, which needs its own key press.
     this.lastPracticeTick = null;
+    this.midi.duet.stop();
     this.audio.stop();
     this.midi.dispose();
     this.unwatchPractice();
@@ -275,6 +312,7 @@ export class Studio {
   load(song: Song) {
     this.cancelPlaybackPreparation();
     if (this.transport.playing) this.pause();
+    this.midi.duet.stop();
     this.audio.stop();
     this.written = { ...song, tracks: song.tracks.map((t) => ({ ...t })) };
     this.settings.selected = song.id;
@@ -308,6 +346,7 @@ export class Studio {
   rebuild() {
     this.cancelPlaybackPreparation();
     this.refreshSelection();
+    this.midi.duet.stop();
     this.audio.stop();
     this.restartScoring();
     this.transport.seek(this.position, this.audio.now());
@@ -384,7 +423,10 @@ export class Studio {
       this.audio.reschedule(this.transport);
       // Notes held at a Wait gate keep waiting.
       if (this.transport.held) this.audio.hold();
-    } else this.audio.stop();
+    } else {
+      this.midi.duet.stop();
+      this.audio.stop();
+    }
     this.persist();
     this.emit();
   }
@@ -447,6 +489,7 @@ export class Studio {
   }
   seek(position: number) {
     this.cancelPlaybackPreparation();
+    this.midi.duet.stop();
     this.audio.stop(!this.transport.playing);
     if (this.loopEnabled)
       position = Math.min(
@@ -467,6 +510,7 @@ export class Studio {
     this.lastPracticeTick = null;
     this.transport.pause(now);
     this.position = this.transport.position;
+    this.midi.duet.stop();
     this.audio.stop();
     this.save();
     this.emit();
@@ -510,6 +554,7 @@ export class Studio {
     try {
       const p = this.position;
       const playbackNotes = this.playbackNotes;
+      this.midi.duet.stop();
       this.audio.stop();
       await this.prepareAudio(playbackNotes, generation, this.pedals);
       if (generation !== this.playGeneration) return;
@@ -621,6 +666,7 @@ export class Studio {
       if (!this.transport.playing) {
         // The transport has finished, but the final piano release can still
         // be ringing. Explicit pause/seek/song changes continue to stop audio.
+        this.midi.duet.stop();
         this.audio.setPlaybackNotes([]);
         this.notice = "";
         this.save();
@@ -656,12 +702,23 @@ export class Studio {
       withReference = (part: readonly Note[]) =>
         part.length ? [...reference, ...part] : reference,
       notes = withReference(duet);
+    this.midi.duet.schedule(
+      duet,
+      this.position,
+      this.transport.cycle,
+      this.transport.held,
+    );
+    const browserNotes = this.midi.duet.connected ? reference : notes;
     this.audio.schedule(
-      notes,
+      browserNotes,
       this.transport,
-      notes.length > 0 || next.length > 0,
+      browserNotes.length > 0 || (!this.midi.duet.connected && next.length > 0),
       this.pedals,
-      next === duet ? notes : withReference(next),
+      this.midi.duet.connected
+        ? reference
+        : next === duet
+          ? notes
+          : withReference(next),
     );
   }
   receive(data: Uint8Array, timestamp: number) {

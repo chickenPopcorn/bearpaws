@@ -1,3 +1,4 @@
+import { localDevelopment } from "./development";
 import { SPEED_PERCENT, type Mode } from "./engine";
 import {
   DEFAULT_PIANO_SOUND,
@@ -50,7 +51,8 @@ export const defaults: Settings = {
   learnerName: "",
   dailyGoalMinutes: 5,
 };
-const storageKey = (key: string) => `cadence:${key}`;
+const storageKey = (key: string) =>
+  `${localDevelopment ? "pawpal-local" : "cadence"}:${key}`;
 export function read<T>(key: string, fallback: T): T {
   try {
     return (

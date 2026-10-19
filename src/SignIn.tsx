@@ -4,9 +4,11 @@ import { useState } from "react";
 export function SignIn({
   error,
   onSignIn,
+  onLocal,
 }: {
   error: string;
   onSignIn: () => Promise<void>;
+  onLocal?: () => void;
 }) {
   const [leaving, setLeaving] = useState(false);
   const [failure, setFailure] = useState("");
@@ -38,6 +40,11 @@ export function SignIn({
         >
           Continue with Google
         </button>
+        {onLocal && (
+          <button type="button" className="text-button" onClick={onLocal}>
+            Open local development studio
+          </button>
+        )}
         {message && (
           <p className="signin-error" role="alert">
             {message}
