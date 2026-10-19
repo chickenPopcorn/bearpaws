@@ -815,6 +815,9 @@ export class Studio {
       new Uint8Array([on ? 0x9f : 0x8f, pitch, on ? 90 : 0]),
       performance.now(),
     );
+    // While the output changes the key still counts, but makes no sound: it
+    // could only go to the output that is on its way out.
+    if (this.outputChanging) return;
     // A MIDI output sounds the key on the piano for as long as it is held.
     if (this.midi.player.connected) {
       if (on) this.midi.player.keyDown(pitch, KEY_VELOCITY);

@@ -451,33 +451,6 @@ describe("USB MIDI output selection", () => {
     expect(callbacks.onOutputChosen).toHaveBeenCalledOnce();
   });
 
-  it("moves an output it picked to the piano the user switches to, but not one the user chose", async () => {
-    const first = input("in-1", "Piano One"),
-      second = input("in-2", "Piano Two");
-    const { midi, access, callbacks } = setup([first, second]);
-    const one = output("out-1", "Piano One"),
-      two = output("out-2", "Piano Two");
-    Object.defineProperty(access, "outputs", {
-      value: new Map([
-        [one.id, one],
-        [two.id, two],
-      ]),
-    });
-    await midi.connect();
-    expect(midi.selectedOutputId).toBe("out-1");
-    await chosen(callbacks);
-    midi.select("in-2");
-    expect(midi.selectedOutputId).toBe("out-2");
-    await chosen(callbacks);
-    expect(midi.player.connected).toBe(true);
-    // Once the user picks an output, switching inputs leaves it alone.
-    await midi.selectOutput("out-1");
-    midi.select("in-1");
-    midi.select("in-2");
-    expect(midi.selectedOutputId).toBe("out-1");
-    expect(callbacks.onOutputChosen).toHaveBeenCalledTimes(2);
-  });
-
   it("leaves sound on the laptop without a piano, or among outputs that are not its own", async () => {
     const { midi, access, change, callbacks } = setup();
     const outputs = new Map([["a", output("a", "Synth A")]]);

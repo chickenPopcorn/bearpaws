@@ -502,6 +502,26 @@ describe("practice studio integration", () => {
     expect(studio.transport.playing).toBe(true);
   });
 
+  it("counts an on-screen key while the output opens, but sounds it nowhere", async () => {
+    const studio = create(song([[60, 1]]));
+    let finish!: () => void;
+    vi.mocked(studio.midi.selectOutput).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const selecting = studio.soundOutput("piano");
+    studio.virtual(60, true);
+    expect(studio.input.down.has(60)).toBe(true);
+    expect(studio.midi.player.keyDown).not.toHaveBeenCalled();
+    // Laptop sound would start by unlocking browser audio straight away.
+    expect(studio.audio.unlock).not.toHaveBeenCalled();
+    studio.virtual(60, false);
+    finish();
+    await selecting;
+  });
+
   it("starts no run while an output choice is still opening", async () => {
     const studio = create(duetSong());
     studio.mode("listen");
