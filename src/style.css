@@ -337,6 +337,14 @@ span.device {
   margin-bottom: var(--space-2);
   font-size: var(--text-md);
 }
+/* The month in the score serif, like the song title. */
+.practice-calendar-head strong {
+  font-family: var(--score-font);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
 .practice-streak {
   display: flex;
   align-items: center;
@@ -356,6 +364,7 @@ span.device {
 }
 .practice-weekday {
   font-size: var(--text-caps);
+  font-weight: 600;
   color: var(--muted);
 }
 .practice-day {
@@ -366,6 +375,7 @@ span.device {
   justify-content: center;
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
   color: var(--text-2);
 }
 .practice-day.done {
