@@ -65,6 +65,29 @@ export function write(key: string, value: unknown) {
     return false;
   }
 }
+/** Every stored value whose key starts with `prefix`, skipping unreadable ones. */
+export function readAll(prefix: string): unknown[] {
+  const values: unknown[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(storageKey(prefix))) continue;
+      try {
+        values.push(JSON.parse(localStorage.getItem(key) || "null"));
+      } catch {}
+    }
+  } catch {}
+  return values;
+}
+/** Returns false when browser storage is blocked. */
+export function remove(key: string) {
+  try {
+    localStorage.removeItem(storageKey(key));
+    return true;
+  } catch {
+    return false;
+  }
+}
 /** Throws when browser storage is blocked. */
 export function removeProgress(id: string) {
   localStorage.removeItem(storageKey(`progress:${id}`));

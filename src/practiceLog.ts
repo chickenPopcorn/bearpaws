@@ -1,4 +1,4 @@
-import { read, write } from "./storage";
+import { readAll, remove, write } from "./storage";
 
 /** Without a key press for this long, nobody is playing, so time stops counting. */
 export const IDLE_SECONDS = 15;
@@ -44,10 +44,14 @@ const isSession = (value: unknown): value is PracticeSession => {
     !Array.isArray(s.songs)
   );
 };
+/**
+ * Each session has its own storage key, written only by the tab that plays
+ * it, so tabs saving at the same moment cannot overwrite each other.
+ */
+const sessionKey = (id: string) => `practice:${id}`;
 /** The sessions saved on this browser, skipping any that are malformed. */
 export function storedSessions(): PracticeSession[] {
-  const value = read<unknown>("practice", []);
-  return Array.isArray(value) ? value.filter(isSession) : [];
+  return readAll(sessionKey("")).filter(isSession);
 }
 
 /**
@@ -148,8 +152,9 @@ export class PracticeLog {
       ),
     };
     this.current = updated;
-    // Other tabs on this browser save to the same list: take their latest
-    // copies, so this save never erases or shrinks their sessions.
+    const saved = write(sessionKey(updated.id), updated);
+    // Take other tabs' latest sessions. This tab's own copies are newest,
+    // even when storage refused one.
     const sessions = new Map<string, PracticeSession>();
     for (const s of storedSessions())
       if (!this.own.has(s.id)) sessions.set(s.id, s);
@@ -159,10 +164,14 @@ export class PracticeLog {
     }
     sessions.set(updated.id, updated);
     this.sessions = sessions;
-    const oldest = addDays(updated.day, -HISTORY_DAYS);
+    // Keep HISTORY_DAYS days, today included. Older sessions belong to no
+    // open tab, so removing their keys cannot race a save.
+    const oldest = addDays(updated.day, 1 - HISTORY_DAYS);
     for (const [id, s] of this.sessions)
-      if (s.day < oldest) this.sessions.delete(id);
-    const saved = write("practice", [...this.sessions.values()]);
+      if (s.day < oldest) {
+        this.sessions.delete(id);
+        remove(sessionKey(id));
+      }
     this.onCommit(updated, saved);
     return saved;
   }

@@ -12,17 +12,37 @@ import {
 const stored = new Map<string, string>();
 let now: Date;
 const clock = () => now;
+const sessionKey = (id: string) => `cadence:practice:${id}`;
+/** The saved sessions, as the app reads them. */
 const saved = () =>
-  JSON.parse(stored.get("cadence:practice") ?? "[]") as PracticeSession[];
+  [...stored]
+    .filter(([key]) => key.startsWith(sessionKey("")))
+    .flatMap(([, value]) => {
+      try {
+        const session = JSON.parse(value) as PracticeSession;
+        return typeof session.seconds === "number" ? [session] : [];
+      } catch {
+        return [];
+      }
+    });
+const storage = (
+  setItem = (key: string, value: string) => {
+    stored.set(key, value);
+  },
+) => ({
+  get length() {
+    return stored.size;
+  },
+  key: (i: number) => [...stored.keys()][i] ?? null,
+  getItem: (key: string) => stored.get(key) ?? null,
+  setItem,
+  removeItem: (key: string) => void stored.delete(key),
+});
 
 beforeEach(() => {
   stored.clear();
   now = new Date(2026, 9, 18, 10, 0, 0);
-  vi.stubGlobal("localStorage", {
-    getItem: (key: string) => stored.get(key) ?? null,
-    setItem: (key: string, value: string) => void stored.set(key, value),
-    removeItem: (key: string) => void stored.delete(key),
-  });
+  vi.stubGlobal("localStorage", storage());
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -98,15 +118,15 @@ describe("practice log", () => {
       seconds: 400,
       songs: {},
     };
-    stored.set(
-      "cadence:practice",
-      JSON.stringify([old, { id: "broken", day: "today" }]),
-    );
+    stored.set(sessionKey("old"), JSON.stringify(old));
+    stored.set(sessionKey("broken"), JSON.stringify({ id: "broken" }));
+    stored.set(sessionKey("garbled"), "{");
     expect(storedSessions().map((s) => s.id)).toEqual(["old"]);
     const log = new PracticeLog(undefined, clock);
     log.add(2, "ode");
     log.commit();
     expect(saved().map((s) => s.seconds)).toEqual([2]);
+    expect(stored.has(sessionKey("old"))).toBe(false);
     expect([...new PracticeLog(undefined, clock).totals()]).toEqual([
       ["2026-10-18", 2],
     ]);
@@ -132,13 +152,12 @@ describe("practice log", () => {
       expect.objectContaining({ seconds: 1 }),
       true,
     );
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => stored.get(key) ?? null,
-      setItem: () => {
+    vi.stubGlobal(
+      "localStorage",
+      storage(() => {
         throw new Error("full");
-      },
-      removeItem: (key: string) => void stored.delete(key),
-    });
+      }),
+    );
     log.add(1, "ode");
     expect(log.commit()).toBe(false);
     expect(onCommit).toHaveBeenLastCalledWith(
@@ -164,6 +183,49 @@ describe("practice log", () => {
       [{ lamb: 3 }, 3],
     ]);
     expect(tabB.totals().get("2026-10-18")).toBe(10);
+  });
+
+  it("saves only its own session, so tabs saving together cannot overwrite each other", () => {
+    const tabA = new PracticeLog(() => {}, clock);
+    const tabB = new PracticeLog(() => {}, clock);
+    const writes: string[] = [];
+    vi.stubGlobal(
+      "localStorage",
+      storage((key, value) => {
+        writes.push(key);
+        stored.set(key, value);
+      }),
+    );
+    tabA.add(3, "ode");
+    tabB.add(2, "lamb");
+    tabA.commit();
+    tabB.commit();
+    const [a, b] = saved();
+    expect(writes).toEqual([sessionKey(a.id), sessionKey(b.id)]);
+    expect([a.seconds, b.seconds]).toEqual([3, 2]);
+  });
+
+  it("keeps exactly HISTORY_DAYS days of sessions, today included", () => {
+    const session = (id: string, back: number): PracticeSession => ({
+      id,
+      day: addDays("2026-10-18", -back),
+      startedAt: "",
+      seconds: 60,
+      songs: {},
+    });
+    for (const s of [
+      session("oldest-kept", HISTORY_DAYS - 1),
+      session("one-too-old", HISTORY_DAYS),
+    ])
+      stored.set(sessionKey(s.id), JSON.stringify(s));
+    const log = new PracticeLog(undefined, clock);
+    log.add(1, "ode");
+    log.commit();
+    expect(saved().map((s) => s.id)).toEqual([
+      "oldest-kept",
+      expect.any(String),
+    ]);
+    expect(log.totals().size).toBe(2);
   });
 
   it("counts a streak of days that met the goal", () => {

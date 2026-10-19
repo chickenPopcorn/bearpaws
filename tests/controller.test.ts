@@ -77,6 +77,11 @@ vi.mock("../src/storage", () => ({
     env.values.set(key, structuredClone(value));
     return true;
   },
+  readAll: (prefix: string) =>
+    [...env.values]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([, value]) => structuredClone(value)),
+  remove: (key: string) => env.values.delete(key),
   progress: (id: string, _duration: number) =>
     structuredClone({
       position: 0,
@@ -1468,13 +1473,22 @@ describe("practice time", () => {
     midi(studio, [0x90, 72, 80]);
     for (let i = 0; i < 4; i++) advance(studio, 1);
     studio.pause();
-    expect(env.values.get("practice")).toEqual([
-      expect.objectContaining({
-        seconds: 4,
-        songs: { "controller-fixture": 4 },
-        day: studio.practiceLog.today(),
-      }),
+    const sessions = [...env.values].filter(([key]) =>
+      key.startsWith("practice:"),
+    );
+    expect(sessions).toEqual([
+      [
+        expect.any(String),
+        expect.objectContaining({
+          seconds: 4,
+          songs: { "controller-fixture": 4 },
+          day: studio.practiceLog.today(),
+        }),
+      ],
     ]);
+    expect(sessions[0][0]).toBe(
+      `practice:${(sessions[0][1] as { id: string }).id}`,
+    );
   });
 
   it("saves the learner's name and a daily goal from the choices", () => {
