@@ -505,7 +505,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
     };
     const save = () => {
       studio.save();
-      saveReloadSnapshot(document.getElementById("root")!);
+      saveReloadSnapshot(document.getElementById("root")!, currentUser ?? "");
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);

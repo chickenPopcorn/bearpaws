@@ -172,7 +172,6 @@ export class CloudSync implements SyncHooks {
     // The owner mark is written only once the pull succeeds, so a failed
     // first pull still adopts on the next try.
     const adopting = owner !== this.userId;
-    const unsynced = adopting ? {} : read<Unsynced>("unsynced", {});
     const since = addDays(localDay(new Date()), -HISTORY_DAYS);
     const [settings, rows, practiceRows] = await Promise.all([
       timed(() => this.client.from("settings").select("data").maybeSingle()),
@@ -191,6 +190,9 @@ export class CloudSync implements SyncHooks {
     if (settings.error) throw settings.error;
     // A newer sign-in replaced this one while it loaded: change nothing.
     if (this.stopped) throw new Error("This sign-in was replaced.");
+    // Read now, not before the requests: another tab of this account may
+    // have saved changes while they were under way.
+    const unsynced = adopting ? {} : read<Unsynced>("unsynced", {});
 
     // Settings: this browser's unconfirmed change wins, then the account's.
     const localSettings = read<Settings | null>("settings", null);
@@ -416,82 +418,94 @@ export class CloudSync implements SyncHooks {
       // after the retry that replaces it.
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      let ok = false;
-      try {
-        const results = await Promise.all([
-          settings &&
-            this.client
-              .from("settings")
-              .upsert({ user_id: this.userId, data: settings })
-              .abortSignal(controller.signal),
-          progress.length > 0 &&
-            this.client
-              .from("progress")
-              .upsert(
-                progress.map(([song_id, data]) => ({
-                  user_id: this.userId,
-                  song_id,
-                  data,
-                })),
-              )
-              .abortSignal(controller.signal),
-          deleted.length > 0 &&
-            this.client
-              .from("progress")
-              .delete()
-              .in("song_id", deleted)
-              .abortSignal(controller.signal),
-          practice.length > 0 &&
-            this.client
-              .from("practice_sessions")
-              .upsert(
-                practice.map((session) => ({
-                  id: session.id,
-                  user_id: this.userId,
-                  day: session.day,
-                  started_at: session.startedAt,
-                  seconds: session.seconds,
-                  songs: session.songs,
-                })),
-              )
-              .abortSignal(controller.signal),
-        ]);
-        ok = results.every((result) => !result || !result.error);
-      } catch {
-      } finally {
-        clearTimeout(timer);
-      }
+      // Each request lands or fails on its own, so only a failed one is
+      // retried: retrying one that landed could overwrite a newer row.
+      const sent = async (
+        request: PromiseLike<{ error: unknown }> | false | null,
+      ) => {
+        if (!request) return true;
+        try {
+          return !(await request).error;
+        } catch {
+          return false;
+        }
+      };
+      const [settingsOk, progressOk, deletesOk, practiceOk] = await Promise.all(
+        [
+          sent(
+            settings &&
+              this.client
+                .from("settings")
+                .upsert({ user_id: this.userId, data: settings })
+                .abortSignal(controller.signal),
+          ),
+          sent(
+            progress.length > 0 &&
+              this.client
+                .from("progress")
+                .upsert(
+                  progress.map(([song_id, data]) => ({
+                    user_id: this.userId,
+                    song_id,
+                    data,
+                  })),
+                )
+                .abortSignal(controller.signal),
+          ),
+          sent(
+            deleted.length > 0 &&
+              this.client
+                .from("progress")
+                .delete()
+                .in("song_id", deleted)
+                .abortSignal(controller.signal),
+          ),
+          sent(
+            practice.length > 0 &&
+              this.client
+                .from("practice_sessions")
+                .upsert(
+                  practice.map((session) => ({
+                    id: session.id,
+                    user_id: this.userId,
+                    day: session.day,
+                    started_at: session.startedAt,
+                    seconds: session.seconds,
+                    songs: session.songs,
+                  })),
+                )
+                .abortSignal(controller.signal),
+          ),
+        ],
+      );
+      clearTimeout(timer);
       this.inFlight = null;
-      if (ok) {
-        if (settings) this.syncedSettings = canon(settings);
-        for (const [id, data] of progress)
-          this.syncedProgress.set(id, canon(data));
-        for (const id of deleted) this.syncedProgress.delete(id);
-      } else {
-        // Requeue what failed, unless a newer change arrived meanwhile.
-        if (settings && !this.pendingSettings) this.pendingSettings = settings;
-        for (const [id, data] of progress)
-          if (!this.pendingProgress.has(id) && !this.pendingDeletes.has(id))
-            this.pendingProgress.set(id, data);
-        for (const id of deleted)
-          if (!this.pendingProgress.has(id)) this.pendingDeletes.add(id);
+      // Requeue what failed, unless a newer change arrived meanwhile.
+      if (settings) {
+        if (settingsOk) this.syncedSettings = canon(settings);
+        else if (!this.pendingSettings) this.pendingSettings = settings;
+      }
+      for (const [id, data] of progress)
+        if (progressOk) this.syncedProgress.set(id, canon(data));
+        else if (!this.pendingProgress.has(id) && !this.pendingDeletes.has(id))
+          this.pendingProgress.set(id, data);
+      for (const id of deleted)
+        if (deletesOk) this.syncedProgress.delete(id);
+        else if (!this.pendingProgress.has(id)) this.pendingDeletes.add(id);
+      if (!practiceOk)
         for (const session of practice)
           if (!this.pendingPractice.has(session.id))
             this.pendingPractice.set(session.id, session);
-      }
+      const ok = settingsOk && progressOk && deletesOk && practiceOk;
       if (this.stopped) return;
-      this.saveUnsynced(
-        ok
-          ? {
-              confirmed: {
-                settings: !!settings,
-                progress: progress.map(([id]) => id),
-                deleted,
-                practice: practice.map((session) => session.id),
-              },
-            }
-          : {},
-      );
+      this.saveUnsynced({
+        confirmed: {
+          settings: !!settings && settingsOk,
+          progress: progressOk ? progress.map(([id]) => id) : [],
+          deleted: deletesOk ? deleted : [],
+          practice: practiceOk ? practice.map((session) => session.id) : [],
+        },
+      });
       if (ok) this.setError("");
       else {
         this.setError("Changes could not be saved to your account. Retrying.");

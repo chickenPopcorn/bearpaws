@@ -43,15 +43,19 @@
           var key = "cadence:reload-snapshot";
           var saved = JSON.parse(sessionStorage.getItem(key) || "null");
           sessionStorage.removeItem(key);
-          // The saved page can show an account's songs and progress, so show
-          // it only while this browser still holds a Supabase sign-in.
-          var signedIn = false;
-          for (var k = 0; k < localStorage.length; k++)
-            if (/^sb-.+-auth-token$/.test(localStorage.key(k) || ""))
-              signedIn = true;
+          // The saved page shows an account's songs and progress, so show it
+          // only while Supabase still holds a sign-in for that same account.
+          var user = "";
+          for (var k = 0; k < localStorage.length; k++) {
+            var name = localStorage.key(k) || "";
+            if (!/^sb-.+-auth-token$/.test(name)) continue;
+            var session = JSON.parse(localStorage.getItem(name) || "null");
+            user = (session && session.user && session.user.id) || "";
+          }
           if (
             !saved ||
-            !signedIn ||
+            !user ||
+            saved.user !== user ||
             !document.querySelector('link[rel="stylesheet"]')
           )
             return;

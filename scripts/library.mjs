@@ -93,6 +93,12 @@ async function push(bucket, validateIndex, validateSong) {
   const index = validateIndex(
     JSON.parse(readFileSync(`${FOLDER}/index.json`, "utf8")),
   );
+  // The working copy uses plain names. One copied from the live index has
+  // hashes; drop them, so each published name carries exactly one.
+  for (const entry of index.songs) {
+    entry.song = plainName(entry.song);
+    if (entry.midi) entry.midi = plainName(entry.midi);
+  }
   const hash = (bytes) =>
     createHash("sha256").update(bytes).digest("hex").slice(0, 16);
   const hashed = (path, bytes) => path.replace(/(\.\w+)$/, `.${hash(bytes)}$1`);

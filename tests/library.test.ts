@@ -205,6 +205,14 @@ describe("song library", () => {
       /pedals must be a list/,
     ],
     [
+      "a pedal whose open flag is not true",
+      (song: Song) => ({
+        ...song,
+        pedals: [{ channel: 0, start: 0, end: 1, open: "false" as never }],
+      }),
+      /pedals must be a list/,
+    ],
+    [
       "pedals out of order",
       (song: Song) => ({
         ...song,

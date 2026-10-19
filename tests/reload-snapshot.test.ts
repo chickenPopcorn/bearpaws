@@ -9,8 +9,9 @@ const restore = new Function(/<script>([\s\S]*?)<\/script>/.exec(page)![1]);
 const image = "data:image/webp;base64,AAAA";
 let root: HTMLElement;
 let values: Map<string, string>;
-// Keys in localStorage.
-let stored: string[];
+// localStorage: Supabase keeps the signed-in session, with its user.
+let stored: Map<string, string>;
+const session = (user: string) => JSON.stringify({ user: { id: user } });
 // Whether a value is too big for the browser to keep.
 let full: (value: string) => boolean;
 
@@ -26,12 +27,16 @@ beforeEach(() => {
     removeItem: (k: string) => values.delete(k),
   });
   // A Supabase sign-in this browser still holds.
-  stored = ["cadence:settings", "sb-test-auth-token"];
+  stored = new Map([
+    ["cadence:settings", "{}"],
+    ["sb-test-auth-token", session("user-1")],
+  ]);
   vi.stubGlobal("localStorage", {
     get length() {
-      return stored.length;
+      return stored.size;
     },
-    key: (i: number) => stored[i] ?? null,
+    key: (i: number) => [...stored.keys()][i] ?? null,
+    getItem: (k: string) => stored.get(k) ?? null,
   });
   document.head.innerHTML = '<link rel="stylesheet" />';
   document.body.innerHTML = '<div id="root"></div>';
@@ -56,7 +61,7 @@ function leave() {
   root.querySelector("select")!.value = "Relaxed";
   root.querySelector<HTMLInputElement>("[type=checkbox]")!.checked = true;
   root.querySelector<HTMLInputElement>("[type=search]")!.value = "lamb";
-  saveReloadSnapshot(root);
+  saveReloadSnapshot(root, "user-1");
   root.innerHTML = "";
 }
 
@@ -94,10 +99,17 @@ it("leaves the page empty while the stylesheet comes from script", () => {
 
 it("shows nothing once this browser holds no sign-in", () => {
   leave();
-  stored = ["cadence:settings"];
+  stored.delete("sb-test-auth-token");
   restore();
   expect(root.innerHTML).toBe("");
   expect(sessionStorage.getItem(RELOAD_SNAPSHOT_KEY)).toBeNull();
+});
+
+it("shows nothing once another account is signed in", () => {
+  leave();
+  stored.set("sb-test-auth-token", session("user-2"));
+  restore();
+  expect(root.innerHTML).toBe("");
 });
 
 it("keeps the markup alone when the canvas images do not fit", () => {
@@ -112,7 +124,7 @@ it("drops an older snapshot when storage refuses the new one", () => {
   leave();
   full = () => true;
   root.innerHTML = "<p>Newer page</p>";
-  saveReloadSnapshot(root);
+  saveReloadSnapshot(root, "user-1");
   root.innerHTML = "";
   restore();
   expect(root.innerHTML).toBe("");
