@@ -27,6 +27,7 @@ import {
   type Progress,
 } from "./storage";
 import type { SyncHooks } from "./cloud";
+import { IDLE_SECONDS, PracticeLog } from "./practiceLog";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
 const NO_PEDALS: readonly PedalSpan[] = [];
 export class Studio {
@@ -61,6 +62,12 @@ export class Studio {
   revision = 0;
   listeners = new Set<() => void>();
   lastSave = 0;
+  /** Playing time per day, for the practice calendar. */
+  practiceLog: PracticeLog;
+  /** When a key was last pressed, on the audio clock. */
+  private lastKeyAt = -Infinity;
+  /** The previous tick while practice time was being counted. */
+  private lastPracticeTick: number | null = null;
   progress: Progress = {
     position: 0,
     best: 0,
@@ -97,6 +104,9 @@ export class Studio {
       ambience: this.settings.ambience,
       voices: this.settings.pianoVoices,
     });
+    this.practiceLog = new PracticeLog((session) =>
+      this.sync?.practice(session),
+    );
     this.midi = this.createMidi();
     this.load(this.song);
   }
@@ -249,6 +259,8 @@ export class Studio {
     if (!write(`progress:${this.song.id}`, this.progress))
       this.storageNotice = "Progress could not be saved in this browser.";
     this.sync?.progress(this.song.id, this.progress);
+    if (!this.practiceLog.commit())
+      this.storageNotice = "Practice time could not be saved in this browser.";
   }
   load(song: Song) {
     this.cancelPlaybackPreparation();
@@ -386,6 +398,7 @@ export class Studio {
     this.cancelPlaybackPreparation();
     const now = this.audio.now();
     if (this.transport.playing) this.tick(now);
+    this.lastPracticeTick = null;
     this.transport.pause(now);
     this.position = this.transport.position;
     this.audio.stop();
@@ -505,6 +518,19 @@ export class Studio {
         this.transport.seek(this.loopStart, this.passEpoch);
         this.position = this.transport.update(now, this.waitGate);
       }
+      // Practice time counts while someone plays along: not in Listen, and
+      // not once the keys have been quiet for a while, such as a Wait gate
+      // left waiting.
+      if (
+        this.lastPracticeTick !== null &&
+        this.settings.mode !== "listen" &&
+        now - this.lastKeyAt <= IDLE_SECONDS
+      )
+        this.practiceLog.add(
+          Math.min(now - this.lastPracticeTick, 1),
+          this.song.id,
+        );
+      this.lastPracticeTick = this.transport.playing ? now : null;
       if (this.settings.mode === "rhythm")
         this.practice.expire(
           this.position,
@@ -552,6 +578,7 @@ export class Studio {
     const edge = this.input.message(data);
     if (edge) {
       this.lastVelocity = edge.velocity;
+      this.lastKeyAt = now;
       // A Rhythm press within the timing window before a loop wrap, delivered
       // after it, is scored in the new pass's time. There it can be early for
       // the pass's first notes or late for the previous pass's last ones.

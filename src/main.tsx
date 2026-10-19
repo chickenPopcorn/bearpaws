@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -28,6 +29,7 @@ import { BrowserStorageError, CloudSync } from "./cloud";
 import { OpeningStudio, SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
+import { PracticeCalendar } from "./PracticeCalendar";
 import "./style.css";
 // One studio per signed-in session, created once the account's songs and
 // progress are on this browser. App only renders while it exists.
@@ -548,6 +550,13 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   const misses = p.recentMisses,
     stats = p.stats,
     recent = p.feedback.at(-1);
+  const today = studio.practiceLog.today();
+  // Totals change at most once a second, when a day gains a whole second.
+  const practiceRevision = studio.practiceLog.revision;
+  const practiceTotals = useMemo(
+    () => studio.practiceLog.totals(),
+    [practiceRevision, today],
+  );
   return (
     <div className="app">
       <header className="top">
@@ -639,6 +648,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
               e.target.value = "";
             }}
           />
+          <PracticeCalendar totals={practiceTotals} today={today} />
           <p className="privacy">
             Imported songs stay on this browser.
             <br />

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BrowserStorageError, CloudSync } from "../src/cloud";
+import { localDay } from "../src/practiceLog";
 import { clearAccountData, read, write } from "../src/storage";
 
 vi.mock("../src/storage", async (importActual) => {
@@ -13,6 +14,7 @@ const USER = "11111111-1111-1111-1111-111111111111";
 interface Backend {
   settings: { data: unknown }[];
   progress: { song_id: string; data: unknown }[];
+  practice_sessions: { id: string; day: string; [key: string]: unknown }[];
   upserts: [string, unknown][];
   calls: string[];
   failWrites: boolean;
@@ -32,6 +34,7 @@ function backend(): Backend {
   return {
     settings: [],
     progress: [],
+    practice_sessions: [],
     upserts: [],
     calls: [],
     failWrites: false,
@@ -70,8 +73,16 @@ function client(b: Backend) {
       );
     },
   });
+  const pages = (rows: () => unknown[]) => ({
+    order: () => ({
+      range: async (from: number, to: number) => {
+        await b.readGate;
+        return reply(rows().slice(from, to + 1));
+      },
+    }),
+  });
   const fake = {
-    from: (table: "settings" | "progress") => ({
+    from: (table: "settings" | "progress" | "practice_sessions") => ({
       select: () => ({
         maybeSingle: async () => {
           await b.readGate;
@@ -79,12 +90,9 @@ function client(b: Backend) {
             ? reply(null, { message: "offline" })
             : reply(b[table][0] ?? null);
         },
-        order: () => ({
-          range: async (from: number, to: number) => {
-            await b.readGate;
-            return reply(b[table].slice(from, to + 1));
-          },
-        }),
+        ...pages(() => b[table]),
+        gte: (_column: "day", since: string) =>
+          pages(() => b.practice_sessions.filter((row) => row.day >= since)),
       }),
       upsert: (rows: unknown) => write(`upsert ${table}`, [table, rows]),
       delete: () => ({
@@ -129,10 +137,12 @@ afterEach(() => {
 });
 
 const unsynced = () =>
-  read<{ settings?: boolean; progress?: string[]; deleted?: string[] }>(
-    "unsynced",
-    {},
-  );
+  read<{
+    settings?: boolean;
+    progress?: string[];
+    deleted?: string[];
+    practice?: string[];
+  }>("unsynced", {});
 
 describe("account sync", () => {
   it("lets this browser's unconfirmed changes win, and the account decide the rest", async () => {
@@ -165,7 +175,12 @@ describe("account sync", () => {
         [{ user_id: USER, song_id: "changed-here", data: { best: 7 } }],
       ],
     ]);
-    expect(unsynced()).toEqual({ settings: false, progress: [], deleted: [] });
+    expect(unsynced()).toEqual({
+      settings: false,
+      progress: [],
+      deleted: [],
+      practice: [],
+    });
   });
 
   it("uploads an unconfirmed settings change over the account's", async () => {
@@ -221,10 +236,12 @@ describe("account sync", () => {
 
   it("gives up on a request that does not answer", async () => {
     const api = client(backend());
+    const hang = { order: () => ({ range: () => new Promise(() => {}) }) };
     api.from = (() => ({
       select: () => ({
         maybeSingle: () => new Promise(() => {}),
-        order: () => ({ range: () => new Promise(() => {}) }),
+        ...hang,
+        gte: () => hang,
       }),
     })) as never;
     const pull = new CloudSync(api, USER).pull();
@@ -245,6 +262,7 @@ describe("account sync", () => {
       settings: true,
       progress: ["song"],
       deleted: [],
+      practice: [],
     });
     await vi.advanceTimersByTimeAsync(1999);
     expect(b.calls).toEqual([]);
@@ -253,7 +271,12 @@ describe("account sync", () => {
     expect(b.upserts[1][1]).toEqual([
       { user_id: USER, song_id: "song", data: { best: 2 } },
     ]);
-    expect(unsynced()).toEqual({ settings: false, progress: [], deleted: [] });
+    expect(unsynced()).toEqual({
+      settings: false,
+      progress: [],
+      deleted: [],
+      practice: [],
+    });
 
     b.failWrites = true;
     sync.progress("song", { best: 3 } as never);
@@ -311,6 +334,80 @@ describe("account sync", () => {
     expect(sync.error).toBe("");
   });
 
+  it("uploads practice sessions under their own ids", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    const session = {
+      id: "s1",
+      day: "2026-10-18",
+      startedAt: "2026-10-18T10:00:00.000Z",
+      seconds: 90,
+      songs: { ode: 90 },
+    };
+    sync.practice(session);
+    sync.practice({ ...session, seconds: 120, songs: { ode: 120 } });
+    expect(unsynced().practice).toEqual(["s1"]);
+    await vi.advanceTimersByTimeAsync(2000);
+    // Re-sending a session's running total replaces it, never adds to it.
+    expect(b.upserts).toEqual([
+      [
+        "practice_sessions",
+        [
+          {
+            id: "s1",
+            user_id: USER,
+            day: "2026-10-18",
+            started_at: "2026-10-18T10:00:00.000Z",
+            seconds: 120,
+            songs: { ode: 120 },
+          },
+        ],
+      ],
+    ]);
+    expect(unsynced().practice).toEqual([]);
+  });
+
+  it("loads recent practice and keeps this browser's unsent sessions", async () => {
+    const b = backend();
+    write("owner", USER);
+    const today = localDay(new Date());
+    b.practice_sessions = [
+      { id: "a", day: today, started_at: "x", seconds: 200, songs: {} },
+      { id: "b", day: today, started_at: "y", seconds: 50, songs: {} },
+      {
+        id: "old",
+        day: "2000-01-01",
+        started_at: "z",
+        seconds: 900,
+        songs: {},
+      },
+    ];
+    write("practice", [
+      { id: "b", day: today, startedAt: "y", seconds: 80, songs: {} },
+      { id: "gone", day: today, startedAt: "w", seconds: 30, songs: {} },
+    ]);
+    write("unsynced", { practice: ["b"] });
+    const sync = new CloudSync(client(b), USER);
+    await sync.pull();
+    // "gone" was uploaded before and is no longer in the account.
+    expect(
+      read<{ id: string; seconds: number }[]>("practice", []).map((s) => [
+        s.id,
+        s.seconds,
+      ]),
+    ).toEqual([
+      ["a", 200],
+      ["b", 80],
+    ]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts).toEqual([
+      [
+        "practice_sessions",
+        [expect.objectContaining({ id: "b", seconds: 80 })],
+      ],
+    ]);
+  });
+
   it("aborts a timed-out upload and holds newer changes until it settles", async () => {
     const b = backend();
     const sync = new CloudSync(client(b), USER);
@@ -348,7 +445,12 @@ describe("account sync", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(b.calls).toEqual(["upsert progress", "delete progress gone"]);
     expect(sync.pending).toBe(false);
-    expect(unsynced()).toEqual({ settings: false, progress: [], deleted: [] });
+    expect(unsynced()).toEqual({
+      settings: false,
+      progress: [],
+      deleted: [],
+      practice: [],
+    });
   });
 
   it("signs out only once Supabase confirms it", async () => {

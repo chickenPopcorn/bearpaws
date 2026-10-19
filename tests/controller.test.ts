@@ -69,6 +69,8 @@ vi.mock("../src/storage", () => ({
     },
     ...((env.values.get("settings") as object) ?? {}),
   }),
+  read: (key: string, fallback: unknown) =>
+    env.values.has(key) ? structuredClone(env.values.get(key)) : fallback,
   write: (key: string, value: unknown) => {
     env.values.set(key, structuredClone(value));
     return true;
@@ -1463,6 +1465,7 @@ describe("account sync hooks", () => {
     settings: vi.fn(),
     progress: vi.fn(),
     forgetProgress: vi.fn(),
+    practice: vi.fn(),
   });
   const midiFile = () =>
     new File(
@@ -1507,6 +1510,7 @@ describe("account sync hooks", () => {
       "settings",
       "progress",
       "forgetProgress",
+      "practice",
     ]);
   });
 
@@ -1522,5 +1526,81 @@ describe("account sync hooks", () => {
     expect(deleteSong).toHaveBeenCalledWith(imported.id);
     expect(sync.forgetProgress).toHaveBeenCalledWith(imported.id);
     expect(studio.songs.some((s) => s.id === imported.id)).toBe(false);
+  });
+});
+
+describe("practice time", () => {
+  // A wrong key holds Wait mode at its first note, so playback keeps running.
+  const held = () => song([[60, 1]]);
+  const today = (studio: Studio) =>
+    studio.practiceLog.totals().get(studio.practiceLog.today()) ?? 0;
+
+  it("counts playing time only while keys are being pressed", async () => {
+    const studio = create(held());
+    await studio.play();
+    advance(studio, 1);
+    advance(studio, 1);
+    expect(today(studio)).toBe(0);
+    midi(studio, [0x90, 72, 80]);
+    midi(studio, [0x80, 72, 0]);
+    for (let i = 0; i < 20; i++) advance(studio, 1);
+    // Time stops counting 15 seconds after the last key press.
+    expect(studio.transport.playing).toBe(true);
+    expect(today(studio)).toBe(15);
+    midi(studio, [0x90, 72, 80]);
+    advance(studio, 1);
+    expect(today(studio)).toBe(16);
+  });
+
+  it("leaves out Listen, paused time and long gaps between ticks", async () => {
+    const studio = create(held());
+    studio.mode("listen");
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    advance(studio, 3);
+    expect(today(studio)).toBe(0);
+    studio.pause();
+
+    studio.mode("wait");
+    await studio.play();
+    advance(studio, 0.5);
+    midi(studio, [0x90, 74, 80]);
+    advance(studio, 1);
+    studio.pause();
+    // The minute spent paused is not practice.
+    env.now += 60;
+    await studio.play();
+    midi(studio, [0x90, 74, 80]);
+    advance(studio, 0.5);
+    // A stalled tick counts at most a second.
+    advance(studio, 5);
+    expect(today(studio)).toBe(2);
+  });
+
+  it("reports practice sessions to the account as they grow", async () => {
+    const sync = {
+      settings: vi.fn(),
+      progress: vi.fn(),
+      forgetProgress: vi.fn(),
+      practice: vi.fn(),
+    };
+    const studio = new Studio(fixtureLibrary(), sync);
+    active.push(studio);
+    studio.load(held());
+    studio.speed(1);
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    for (let i = 0; i < 4; i++) advance(studio, 1);
+    studio.pause();
+    expect(sync.practice).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        seconds: 4,
+        songs: { "controller-fixture": 4 },
+        day: studio.practiceLog.today(),
+      }),
+    );
+    expect(env.values.get("practice")).toEqual([
+      expect.objectContaining({ seconds: 4 }),
+    ]);
   });
 });

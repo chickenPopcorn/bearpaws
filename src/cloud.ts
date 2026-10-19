@@ -8,6 +8,13 @@ import {
   type Progress,
   type Settings,
 } from "./storage";
+import {
+  addDays,
+  HISTORY_DAYS,
+  localDay,
+  storedSessions,
+  type PracticeSession,
+} from "./practiceLog";
 
 /** A burst of saves within this time becomes one upload. */
 const DEBOUNCE_MS = 2000;
@@ -86,6 +93,17 @@ interface Unsynced {
   settings?: boolean;
   progress?: string[];
   deleted?: string[];
+  /** Practice session ids. */
+  practice?: string[];
+}
+
+/** A practice_sessions row as the Data API returns it. */
+interface PracticeRow {
+  id: string;
+  day: string;
+  started_at: string;
+  seconds: number;
+  songs: Record<string, number>;
 }
 
 /** What the studio reports so the signed-in account stays current. */
@@ -94,10 +112,13 @@ export interface SyncHooks {
   progress(songId: string, progress: Progress): void;
   /** The song was removed from this browser, so its progress goes too. */
   forgetProgress(songId: string): void;
+  /** A practice session gained time. */
+  practice(session: PracticeSession): void;
 }
 
 /**
- * Keeps one user's settings and practice progress in their Supabase account.
+ * Keeps one user's settings, practice progress and practice time in their
+ * Supabase account.
  * Imported MIDI files never leave the browser. This browser's storage stays
  * the working copy: pull() fills it from the account at sign-in, and later
  * changes upload shortly after they happen, one upload at a time.
@@ -106,6 +127,7 @@ export class CloudSync implements SyncHooks {
   private pendingSettings: Settings | null = null;
   private pendingProgress = new Map<string, Progress>();
   private pendingDeletes = new Set<string>();
+  private pendingPractice = new Map<string, PracticeSession>();
   /** What the upload in progress carries, until the account confirms it. */
   private inFlight: Required<Unsynced> | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -151,9 +173,20 @@ export class CloudSync implements SyncHooks {
     // first pull still adopts on the next try.
     const adopting = owner !== this.userId;
     const unsynced = adopting ? {} : read<Unsynced>("unsynced", {});
-    const [settings, rows] = await Promise.all([
+    const since = addDays(localDay(new Date()), -HISTORY_DAYS);
+    const [settings, rows, practiceRows] = await Promise.all([
       timed(() => this.client.from("settings").select("data").maybeSingle()),
-      this.allProgress(),
+      this.allRows<{ song_id: string; data: Partial<Progress> }>(
+        "progress",
+        "song_id, data",
+        "song_id",
+      ),
+      this.allRows<PracticeRow>(
+        "practice_sessions",
+        "id, day, started_at, seconds, songs",
+        "id",
+        since,
+      ),
     ]);
     if (settings.error) throw settings.error;
     // A newer sign-in replaced this one while it loaded: change nothing.
@@ -189,6 +222,34 @@ export class CloudSync implements SyncHooks {
       }
     }
     for (const [id, data] of remote) store(`progress:${id}`, data);
+
+    // Practice: the account's sessions, with this browser's unconfirmed ones
+    // in place of the account's copy.
+    const sessions = new Map<string, PracticeSession>(
+      practiceRows.map((row) => [
+        row.id,
+        {
+          id: row.id,
+          day: row.day,
+          startedAt: row.started_at,
+          seconds: row.seconds,
+          songs: row.songs,
+        },
+      ]),
+    );
+    const unsentPractice = new Set(unsynced.practice);
+    for (const session of storedSessions())
+      if (
+        unsentPractice.has(session.id) ||
+        (adopting && !sessions.has(session.id))
+      ) {
+        sessions.set(session.id, session);
+        this.pendingPractice.set(session.id, session);
+      }
+    store(
+      "practice",
+      [...sessions.values()].filter((session) => session.day >= since),
+    );
     store("owner", this.userId);
     // Without the marker, the next pull would drop what this one adopted.
     if (!this.saveUnsynced()) throw new BrowserStorageError();
@@ -196,19 +257,23 @@ export class CloudSync implements SyncHooks {
     if (this.pending) this.schedule(0);
   }
 
-  /** Every progress row of the account, a page at a time. */
-  private async allProgress() {
-    const rows: { song_id: string; data: Partial<Progress> }[] = [];
+  /** Every row of an account table, a page at a time, from `since` on if given. */
+  private async allRows<T>(
+    table: string,
+    columns: string,
+    order: string,
+    since?: string,
+  ) {
+    const rows: T[] = [];
     for (let from = 0; ; from += PAGE) {
-      const page = await timed(() =>
-        this.client
-          .from("progress")
-          .select("song_id, data")
-          .order("song_id")
-          .range(from, from + PAGE - 1),
-      );
+      const page = await timed(() => {
+        const query = this.client.from(table).select(columns);
+        return (since ? query.gte("day", since) : query)
+          .order(order)
+          .range(from, from + PAGE - 1);
+      });
       if (page.error) throw page.error;
-      rows.push(...(page.data as typeof rows));
+      rows.push(...(page.data as T[]));
       if (page.data.length < PAGE || this.stopped) return rows;
     }
   }
@@ -231,6 +296,12 @@ export class CloudSync implements SyncHooks {
       return;
     this.pendingDeletes.delete(songId);
     this.pendingProgress.set(songId, { ...progress });
+    this.queued();
+  }
+
+  practice(session: PracticeSession) {
+    if (this.stopped) return;
+    this.pendingPractice.set(session.id, { ...session });
     this.queued();
   }
 
@@ -270,6 +341,12 @@ export class CloudSync implements SyncHooks {
       deleted: [
         ...new Set([...this.pendingDeletes, ...(flight?.deleted ?? [])]),
       ],
+      practice: [
+        ...new Set([
+          ...this.pendingPractice.keys(),
+          ...(flight?.practice ?? []),
+        ]),
+      ],
     } satisfies Unsynced);
   }
 
@@ -285,7 +362,8 @@ export class CloudSync implements SyncHooks {
     return (
       !!this.pendingSettings ||
       this.pendingProgress.size > 0 ||
-      this.pendingDeletes.size > 0
+      this.pendingDeletes.size > 0 ||
+      this.pendingPractice.size > 0
     );
   }
 
@@ -300,14 +378,17 @@ export class CloudSync implements SyncHooks {
     }
     const settings = this.pendingSettings,
       progress = [...this.pendingProgress],
-      deleted = [...this.pendingDeletes];
+      deleted = [...this.pendingDeletes],
+      practice = [...this.pendingPractice.values()];
     this.pendingSettings = null;
     this.pendingProgress.clear();
     this.pendingDeletes.clear();
+    this.pendingPractice.clear();
     this.inFlight = {
       settings: !!settings,
       progress: progress.map(([id]) => id),
       deleted,
+      practice: practice.map((session) => session.id),
     };
     CloudSync.flushing = (async () => {
       // Aborting at the time limit settles the request, so it cannot land
@@ -339,6 +420,20 @@ export class CloudSync implements SyncHooks {
               .delete()
               .in("song_id", deleted)
               .abortSignal(controller.signal),
+          practice.length > 0 &&
+            this.client
+              .from("practice_sessions")
+              .upsert(
+                practice.map((session) => ({
+                  id: session.id,
+                  user_id: this.userId,
+                  day: session.day,
+                  started_at: session.startedAt,
+                  seconds: session.seconds,
+                  songs: session.songs,
+                })),
+              )
+              .abortSignal(controller.signal),
         ]);
         ok = results.every((result) => !result || !result.error);
       } catch {
@@ -359,6 +454,9 @@ export class CloudSync implements SyncHooks {
             this.pendingProgress.set(id, data);
         for (const id of deleted)
           if (!this.pendingProgress.has(id)) this.pendingDeletes.add(id);
+        for (const session of practice)
+          if (!this.pendingPractice.has(session.id))
+            this.pendingPractice.set(session.id, session);
       }
       if (this.stopped) return;
       this.saveUnsynced();
@@ -381,6 +479,7 @@ export class CloudSync implements SyncHooks {
     this.pendingSettings = null;
     this.pendingProgress.clear();
     this.pendingDeletes.clear();
+    this.pendingPractice.clear();
   }
 
   /**

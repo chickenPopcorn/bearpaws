@@ -145,6 +145,9 @@ Sign-in with Google is required. Supabase (project `pawpal`) holds each user's s
 
 - `settings`: one row per user, the studio settings.
 - `progress`: per song, the position, track assignments, passage, number of starts, and best matched-note proportion.
+- `practice_sessions`: playing time, one row per page visit per local calendar day, with seconds per song. The browser makes up each session's id and re-sends its running total, so a retried upload never counts twice and practice on two devices adds up.
+
+The practice calendar in the sidebar shows this month: a star on each day with at least 5 minutes of practice, a dot on days with less, and a ring filling up for today. Practice time counts only while a song plays in Wait for me or Rhythm and a key was pressed within the last 15 seconds; Listen, paused time and a Wait gate left waiting do not count. Days follow the device's local calendar, and sign-in loads the last 92 days for the calendar and streak.
 
 The songs themselves come from the shared library (see above), which is the same for everyone and read-only. MIDI files you import are stored only in this browser (IndexedDB, normalized and keyed by a SHA-256 hash of their contents); they are never uploaded and do not appear on other devices. Removing an imported song removes it from the browser and its progress from your account. Signing out keeps imported songs.
 
