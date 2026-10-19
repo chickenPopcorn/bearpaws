@@ -20,6 +20,7 @@ npm test               # Deterministic engine, MIDI lifecycle, controller, stora
 python3 -m unittest discover -s tests -p 'test_*.py' # Offline sample importer checks
 npm run test:watch     # Watch tests
 npm run test:coverage  # Tests with a coverage report in coverage/; fails below the floor in vite.config.ts
+npm run test:e2e       # Browser tests of the production build (see below)
 npm run lint           # ESLint: TypeScript and React hook rules
 npm run format:check   # Check formatting without writing
 npm run build          # TypeScript validation and static production build in dist/
@@ -29,6 +30,21 @@ npm run library:pull   # Download the shared song library into ./library
 npm run library:push   # Check ./library and upload it to the library bucket
 npm run format         # Format source, tests and documentation
 ```
+
+## Browser tests
+
+`npm run test:e2e` builds the app into `e2e/.dist`, serves it on port 4174
+and drives it in Chromium with Playwright: Google sign-in and sign-out, the
+library and search, settings from and to the account, Listen and Wait for me
+practice, a library that fails to load, and the one studio tab. The first run
+needs the browser: `npx playwright install chromium`. The build talks to a
+fake Supabase project that `e2e/fake-supabase.ts` answers inside the browser,
+with the three fixture songs as the library, so the tests need no account or
+network.
+
+The **E2E tests** workflow runs them in the merge queue only, on the merged
+result. Pull requests show the check as skipped, so it can be a required
+check; it can also be run by hand from the Actions tab.
 
 ## Architecture
 

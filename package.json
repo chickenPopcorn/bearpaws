@@ -9,10 +9,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint .",
-    "format": "prettier --write src tests scripts *.json *.ts *.js index.html README.md docs/*.md",
-    "format:check": "prettier --check src tests scripts *.json *.ts *.js index.html README.md docs/*.md",
+    "format": "prettier --write src tests e2e scripts *.json *.ts *.js index.html README.md docs/*.md",
+    "format:check": "prettier --check src tests e2e scripts *.json *.ts *.js index.html README.md docs/*.md",
     "example": "node scripts/create-example.mjs",
     "library:pull": "node scripts/library.mjs pull",
     "library:push": "node scripts/library.mjs push"
@@ -25,6 +26,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitest/coverage-v8": "^4.1.12",
