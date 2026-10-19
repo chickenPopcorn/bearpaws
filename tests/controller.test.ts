@@ -427,6 +427,8 @@ describe("practice studio integration", () => {
     const selecting = studio.duetOutput("first");
     expect(studio.outputChanging).toBe(true);
     expect(studio.transport.playing).toBe(false);
+    await studio.play();
+    expect(studio.transport.playing).toBe(false);
     await studio.duetOutput("second");
     expect(studio.midi.selectOutput).toHaveBeenCalledExactlyOnceWith("first");
     finish();

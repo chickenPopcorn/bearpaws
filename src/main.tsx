@@ -796,7 +796,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                   <button
                     className="primary play"
                     disabled={busy || studio.outputChanging}
-                    aria-busy={busy}
+                    aria-busy={busy || studio.outputChanging}
                     title={playing ? "Pause (Space)" : "Play (Space)"}
                     aria-keyshortcuts="Space"
                     onClick={() => void toggle()}
