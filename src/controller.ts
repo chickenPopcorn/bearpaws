@@ -187,6 +187,8 @@ export class Studio {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.save();
+    // A restart begins a new playback run, which needs its own key press.
+    this.lastPracticeTick = null;
     this.audio.stop();
     this.midi.dispose();
     this.unwatchPractice();

@@ -1474,6 +1474,21 @@ describe("practice time", () => {
     expect(today(studio)).toBe(240);
   });
 
+  it("needs a new key press after the studio restarts mid-playback", async () => {
+    const studio = create(held());
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    advance(studio, 1);
+    expect(today(studio)).toBe(1);
+    studio.destroy();
+    studio.init();
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(1);
+    midi(studio, [0x90, 74, 80]);
+    advance(studio, 1);
+    expect(today(studio)).toBe(2);
+  });
+
   it("needs a new key press after resuming playback", async () => {
     const studio = create(held());
     await studio.play();
