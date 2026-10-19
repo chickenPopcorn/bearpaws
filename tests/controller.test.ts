@@ -49,6 +49,8 @@ vi.mock("../src/midi", () => ({
   },
 }));
 vi.mock("../src/storage", () => ({
+  DAILY_GOAL_CHOICES: [5, 10, 15, 20, 30],
+  LEARNER_NAME_MAX: 40,
   settings: () => ({
     mode: "wait",
     speed: 1,
@@ -65,6 +67,8 @@ vi.mock("../src/storage", () => ({
       pedalNoise: true,
       resonance: true,
     },
+    learnerName: "",
+    dailyGoalMinutes: 5,
     ...((env.values.get("settings") as object) ?? {}),
   }),
   read: (key: string, fallback: unknown) =>
@@ -1440,5 +1444,24 @@ describe("practice time", () => {
     expect(env.values.get("practice")).toEqual([
       expect.objectContaining({ seconds: 4 }),
     ]);
+  });
+
+  it("saves the learner's name and a daily goal from the choices", () => {
+    const sync = {
+      settings: vi.fn(),
+      progress: vi.fn(),
+      practice: vi.fn(),
+    };
+    const studio = new Studio(fixtureLibrary(), sync);
+    active.push(studio);
+    studio.learnerName("George");
+    studio.dailyGoal(15);
+    studio.dailyGoal(7);
+    const saved = { learnerName: "George", dailyGoalMinutes: 15 };
+    expect(studio.settings).toMatchObject(saved);
+    expect(env.values.get("settings")).toMatchObject(saved);
+    expect(sync.settings).toHaveBeenLastCalledWith(
+      expect.objectContaining(saved),
+    );
   });
 });

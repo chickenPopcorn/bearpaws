@@ -3,18 +3,31 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PracticeCalendar, useLocalDay } from "../src/PracticeCalendar";
-import { DAILY_GOAL_SECONDS } from "../src/practiceLog";
 
-const goal = DAILY_GOAL_SECONDS;
+const goal = 5 * 60;
 let root: Root;
 let container: HTMLDivElement;
 const day = (date: number) =>
   container.querySelector<HTMLElement>(
     `[aria-label^="October ${date}${date === 18 ? ", today" : ""}:"]`,
   )!;
-async function render(totals: [string, number][], today = "2026-10-18") {
+async function render(
+  totals: [string, number][],
+  today = "2026-10-18",
+  profile: Partial<Parameters<typeof PracticeCalendar>[0]> = {},
+) {
   await act(async () =>
-    root.render(<PracticeCalendar totals={new Map(totals)} today={today} />),
+    root.render(
+      <PracticeCalendar
+        totals={new Map(totals)}
+        today={today}
+        learnerName=""
+        goalMinutes={5}
+        onLearnerName={() => {}}
+        onGoalMinutes={() => {}}
+        {...profile}
+      />,
+    ),
   );
 }
 
@@ -92,6 +105,81 @@ describe("practice calendar", () => {
     root = createRoot(container);
     await render([["2026-10-18", goal]]);
     expect(container.querySelector(".celebrate")).toBeNull();
+  });
+
+  it("praises the learner by name and measures days against their goal", async () => {
+    vi.useFakeTimers();
+    const totals: [string, number][] = [
+      ["2026-10-17", 10 * 60],
+      ["2026-10-18", 9 * 60],
+    ];
+    await render(totals, "2026-10-18", {
+      learnerName: " George ",
+      goalMinutes: 10,
+    });
+    expect(day(17).className).toContain("done");
+    expect(day(18).getAttribute("aria-label")).toBe(
+      "October 18, today: 9 of 10 minutes",
+    );
+    expect(container.querySelector(".practice-streak")!.textContent).toBe(
+      "1-day streak",
+    );
+    await render([...totals.slice(0, 1), ["2026-10-18", 10 * 60]], undefined, {
+      learnerName: " George ",
+      goalMinutes: 10,
+    });
+    expect(container.querySelector('[role="status"]')!.textContent).toBe(
+      "Today's star earned, George!",
+    );
+    expect(container.querySelector(".practice-today")!.textContent).toBe(
+      "Today's star earned. Great job, George!",
+    );
+  });
+
+  it("does not celebrate a goal lowered below today's time", async () => {
+    await render([["2026-10-18", 7 * 60]], "2026-10-18", { goalMinutes: 10 });
+    await render([["2026-10-18", 7 * 60]], "2026-10-18", { goalMinutes: 5 });
+    expect(day(18).className).toContain("done");
+    expect(container.querySelector(".celebrate")).toBeNull();
+  });
+
+  it("edits the learner's name and daily goal", async () => {
+    const onLearnerName = vi.fn(),
+      onGoalMinutes = vi.fn();
+    await render([], "2026-10-18", { onLearnerName, onGoalMinutes });
+    const edit = container.querySelector<HTMLButtonElement>(".practice-edit")!;
+    expect(edit.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".practice-profile")).toBeNull();
+    await act(async () => edit.click());
+    expect(edit.textContent).toBe("Done");
+    const input = container.querySelector<HTMLInputElement>(
+      ".practice-profile input",
+    )!;
+    const select = container.querySelector<HTMLSelectElement>(
+      ".practice-profile select",
+    )!;
+    expect([...select.options].map((o) => o.value)).toEqual([
+      "5",
+      "10",
+      "15",
+      "20",
+      "30",
+    ]);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input, "George");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onLearnerName).toHaveBeenLastCalledWith("George");
+    await act(async () => {
+      select.value = "20";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onGoalMinutes).toHaveBeenLastCalledWith(20);
+    await act(async () => edit.click());
+    expect(container.querySelector(".practice-profile")).toBeNull();
   });
 });
 

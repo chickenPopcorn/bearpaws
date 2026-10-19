@@ -1,7 +1,5 @@
 import { read, write } from "./storage";
 
-/** Playing time that earns a day its star. */
-export const DAILY_GOAL_SECONDS = 5 * 60;
 /** Without a key press for this long, nobody is playing, so time stops counting. */
 export const IDLE_SECONDS = 15;
 /** How many days of sessions the browser keeps and sign-in loads. */
@@ -55,9 +53,16 @@ export function storedSessions(): PracticeSession[] {
   return Array.isArray(value) ? value.filter(isSession) : [];
 }
 
-/** Days in a row that met the goal, ending today, or yesterday if today has not yet. */
-export function streak(totals: ReadonlyMap<string, number>, today: string) {
-  const met = (day: string) => (totals.get(day) ?? 0) >= DAILY_GOAL_SECONDS;
+/**
+ * Days in a row with at least `goal` seconds, ending today, or yesterday if
+ * today has not met it yet.
+ */
+export function streak(
+  totals: ReadonlyMap<string, number>,
+  today: string,
+  goal: number,
+) {
+  const met = (day: string) => (totals.get(day) ?? 0) >= goal;
   let day = met(today) ? today : addDays(today, -1);
   let count = 0;
   while (met(day)) {

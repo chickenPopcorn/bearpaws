@@ -1,8 +1,8 @@
 import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
-import { DAILY_GOAL_SECONDS, addDays, streak } from "./practiceLog";
+import { addDays, streak } from "./practiceLog";
+import { DAILY_GOAL_CHOICES, LEARNER_NAME_MAX } from "./storage";
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
-const GOAL_MINUTES = DAILY_GOAL_SECONDS / 60;
 /** How long today's star celebrates once the goal is met. */
 const CELEBRATE_MS = 2400;
 /** How often an open page checks whether the local day has changed. */
@@ -19,9 +19,9 @@ function Star() {
 }
 
 /** Today's progress toward the goal, as a ring around the date. */
-function Ring({ seconds }: { seconds: number }) {
+function Ring({ seconds, goal }: { seconds: number; goal: number }) {
   const length = 2 * Math.PI * 15;
-  const done = Math.min(seconds / DAILY_GOAL_SECONDS, 1);
+  const done = Math.min(seconds / goal, 1);
   return (
     <svg className="practice-ring" viewBox="0 0 36 36" aria-hidden="true">
       <circle cx="18" cy="18" r="15" />
@@ -59,25 +59,34 @@ export function useLocalDay(today: () => string) {
 /**
  * This month's practice: a star on each day with at least the daily goal, a
  * dot on days with some practice, and a ring filling up for today. Today's
- * star pops when the goal is met while the studio is open.
+ * star pops when the goal is met while the studio is open. The learner's name
+ * and the goal can be edited here.
  */
 export const PracticeCalendar = memo(function PracticeCalendar({
   totals,
   today,
+  learnerName,
+  goalMinutes,
+  onLearnerName,
+  onGoalMinutes,
 }: {
   /** Seconds practiced on each day, YYYY-MM-DD. */
   totals: ReadonlyMap<string, number>;
   today: string;
+  learnerName: string;
+  goalMinutes: number;
+  onLearnerName: (name: string) => void;
+  onGoalMinutes: (minutes: number) => void;
 }) {
+  const goal = goalMinutes * 60;
+  const name = learnerName.trim();
   const todaySeconds = totals.get(today) ?? 0;
   const [celebrating, setCelebrating] = useState(false);
+  const [editing, setEditing] = useState(false);
   const before = useRef(todaySeconds);
   useEffect(() => {
-    if (
-      before.current < DAILY_GOAL_SECONDS &&
-      todaySeconds >= DAILY_GOAL_SECONDS
-    )
-      setCelebrating(true);
+    // Only practice earns the celebration, not a goal lowered past today.
+    if (before.current < goal && todaySeconds >= goal) setCelebrating(true);
     before.current = todaySeconds;
   }, [todaySeconds]);
   useEffect(() => {
@@ -95,8 +104,8 @@ export const PracticeCalendar = memo(function PracticeCalendar({
     { length: new Date(year, month, 0).getDate() },
     (_, i) => addDays(`${today.slice(0, 8)}01`, i),
   );
-  const run = streak(totals, today);
-  const done = todaySeconds >= DAILY_GOAL_SECONDS;
+  const run = streak(totals, today, goal);
+  const done = todaySeconds >= goal;
 
   return (
     <section className="practice-calendar" aria-labelledby="practice-month">
@@ -122,7 +131,7 @@ export const PracticeCalendar = memo(function PracticeCalendar({
           const seconds = totals.get(day) ?? 0;
           const date = Number(day.slice(8));
           const isToday = day === today;
-          const met = seconds >= DAILY_GOAL_SECONDS;
+          const met = seconds >= goal;
           const state = met
             ? "done"
             : isToday
@@ -136,7 +145,7 @@ export const PracticeCalendar = memo(function PracticeCalendar({
             met
               ? `${plural(minutes(seconds), "minute")}, star earned`
               : isToday
-                ? `${minutes(seconds)} of ${GOAL_MINUTES} minutes`
+                ? `${minutes(seconds)} of ${goalMinutes} minutes`
                 : day > today
                   ? "coming up"
                   : seconds > 0
@@ -154,7 +163,7 @@ export const PracticeCalendar = memo(function PracticeCalendar({
               }`}
             >
               {met ? <Star /> : date}
-              {isToday && !met && <Ring seconds={seconds} />}
+              {isToday && !met && <Ring seconds={seconds} goal={goal} />}
               {isToday &&
                 celebrating &&
                 Array.from({ length: 8 }, (_, i) => (
@@ -172,15 +181,53 @@ export const PracticeCalendar = memo(function PracticeCalendar({
           );
         })}
       </div>
-      <p className="practice-today">
-        {done
-          ? "Today's star earned. Great job!"
-          : todaySeconds > 0
-            ? `Today: ${minutes(todaySeconds)} of ${GOAL_MINUTES} minutes`
-            : `Play ${GOAL_MINUTES} minutes today to earn a star.`}
-      </p>
+      <div className="practice-foot">
+        <p className="practice-today">
+          {done
+            ? `Today's star earned. Great job${name ? `, ${name}` : ""}!`
+            : todaySeconds > 0
+              ? `Today: ${minutes(todaySeconds)} of ${goalMinutes} minutes`
+              : `Play ${goalMinutes} minutes today to earn a star.`}
+        </p>
+        <button
+          type="button"
+          className="practice-edit"
+          aria-expanded={editing}
+          aria-controls="practice-profile"
+          onClick={() => setEditing(!editing)}
+        >
+          {editing ? "Done" : "Edit"}
+        </button>
+      </div>
+      {editing && (
+        <div className="practice-profile" id="practice-profile">
+          <label>
+            Name
+            <input
+              value={learnerName}
+              maxLength={LEARNER_NAME_MAX}
+              placeholder="Who is practicing?"
+              autoComplete="off"
+              onChange={(e) => onLearnerName(e.target.value)}
+            />
+          </label>
+          <label>
+            Daily goal
+            <select
+              value={goalMinutes}
+              onChange={(e) => onGoalMinutes(Number(e.target.value))}
+            >
+              {DAILY_GOAL_CHOICES.map((choice) => (
+                <option key={choice} value={choice}>
+                  {choice} minutes
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <p className="sr-only" role="status">
-        {celebrating ? "Today's star earned!" : ""}
+        {celebrating ? `Today's star earned${name ? `, ${name}` : ""}!` : ""}
       </p>
     </section>
   );

@@ -13,6 +13,11 @@ jobs:
       - run: npm test
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: npm run build
+        env:
+          # Public values, the same the Pages build uses: the artifact below
+          # can be deployed on its own, and sign-in needs them.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - run: node scripts/check-built-fonts.mjs
       - uses: actions/upload-artifact@v4
         with:

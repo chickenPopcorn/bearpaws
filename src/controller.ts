@@ -9,7 +9,14 @@ import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
 import type { PedalSpan, Song, Hand } from "./song";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
-import { settings, write, progress, type Progress } from "./storage";
+import {
+  settings,
+  write,
+  progress,
+  DAILY_GOAL_CHOICES,
+  LEARNER_NAME_MAX,
+  type Progress,
+} from "./storage";
 import type { SyncHooks } from "./cloud";
 import { IDLE_SECONDS, PracticeLog } from "./practiceLog";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
@@ -289,6 +296,17 @@ export class Studio {
   }
   tolerance(value: number) {
     this.settings.tolerance = value;
+    this.persist();
+    this.emit();
+  }
+  learnerName(name: string) {
+    this.settings.learnerName = name.slice(0, LEARNER_NAME_MAX);
+    this.persist();
+    this.emit();
+  }
+  dailyGoal(minutes: number) {
+    if (!DAILY_GOAL_CHOICES.includes(minutes)) return;
+    this.settings.dailyGoalMinutes = minutes;
     this.persist();
     this.emit();
   }
