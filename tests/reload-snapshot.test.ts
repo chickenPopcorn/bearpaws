@@ -11,7 +11,11 @@ let root: HTMLElement;
 let values: Map<string, string>;
 // localStorage: Supabase keeps the signed-in session, with its user.
 let stored: Map<string, string>;
-const session = (user: string) => JSON.stringify({ user: { id: user } });
+const session = (user: string, expiresIn = 3600) =>
+  JSON.stringify({
+    user: { id: user },
+    expires_at: Math.floor(Date.now() / 1000) + expiresIn,
+  });
 // Whether a value is too big for the browser to keep.
 let full: (value: string) => boolean;
 
@@ -103,6 +107,13 @@ it("shows nothing once this browser holds no sign-in", () => {
   restore();
   expect(root.innerHTML).toBe("");
   expect(sessionStorage.getItem(RELOAD_SNAPSHOT_KEY)).toBeNull();
+});
+
+it("shows nothing once the stored sign-in has expired", () => {
+  leave();
+  stored.set("sb-test-auth-token", session("user-1", -60));
+  restore();
+  expect(root.innerHTML).toBe("");
 });
 
 it("shows nothing once another account is signed in", () => {
