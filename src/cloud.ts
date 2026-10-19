@@ -98,6 +98,8 @@ async function timed<T>(
  * uploaded, never a newer save another tab made since.
  */
 interface Unsynced {
+  /** The account whose changes these are. */
+  owner?: string;
   /** A fingerprint of the unconfirmed settings. */
   settings?: string;
   /** Song id to the `updated` stamp of its unconfirmed progress. */
@@ -123,6 +125,7 @@ function readUnsynced(): Unsynced {
   const stored = read<Record<string, unknown>>("unsynced", {});
   const progress = stored.progress;
   return {
+    owner: typeof stored.owner === "string" ? stored.owner : undefined,
     settings:
       typeof stored.settings === "string"
         ? stored.settings
@@ -152,21 +155,36 @@ interface Stash {
   progress: Record<string, Partial<Progress> | null>;
 }
 
-/** Set aside what `owner` has not uploaded. False if storage refused it. */
+/**
+ * Set aside what `owner` has not uploaded, added to anything already set aside
+ * for it (the later save of a song wins). False if storage refused it.
+ */
 function stashUnsent(owner: string): boolean {
   const marker = readUnsynced();
   const songs = Object.keys(marker.progress);
   if (!marker.settings && !songs.length && !Object.keys(marker.deleted).length)
     return true;
+  const earlier = read<Stash | null>(`stash:${owner}`, null);
+  const progress = { ...earlier?.progress };
+  const versions = { ...earlier?.marker.progress };
+  for (const id of songs) {
+    const data = read<Partial<Progress> | null>(`progress:${id}`, null);
+    if (!data || (id in versions && versions[id] > marker.progress[id]))
+      continue;
+    progress[id] = data;
+    versions[id] = marker.progress[id];
+  }
   return write(`stash:${owner}`, {
-    marker,
-    settings: marker.settings ? read<Settings | null>("settings", null) : null,
-    progress: Object.fromEntries(
-      songs.map((id) => [
-        id,
-        read<Partial<Progress> | null>(`progress:${id}`, null),
-      ]),
-    ),
+    marker: {
+      owner,
+      settings: marker.settings ?? earlier?.marker.settings,
+      progress: versions,
+      deleted: { ...earlier?.marker.deleted, ...marker.deleted },
+    },
+    settings: marker.settings
+      ? read<Settings | null>("settings", null)
+      : (earlier?.settings ?? null),
+    progress,
   } satisfies Stash);
 }
 
@@ -242,6 +260,9 @@ export class CloudSync implements SyncHooks {
     if (owner && owner !== this.userId) {
       if (!stashUnsent(owner)) throw new BrowserStorageError();
       clearAccountData();
+      // This browser is now this account's: nothing a tab of the other
+      // account still writes is adopted, even if this pull fails.
+      store("owner", this.userId);
     }
     // Changes this account had not uploaded when another signed in here come
     // back first, marked unconfirmed, so they win over the account's copy.
@@ -266,7 +287,7 @@ export class CloudSync implements SyncHooks {
     // The first account on this browser adopts what was saved here before.
     // The owner mark is written only once the pull succeeds, so a failed
     // first pull still adopts on the next try.
-    const adopting = owner !== this.userId && !stash;
+    const adopting = !owner && !stash;
     const [settings, rows] = await Promise.all([
       timed(() => this.client.from("settings").select("data").maybeSingle()),
       this.allProgress(),
@@ -278,7 +299,7 @@ export class CloudSync implements SyncHooks {
     // have saved changes while they were under way.
     const unsynced: Unsynced = adopting
       ? { progress: {}, deleted: {} }
-      : readUnsynced();
+      : this.ownMarker();
 
     // A marker entry newer than the record it names is for a save this
     // browser could not store, so the record is not that change.
@@ -290,7 +311,7 @@ export class CloudSync implements SyncHooks {
     const localSettings = read<Settings | null>("settings", null);
     if (settings.data) this.syncedSettings = canon(settings.data.data);
     let keepSettings =
-      !!localSettings && (!!unsynced.settings || !settings.data);
+      !!localSettings && (!!unsynced.settings || (adopting && !settings.data));
 
     // Progress: this browser's unconfirmed changes win; otherwise the account
     // is the record. Adopted progress fills in songs the account lacks.
@@ -316,7 +337,7 @@ export class CloudSync implements SyncHooks {
     // Another tab may have saved while this decided: entries added to the
     // marker since it was read win too, before anything is overwritten.
     if (!adopting) {
-      const latest = readUnsynced();
+      const latest = this.ownMarker();
       if (latest.settings !== unsynced.settings && localSettings)
         keepSettings = true;
       for (const [id, version] of Object.entries(latest.progress)) {
@@ -338,6 +359,13 @@ export class CloudSync implements SyncHooks {
 
     if (keepSettings) this.pendingSettings = localSettings;
     else if (settings.data) store("settings", settings.data.data);
+    else if (localSettings)
+      // Not this account's: start from the defaults instead.
+      try {
+        remove("settings");
+      } catch {
+        throw new BrowserStorageError();
+      }
     for (const id of removals)
       try {
         removeProgress(id);
@@ -351,6 +379,17 @@ export class CloudSync implements SyncHooks {
     store("owner", this.userId);
     this.error = "";
     if (this.pending) this.schedule(0);
+  }
+
+  /**
+   * The marker, if it is this account's. One that a still-running tab of
+   * another account wrote after a switch is set aside for that account.
+   */
+  private ownMarker(): Unsynced {
+    const marker = readUnsynced();
+    if (!marker.owner || marker.owner === this.userId) return marker;
+    stashUnsent(marker.owner);
+    return { progress: {}, deleted: {} };
   }
 
   /**
@@ -459,7 +498,7 @@ export class CloudSync implements SyncHooks {
     const flight = this.inFlight;
     const stored: Unsynced = exact
       ? { progress: {}, deleted: {} }
-      : readUnsynced();
+      : this.ownMarker();
     const settings = this.pendingSettings
       ? settingsVersion(this.pendingSettings)
       : (flight?.settings ??
@@ -494,6 +533,7 @@ export class CloudSync implements SyncHooks {
         else delete deleted[id];
       }
     return write("unsynced", {
+      owner: this.userId,
       settings,
       progress,
       deleted,

@@ -421,6 +421,35 @@ describe("account sync", () => {
     expect(read(`stash:${OTHER}`, null)).toBeNull();
   });
 
+  it("keeps a switched-out account's late saves out of the new account", async () => {
+    const OTHER = "22222222-2222-2222-2222-222222222222";
+    write("owner", OTHER);
+    const b = backend();
+    let open!: () => void;
+    b.readGate = new Promise((resolve) => (open = resolve));
+    const pulling = new CloudSync(client(b), USER).pull();
+    // A tab of the other account, not yet told of the switch, saves.
+    write("progress:theirs", { best: 7, updated: "t" });
+    write("settings", { mode: "rhythm" });
+    write("unsynced", {
+      owner: OTHER,
+      settings: "s",
+      progress: { theirs: "t" },
+      deleted: {},
+    });
+    open();
+    await pulling;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts).toEqual([]);
+    expect(read("progress:theirs", null)).toBeNull();
+    expect(read("settings", null)).toBeNull();
+    expect(
+      read<{ progress: Record<string, unknown> }>(`stash:${OTHER}`, {
+        progress: {},
+      }).progress,
+    ).toEqual({ theirs: { best: 7, updated: "t" } });
+  });
+
   it("drops a restored stash even when that pull fails", async () => {
     const OTHER = "22222222-2222-2222-2222-222222222222";
     write(`stash:${USER}`, {
