@@ -95,18 +95,21 @@ export function duetNotes(
         const start = at(beat),
           written = at(beat + beats);
         graces.forEach((grace, index) => {
-          const graceStart = at(beat - GRACE_BEATS * (graces.length - index));
+          // Each grace note ends where the next one, or its note, begins.
+          const before = graces.length - index,
+            graceStart = at(beat - GRACE_BEATS * before),
+            graceEnd = at(beat - GRACE_BEATS * (before - 1));
           for (const pitch of grace.split("+"))
             attacks.push({
               id: "",
               pitch: parsePitch(pitch),
               start: graceStart,
-              end: graceStart + GRACE_BEATS * beatSeconds,
-              soundEnd: graceStart + GRACE_BEATS * beatSeconds,
+              end: graceEnd,
+              soundEnd: graceEnd,
               velocity,
               track: 2,
               channel: 2,
-              written: graceStart + GRACE_BEATS * beatSeconds,
+              written: graceEnd,
               tied: false,
             });
         });

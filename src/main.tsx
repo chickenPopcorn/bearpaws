@@ -394,7 +394,12 @@ const PracticeReview = memo(function PracticeReview({
     </section>
   );
 });
-const KeyboardHelp = memo(function KeyboardHelp() {
+const KeyboardHelp = memo(function KeyboardHelp({
+  shift,
+}: {
+  /** Semitones the keys move with the student part, as with Duet on. */
+  shift: number;
+}) {
   const [showKeys, setShowKeys] = useState(false);
   return (
     <details
@@ -412,32 +417,35 @@ const KeyboardHelp = memo(function KeyboardHelp() {
       </p>
       {showKeys && (
         <div className="accessible-keys">
-          {Object.entries(shortcuts).map(([key, pitch]) => (
-            <button
-              key={key}
-              aria-label={`Play ${noteName(pitch)}`}
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId);
-                studio.virtual(pitch, true);
-              }}
-              onPointerUp={() => studio.virtual(pitch, false)}
-              onPointerCancel={() => studio.virtual(pitch, false)}
-              onLostPointerCapture={() => studio.virtual(pitch, false)}
-              onKeyDown={(e) => {
-                if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
-                  e.preventDefault();
+          {Object.entries(shortcuts).map(([key, written]) => {
+            const pitch = written + shift;
+            return (
+              <button
+                key={key}
+                aria-label={`Play ${noteName(pitch)}`}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId);
                   studio.virtual(pitch, true);
-                }
-              }}
-              onKeyUp={(e) => {
-                if (e.key === "Enter" || e.key === " ")
-                  studio.virtual(pitch, false);
-              }}
-            >
-              {noteName(pitch)}
-              <small>{key.toUpperCase()}</small>
-            </button>
-          ))}
+                }}
+                onPointerUp={() => studio.virtual(pitch, false)}
+                onPointerCancel={() => studio.virtual(pitch, false)}
+                onLostPointerCapture={() => studio.virtual(pitch, false)}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
+                    e.preventDefault();
+                    studio.virtual(pitch, true);
+                  }
+                }}
+                onKeyUp={(e) => {
+                  if (e.key === "Enter" || e.key === " ")
+                    studio.virtual(pitch, false);
+                }}
+              >
+                {noteName(pitch)}
+                <small>{key.toUpperCase()}</small>
+              </button>
+            );
+          })}
         </div>
       )}
     </details>
@@ -957,7 +965,7 @@ function App() {
               loopEnd={studio.loopEnd}
             />
           </section>
-          <KeyboardHelp />
+          <KeyboardHelp shift={studio.octaveShift} />
           <footer>
             Practice stays on this browser.{" "}
             <span>USB MIDI · Desktop Chrome / Edge · HTTPS required</span>

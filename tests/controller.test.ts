@@ -1533,6 +1533,24 @@ describe("teacher duet", () => {
     expect(studio.transport.cycle).toBe(cycle);
   });
 
+  it("keeps the next loop pass's duet waiting at its first gate", async () => {
+    const studio = create(duetSong());
+    studio.duet();
+    studio.bounds(0.5, 2.5);
+    await studio.play();
+    advance(studio, 0.5);
+    midi(studio, [0x90, 72, 100]);
+    midi(studio, [0x80, 72, 0]);
+    advance(studio, 1);
+    midi(studio, [0x90, 76, 100]);
+    expect(studio.practice.gate).toBeUndefined();
+    // Near the loop end only the next pass's notes before its first gate,
+    // and this pass's notes still to come, may be scheduled ahead.
+    expect(scheduled(studio)).toEqual(["duet-0", "duet-3"]);
+    advance(studio, 0.45);
+    expect(scheduled(studio)).toEqual(["duet-0"]);
+  });
+
   it("plays along in Listen and Rhythm, and only the duet with Rhythm's reference off", async () => {
     const studio = create(duetSong());
     const played = () =>

@@ -54,6 +54,16 @@ describe("teacher duet notation", () => {
     ]);
   });
 
+  it("ends swung grace notes as their note begins", () => {
+    const [first, second, principal] = notes(
+      [["r/1 C#3/g D#3/g E3/1 r/2"]],
+      true,
+    );
+    expect(first.end).toBeCloseTo(second.start, 3);
+    expect(second.end).toBeCloseTo(principal.start, 3);
+    expect(first.start).toBeLessThan(second.start);
+  });
+
   it("swings off-beat eighths onto the triplet", () => {
     expect(
       notes([["C3/0.5 D3/0.5 E3/1 F3/0.5 G3/0.5 A3/1"]], true).map(

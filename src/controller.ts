@@ -597,10 +597,23 @@ export class Studio {
   private scheduleAudio() {
     const reference = this.referenceAudible ? this.notes : NO_NOTES,
       gate = this.waitGate,
+      // A Wait loop's next pass is scheduled ahead, before its gates come
+      // back: it may only start the notes before its first gate. The notes
+      // from there up to here have played in this pass already.
+      first =
+        this.settings.mode === "wait" && this.transport.loop
+          ? this.practice.groups[0]?.start
+          : undefined,
       duet =
-        gate === undefined
+        gate === undefined && first === undefined
           ? this.duetNotes
-          : this.duetNotes.filter((note) => note.start < gate - 0.001);
+          : this.duetNotes.filter(
+              (note) =>
+                (gate === undefined || note.start < gate - 0.001) &&
+                (first === undefined ||
+                  note.start < first - 0.001 ||
+                  note.start >= this.position - 0.001),
+            );
     this.audio.schedule(
       duet.length ? [...reference, ...duet] : reference,
       this.transport,
