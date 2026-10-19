@@ -520,10 +520,11 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
       else studio.emit();
     };
     const hidden = () => {
-      if (document.hidden && studio.transport.playing) studio.pause();
+      if (document.hidden) studio.pause();
     };
     const save = () => {
-      studio.save();
+      // Also cancel starts still opening audio/MIDI, and release hardware notes.
+      studio.pause();
       saveReloadSnapshot(document.getElementById("root")!, currentUser ?? "");
     };
     window.addEventListener("keydown", down);
@@ -635,6 +636,27 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
             </button>
           )}
         </div>
+        {/* Keep output selection and retry available without an input. */}
+        {(connected ||
+          studio.midi.outputs.length > 0 ||
+          studio.midi.selectedOutputId) && (
+          <label>
+            Duet sound
+            <select
+              aria-label="Duet sound"
+              disabled={studio.outputChanging}
+              value={studio.midi.selectedOutputId}
+              onChange={(e) => void studio.duetOutput(e.target.value)}
+            >
+              <option value="">Laptop</option>
+              {studio.midi.outputs.map((port) => (
+                <option key={port.id} value={port.id}>
+                  {port.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button
           className="account"
           title={email ? `Signed in as ${email}` : undefined}
@@ -646,6 +668,11 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
       <p className="sr-only" role="status">
         {studio.midi.message}
       </p>
+      {studio.midi.outputMessage && (
+        <p className="connection" role="status">
+          {studio.midi.outputMessage}
+        </p>
+      )}
       {/* After a click, say why the piano is not connected yet. */}
       {connectTried && !connected && !connecting && (
         <p className="connection">{studio.midi.message}</p>
@@ -771,8 +798,8 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                   </button>
                   <button
                     className="primary play"
-                    disabled={busy}
-                    aria-busy={busy}
+                    disabled={busy || studio.outputChanging}
+                    aria-busy={busy || studio.outputChanging}
                     title={playing ? "Pause (Space)" : "Play (Space)"}
                     aria-keyshortcuts="Space"
                     onClick={() => void toggle()}

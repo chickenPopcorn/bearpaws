@@ -32,7 +32,12 @@ function setup(inputs: MIDIInput[] = []) {
     permissions: { query },
     requestMIDIAccess: vi.fn().mockResolvedValue(access),
   } satisfies MidiNavigator;
-  const callbacks = { onMessage: vi.fn(), onReset: vi.fn(), onChange: vi.fn() };
+  const callbacks = {
+    onMessage: vi.fn(),
+    onReset: vi.fn(),
+    onChange: vi.fn(),
+    onOutputLost: vi.fn(),
+  };
   const midi = new MidiConnection(callbacks, source);
   const change = () =>
     access.onstatechange?.call(access, {} as MIDIConnectionEvent);
@@ -151,6 +156,7 @@ describe("automatic MIDI connection", () => {
       onMessage: vi.fn(),
       onReset: vi.fn(),
       onChange: vi.fn(),
+      onOutputLost: vi.fn(),
     };
     const midi = new MidiConnection(callbacks, { requestMIDIAccess });
 

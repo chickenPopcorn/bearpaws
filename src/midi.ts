@@ -1,3 +1,4 @@
+import { closeOutput, MidiDuet } from "./midiDuet";
 /** New MIDI permission stays behind Connect; saved permission can reconnect at startup. */
 export type MidiConnectionStatus =
   | "unsupported"
@@ -15,6 +16,8 @@ export interface MidiCallbacks {
   /** Clear physical keys, pedals, and pending input when a bound source changes or is disposed. */
   onReset(): void;
   onChange(): void;
+  /** The chosen duet output failed or went away; the duet is back on the laptop. */
+  onOutputLost(): void;
 }
 export interface MidiNavigator {
   requestMIDIAccess(options?: MIDIOptions): Promise<MIDIAccess>;
@@ -27,6 +30,8 @@ export interface MidiNavigator {
 
 const OPEN_FAILED =
   "This MIDI input could not be opened. Check the USB connection and choose it again.";
+const OUTPUT_LOST =
+  "Piano output disconnected. The duet plays on the laptop until you choose the piano again under Duet sound.";
 const label = (input: MIDIInput) => input.name || "MIDI input";
 
 export class MidiConnection {
@@ -34,6 +39,14 @@ export class MidiConnection {
   message: string;
   devices: MidiDevice[] = [];
   selectedId = "";
+  outputs: MidiDevice[] = [];
+  selectedOutputId = "";
+  outputMessage = "";
+  private outputGeneration = 0;
+  duet = new MidiDuet(() => {
+    this.loseOutput(OUTPUT_LOST);
+    this.callbacks.onChange();
+  });
   private access: MIDIAccess | undefined;
   private input: MIDIInput | undefined;
   private disposed = false;
@@ -114,7 +127,7 @@ export class MidiConnection {
     try {
       const access = await this.source!.requestMIDIAccess({ sysex: false });
       if (this.disposed) return;
-      this.releaseAccess();
+      this.releaseAccess(true);
       this.detach();
       this.access = access;
       this.failedInput = undefined;
@@ -131,7 +144,7 @@ export class MidiConnection {
       this.refresh();
     } catch (error) {
       if (this.disposed) return;
-      this.releaseAccess();
+      this.releaseAccess(true);
       this.detach();
       this.devices = [];
       const name =
@@ -158,8 +171,63 @@ export class MidiConnection {
     else this.callbacks.onChange();
   }
 
+  /** An explicit choice keeps unrelated MIDI devices silent. */
+  async selectOutput(id: string): Promise<void> {
+    const generation = ++this.outputGeneration;
+    this.duet.setOutput();
+    this.selectedOutputId = id;
+    this.outputMessage = "";
+    this.callbacks.onChange();
+    if (!id) return;
+    const port = this.access?.outputs?.get(id);
+    try {
+      if (port?.state !== "connected") throw new Error("Unavailable");
+      await port.open();
+      if (generation !== this.outputGeneration || this.disposed) {
+        // A newer choice replaced this one, and may itself use this port.
+        if (this.selectedOutputId !== id) closeOutput(port);
+        return;
+      }
+      if (port.state !== "connected") throw new Error("Disconnected");
+      this.duet.setOutput(port);
+      this.outputMessage = `Teacher duet plays on ${port.name || "MIDI output"} (same channel as your piano).`;
+    } catch {
+      if (generation !== this.outputGeneration || this.disposed) return;
+      if (port) closeOutput(port);
+      this.loseOutput(
+        "Could not open the piano output. Choose it again under Duet sound to retry.",
+      );
+    }
+    this.callbacks.onChange();
+  }
+
+  /**
+   * Return the duet to the laptop. The selection goes back to Laptop too, so
+   * choosing the output again is a change that retries it.
+   */
+  private loseOutput(message: string) {
+    this.outputGeneration++;
+    this.duet.setOutput();
+    this.selectedOutputId = "";
+    this.outputMessage = message;
+    this.callbacks.onOutputLost();
+  }
+
   private refresh(): void {
     if (!this.access || this.disposed) return;
+    this.outputs = [];
+    this.access.outputs?.forEach((output) => {
+      if (output.state === "connected")
+        this.outputs.push({
+          id: output.id,
+          name: output.name || "MIDI output",
+        });
+    });
+    if (
+      this.selectedOutputId &&
+      !this.outputs.some((p) => p.id === this.selectedOutputId)
+    )
+      this.loseOutput(OUTPUT_LOST);
     const inputs: MIDIInput[] = [];
     this.access.inputs.forEach((input) => {
       if (input.state === "connected") inputs.push(input);
@@ -198,6 +266,10 @@ export class MidiConnection {
     input.onmidimessage = (event) => {
       if (!current() || input.state !== "connected" || !event.data) return;
       // DOM event timestamps share performance.now()'s clock. Never substitute animation-frame time.
+      // Only physical note-ons select the teacher channel, never virtual keys
+      // or system messages. Channel 1 is used until the first physical note.
+      if ((event.data[0] & 0xf0) === 0x90 && event.data[2] > 0)
+        this.duet.setChannel(event.data[0] & 0x0f);
       this.callbacks.onMessage(new Uint8Array(event.data), event.timeStamp);
     };
     void input.open().then(
@@ -227,6 +299,7 @@ export class MidiConnection {
     const input = this.input;
     this.input = undefined;
     if (input) {
+      this.duet.silence();
       input.onmidimessage = null;
       // Closing a disconnected port can reject; cleanup must still clear held keys and pedals.
       void input.close().catch(() => {});
@@ -236,9 +309,16 @@ export class MidiConnection {
     if (input || forceReset) this.callbacks.onReset();
   }
 
-  private releaseAccess(): void {
+  private releaseAccess(notifyOutputLoss = false): void {
+    const hadOutput = !!this.selectedOutputId || this.duet.connected;
+    this.outputGeneration++;
+    this.duet.setOutput();
+    this.selectedOutputId = "";
+    this.outputs = [];
+    this.outputMessage = "";
     if (this.access) this.access.onstatechange = null;
     this.access = undefined;
+    if (notifyOutputLoss && hadOutput) this.callbacks.onOutputLost();
   }
 
   dispose(): void {

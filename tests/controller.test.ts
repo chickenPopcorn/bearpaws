@@ -7,6 +7,8 @@ const env = vi.hoisted(() => ({
   now: 100,
   values: new Map<string, unknown>(),
   resets: [] as (() => void)[],
+  /** Each studio's report that its duet MIDI output was lost. */
+  outputLosses: [] as (() => void)[],
   unlockWait: null as Promise<void> | null,
   prepareWait: null as Promise<void> | null,
   /** What each studio does when another tab changes stored practice. */
@@ -41,9 +43,18 @@ vi.mock("../src/midi", () => ({
     status = "disconnected";
     message = "No piano";
     devices = [];
+    duet = {
+      connected: false,
+      stop: vi.fn(),
+      schedule: vi.fn(),
+      finish: vi.fn(),
+      pulse: vi.fn(),
+    };
+    selectOutput = vi.fn(async () => {});
     selectedId = "";
-    constructor(callbacks: { onReset(): void }) {
+    constructor(callbacks: { onReset(): void; onOutputLost(): void }) {
       env.resets.push(callbacks.onReset);
+      env.outputLosses.push(callbacks.onOutputLost);
     }
     connect = vi.fn(async () => {});
     autoConnect = vi.fn(async () => {});
@@ -194,6 +205,7 @@ beforeEach(() => {
   env.values.clear();
   env.watchers.clear();
   env.resets = [];
+  env.outputLosses = [];
   env.unlockWait = null;
   env.prepareWait = null;
   vi.spyOn(performance, "now").mockImplementation(() => env.now * 1000);
@@ -387,6 +399,72 @@ describe("practice studio integration", () => {
       expect(studio.progress.attempts).toBe(0);
     },
   );
+
+  it.each([false, true])(
+    "keeps browser playback going after losing an unused output (duet enabled: %s)",
+    async (enabled) => {
+      const studio = create(enabled ? song([[60, 1]]) : duetSong());
+      if (enabled) studio.duet();
+      studio.mode("listen");
+      Object.defineProperty(studio.midi.duet, "connected", {
+        value: true,
+        configurable: true,
+      });
+      await studio.play();
+      Object.defineProperty(studio.midi.duet, "connected", { value: false });
+      env.outputLosses.at(-1)!();
+      expect(studio.transport.playing).toBe(true);
+      expect(studio.notice).toBe("");
+    },
+  );
+
+  it("keeps the original resume intent by serializing output choices", async () => {
+    const studio = create(duetSong());
+    studio.mode("listen");
+    await studio.play();
+    let finish!: () => void;
+    vi.mocked(studio.midi.selectOutput).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    Object.defineProperty(studio.midi.duet, "connected", { value: true });
+    const selecting = studio.duetOutput("first");
+    expect(studio.outputChanging).toBe(true);
+    expect(studio.transport.playing).toBe(false);
+    await studio.play();
+    expect(studio.transport.playing).toBe(false);
+    await studio.duetOutput("second");
+    expect(studio.midi.selectOutput).toHaveBeenCalledExactlyOnceWith("first");
+    finish();
+    await selecting;
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.outputChanging).toBe(false);
+  });
+
+  it("starts no run while an output choice is still opening", async () => {
+    const studio = create(duetSong());
+    studio.mode("listen");
+    let finish!: () => void;
+    vi.mocked(studio.midi.selectOutput).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const selecting = studio.duetOutput("piano");
+    // A run started now would prepare the duet for the laptop.
+    await studio.play();
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    finish();
+    await selecting;
+    // It was not playing before the choice, so the choice does not start it.
+    expect(studio.transport.playing).toBe(false);
+    await studio.play();
+    expect(studio.transport.playing).toBe(true);
+  });
 
   it("does not duplicate a virtual note released and re-pressed during sample loading", async () => {
     const studio = create(song([[60, 1]]));
@@ -1508,6 +1586,52 @@ describe("teacher duet", () => {
     expect(studio.audio.reschedule).toHaveBeenCalledOnce();
     advance(studio, 0.1);
     expect(studio.audio.hold).toHaveBeenCalledOnce();
+  });
+
+  it("routes only the teacher to MIDI, waits at gates and silences output on pause and seek", async () => {
+    const studio = create(duetSong());
+    Object.defineProperty(studio.midi.duet, "connected", { value: true });
+    studio.duet();
+    await studio.play();
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    advance(studio, 1);
+    expect(scheduled(studio)).toEqual([]);
+    let call = vi.mocked(studio.midi.duet.schedule).mock.calls.at(-1)!;
+    expect(ids(call[0])).toEqual(["duet-0"]);
+    expect(call[3]).toBe(true);
+    midi(studio, [0x90, 72, 100]);
+    call = vi.mocked(studio.midi.duet.schedule).mock.calls.at(-1)!;
+    expect(ids(call[0])).toEqual(["duet-0", "duet-1", "duet-2"]);
+    expect(call[3]).toBe(false);
+    vi.mocked(studio.midi.duet.stop).mockClear();
+    studio.pause();
+    expect(studio.midi.duet.stop).toHaveBeenCalledOnce();
+    studio.seek(0);
+    expect(studio.midi.duet.stop).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels a start still loading when the duet's MIDI output is lost", async () => {
+    const studio = create(duetSong());
+    studio.mode("listen");
+    studio.duet();
+    Object.defineProperty(studio.midi.duet, "connected", {
+      value: true,
+      configurable: true,
+    });
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const starting = studio.play();
+    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
+    const signal = vi.mocked(studio.audio.prepare).mock.calls[0][1]!;
+    Object.defineProperty(studio.midi.duet, "connected", { value: false });
+    env.outputLosses.at(-1)!();
+    expect(signal.aborted).toBe(true);
+    expect(studio.notice).toMatch(/Piano output disconnected.*Press Play/);
+    finish();
+    await starting;
+    expect(studio.transport.playing).toBe(false);
   });
 
   it("sounds a duet note a Wait loop seek lands in", async () => {
