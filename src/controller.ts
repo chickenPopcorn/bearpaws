@@ -33,6 +33,7 @@ export class Studio {
   outputChanging = false;
   private midiDuetRouted = false;
   private midiPassStart = 0;
+  private midiTick = 0;
   private audioPreparations = new Set<AbortController>();
   private virtualRequests = new Map<number, number>();
   private nextVirtualRequest = 0;
@@ -631,6 +632,8 @@ export class Studio {
     if (resume) void this.play();
   }
   tick(now = this.audio.now()) {
+    this.midiTick++;
+    if (!this.transport.playing) this.midi.duet.pulse(this.midiTick);
     const playing = this.transport.playing,
       cycle = this.transport.cycle,
       held = this.transport.held;
@@ -644,6 +647,7 @@ export class Studio {
           cycle,
           false,
           this.midiPassStart,
+          this.midiTick,
         );
         this.midiPassStart = this.loopStart;
         this.passEpoch =
@@ -691,7 +695,7 @@ export class Studio {
       if (!this.transport.playing) {
         // The transport has finished, but the final piano release can still
         // be ringing. Explicit pause/seek/song changes continue to stop audio.
-        this.midi.duet.stop();
+        this.midi.duet.finish();
         this.audio.setPlaybackNotes([]);
         this.notice = "";
         this.save();
@@ -733,6 +737,7 @@ export class Studio {
       this.transport.cycle,
       this.transport.held,
       this.midiPassStart,
+      this.midiTick,
     );
     const browserNotes = this.midi.duet.connected ? reference : notes;
     this.audio.schedule(

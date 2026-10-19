@@ -157,6 +157,41 @@ describe("teacher MIDI output", () => {
     ]);
   });
 
+  it("preserves crossed attacks across two passes scheduled in the same tick", () => {
+    const { duet, send } = setup();
+    const notes = [note("a", 48, 0.002, 0.005), note("b", 48, 0.01, 0.015)];
+    duet.schedule(notes, 0.02, 1, false, 0, 1);
+    duet.schedule(notes, 0, 2, false, 0, 1);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
+    duet.schedule([], 0, 2, false, 0, 2);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+      [[0x90, 48, 64]],
+    ]);
+    duet.schedule([], 0, 2, false, 0, 3);
+    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+    expect(send).toHaveBeenCalledTimes(4);
+  });
+
+  it("drains final crossed attacks after completion and cancels them on explicit stop", () => {
+    const { duet, send } = setup();
+    const notes = [note("a", 48, 0.002, 0.005), note("b", 48, 0.01, 0.015)];
+    duet.schedule(notes, 0.02, 1, false, 0, 1);
+    duet.finish();
+    expect(send).toHaveBeenCalledTimes(1);
+    duet.pulse(2);
+    expect(send).toHaveBeenCalledTimes(3);
+    duet.pulse(3);
+    expect(send).toHaveBeenCalledTimes(4);
+    duet.stop();
+    duet.schedule(notes, 0.02, 2, false, 0, 4);
+    duet.finish();
+    duet.stop();
+    duet.pulse(5);
+    expect(send).toHaveBeenCalledTimes(6);
+  });
+
   it("keeps a long legato part within one tick of the song, without drifting", () => {
     const { duet, send } = setup();
     const notes = Array.from({ length: 240 }, (_, i) =>
@@ -181,8 +216,8 @@ describe("teacher MIDI output", () => {
     const notes = [note("last", 48, 0.99, 1.5), note("first", 52, 0, 0.5)];
     duet.schedule(notes, 0.98, 1, false);
     // The wrap: the old pass is finished up to its end, then the new one begins.
-    duet.schedule(notes, 1, 1, false);
-    duet.schedule(notes, 0.005, 2, false, 0);
+    duet.schedule(notes, 1, 1, false, 0, 2);
+    duet.schedule(notes, 0.005, 2, false, 0, 2);
     expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x90, 52, 64]]]);
     duet.schedule(notes, 0.025, 2, false);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
@@ -193,8 +228,10 @@ describe("teacher MIDI output", () => {
   it("restrikes a pitch the new pass opens with while the old pass's note rings", () => {
     const { duet, send } = setup();
     const notes = [note("last", 48, 0.99, 1.5), note("first", 48, 0, 0.5)];
-    duet.schedule(notes, 1, 1, false, 0.98);
-    duet.schedule(notes, 0.005, 2, false, 0);
+    duet.schedule(notes, 1, 1, false, 0.98, 1);
+    duet.schedule(notes, 0.005, 2, false, 0, 1);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
+    duet.schedule(notes, 0.025, 2, false, 0, 2);
     expect(send.mock.calls).toEqual([
       [[0x90, 48, 64]],
       [[0x80, 48, 0]],
