@@ -182,9 +182,15 @@ span.device {
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
 }
+/* Quieter than Connect your piano beside it: white, with muted text. */
 .account {
   font-size: var(--text-sm);
+  background: #fff;
+  color: var(--muted);
+}
+.account:hover {
   background: #f7f6fa;
+  color: var(--text-2);
 }
 /* The sign-in page, and the page shown while the studio loads or cannot. */
 .signin {
