@@ -144,6 +144,18 @@ describe("teacher MIDI output", () => {
     vi.advanceTimersByTime(1);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
   });
+  it("rounds fractional timer waits up instead of spinning before their deadline", () => {
+    const { duet, send } = setup();
+    const notes = [note("a", 48, 0.005, 0.012)];
+    duet.schedule(notes, 0, 1, false, 0, 1.2);
+    vi.advanceTimersByTime(20);
+    duet.schedule(notes, 0.02, 1, false, 0, 1.2);
+    vi.advanceTimersByTime(5);
+    expect(send).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+  });
+
   it("cancels pending notes and releases a sounding note on pause or seek", () => {
     const { duet, send } = setup(),
       notes = [note("a", 48, 0.005, 0.01), note("b", 52, 0.015, 0.02)];

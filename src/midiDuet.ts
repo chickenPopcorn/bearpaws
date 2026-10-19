@@ -111,7 +111,7 @@ export class MidiDuet {
     this.queue.sort((a, b) => a.at - b.at || a.order - b.order);
     this.timer = setTimeout(
       () => this.pump(),
-      Math.max(0, this.queue[0].at - performance.now()),
+      Math.max(0, Math.ceil(this.queue[0].at - performance.now())),
     );
   }
   private pump() {
