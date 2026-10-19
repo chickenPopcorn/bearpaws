@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { builtInSongs, isBuiltInSong } from "../src/lessons";
+import { builtInSongs, classSongs } from "../src/lessons";
 import { starterPieces } from "../src/starterPieces";
 import { popsPieces } from "../src/popsPieces";
 import {
@@ -8,7 +8,7 @@ import {
   classPositions,
   georgeClassesOrder,
 } from "../src/classPieces";
-import { collectionForSong, songsInCollection } from "../src/collections";
+import { books, bookForSong, songsInBook } from "../src/books";
 import { parseSong, tempoConverter, type Song } from "../src/song";
 import { buildScore, scoreTimeAtX, scoreViewport } from "../src/notation";
 
@@ -31,18 +31,6 @@ describe("bundled beginner music", () => {
       "安静 · 周杰伦",
     ])
       expect(songs.some((song) => song.title === title)).toBe(true);
-    for (const song of songs) {
-      expect(isBuiltInSong(song.id)).toBe(true);
-      expect(isBuiltInSong(`${song.id}-imported`)).toBe(false);
-    }
-    for (const removedId of [
-      "cadence-first-steps-v1",
-      "cadence-saints-v1",
-      "cadence-morning-waltz-v1",
-      "cadence-imported-song",
-      "",
-    ])
-      expect(isBuiltInSong(removedId)).toBe(false);
   });
 
   it("returns independent notes, track assignments and lesson metadata for every song", () => {
@@ -143,17 +131,12 @@ describe("bundled beginner music", () => {
     }
   });
 
-  it("adds the eight-bar Jasmine Flower chorus to Mama Bear’s Pops", () => {
+  it("builds the eight-bar Jasmine Flower chorus", () => {
     const songs = builtInSongs();
     const jasmine = songs.find(
       (song) => song.id === "bearpaws-jasmine-flower-v1",
     )!;
-    expect(collectionForSong(jasmine.id).id).toBe("pops");
-    expect(
-      songs
-        .filter((song) => collectionForSong(song.id).id === "classes")
-        .map((song) => song.title),
-    ).toEqual([
+    expect(classSongs().map((song) => song.title)).toEqual([
       "Dancing Raindrops",
       "Five O'Clock",
       "Tell Us, Please!",
@@ -167,9 +150,6 @@ describe("bundled beginner music", () => {
       "Old MacDonald Had a Farm",
       "Aura Lee",
     ]);
-    expect(
-      songs.filter((song) => collectionForSong(song.id).id === "songs"),
-    ).toHaveLength(13);
     expect(jasmine.notes.filter((note) => note.track === 0)).toHaveLength(8);
     const melody = jasmine.notes.filter((note) => note.track === 1);
     expect(melody).toHaveLength(40);
@@ -182,7 +162,7 @@ describe("bundled beginner music", () => {
     expect(jasmine.lesson!.description).toContain("chorus");
   });
 
-  it("adds the full An Jing piano MIDI to Mama Bear’s Pops without invented fingerings", () => {
+  it("builds the full An Jing piano MIDI without invented fingerings", () => {
     const song = builtInSongs().find(
       (candidate) => candidate.id === "bearpaws-an-jing-v1",
     )!;
@@ -193,7 +173,6 @@ describe("bundled beginner music", () => {
     );
     expect(song).toBeDefined();
     expect(song.title).toBe("安静 · 周杰伦");
-    expect(collectionForSong(song.id).id).toBe("pops");
     expect(song.lesson).toBeUndefined();
     expect(song.source!.composer).toMatch(/周杰伦|Jay Chou/);
     expect(song.source!.description.length).toBeGreaterThan(0);
@@ -463,11 +442,6 @@ function printedBars(song: Song, hand: "left" | "right") {
 }
 
 describe("George Bear’s Classes book pieces", () => {
-  const classSongs = () =>
-    builtInSongs().filter(
-      (song) => collectionForSong(song.id).id === "classes",
-    );
-
   it("lists the pieces in Recital Book 3 order, after Dancing Raindrops", () => {
     // Pages 21–31 are printed in the photos; the five story pieces before
     // page 21 follow their facing pages and the story.
@@ -492,9 +466,18 @@ describe("George Bear’s Classes book pieces", () => {
     expect(songs.map((song) => song.id).slice(1, 13)).toEqual(
       georgeClassesOrder,
     );
-    expect(songsInCollection(songs, "classes").map((song) => song.id)).toEqual(
-      georgeClassesOrder,
-    );
+    expect(classSongs().map((song) => song.id)).toEqual(georgeClassesOrder);
+  });
+
+  it("puts every class song in Recital Book 3 and none yet in Lesson Book 3", () => {
+    expect(books.map((book) => book.title)).toEqual([
+      "Music Recital Book 3",
+      "Music Lesson Book 3",
+    ]);
+    const songs = classSongs();
+    expect(songsInBook(songs, "recital-3")).toEqual(songs);
+    expect(songsInBook(songs, "lesson-3")).toEqual([]);
+    expect(bookForSong("not-in-a-book").id).toBe("recital-3");
   });
 
   it("registers each piece once, with full bars and its printed hand position", () => {
@@ -506,7 +489,6 @@ describe("George Bear’s Classes book pieces", () => {
     ]);
     for (const piece of classPieces) {
       expect(piece.id).toMatch(/^pawpal-[a-z-]+-v1$/);
-      expect(isBuiltInSong(piece.id)).toBe(true);
       for (const bar of piece.bars)
         for (const steps of [bar.left, bar.right])
           if (steps)

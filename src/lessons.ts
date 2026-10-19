@@ -1,7 +1,7 @@
 import { tempoConverter, type Finger, type Note, type Song } from "./song";
 import { starterPieces, type StarterPiece } from "./starterPieces";
 import { popsPieces } from "./popsPieces";
-import { midiPieces, midiSongs } from "./midiPieces";
+import { midiSongs } from "./midiPieces";
 import { classPieces, classSong, georgeClassesOrder } from "./classPieces";
 
 const rightFingers: Record<number, Finger> = {
@@ -18,13 +18,6 @@ const leftFingers: Record<number, Finger> = {
   53: 2,
   55: 1,
 };
-const builtInIds = new Set([
-  "cadence-ode-to-joy-v1",
-  ...georgeClassesOrder,
-  ...starterPieces.map((piece) => piece.id),
-  ...popsPieces.map((piece) => piece.id),
-  ...midiPieces.map((piece) => piece.id),
-]);
 
 function makeLesson(lesson: StarterPiece): Song {
   const ppq = 480;
@@ -246,6 +239,7 @@ export function builtInSongs(): Song[] {
   ];
 }
 
-export function isBuiltInSong(id: string): boolean {
-  return builtInIds.has(id);
+/** The studio's library: George Bear’s Classes, in book order. */
+export function classSongs(): Song[] {
+  return georgeClassesOrder.map(classLesson);
 }

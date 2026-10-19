@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
 import type { Song } from "../src/song";
-import { builtInSongs } from "../src/lessons";
+import { builtInSongs, classSongs } from "../src/lessons";
 
 const env = vi.hoisted(() => ({
   now: 100,
@@ -771,19 +771,21 @@ describe("practice studio integration", () => {
   });
 
   it("starts on the saved song, or the first one once it leaves the library", () => {
-    const songs = builtInSongs();
+    const songs = classSongs();
+    expect(create().songs.map((song) => song.id)).toEqual(
+      songs.map((song) => song.id),
+    );
     env.values.set("settings", { selected: songs[1].id });
     expect(create().song.id).toBe(songs[1].id);
     env.values.set("settings", { selected: "gone-from-library" });
     expect(create().song.id).toBe(songs[0].id);
   });
 
-  it("restores the full An Jing arrangement and practices each suggested hand independently", async () => {
+  it("loads the full An Jing arrangement and practices each suggested hand independently", async () => {
     const arrangement = builtInSongs().find(
       (piece) => piece.id === "bearpaws-an-jing-v1",
     )!;
-    env.values.set("settings", { selected: arrangement.id });
-    const studio = create();
+    const studio = create(arrangement);
 
     expect(studio.song.id).toBe(arrangement.id);
     expect(studio.song.source).toEqual(arrangement.source);

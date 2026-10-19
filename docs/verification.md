@@ -24,7 +24,7 @@ seeking geometry and label bounds; hand-guide preferences; fullscreen fallback,
 Escape, focus restoration, tab trapping and audio-before-fullscreen ordering.
 Imported 3/4, 6/8 and changing meters are verified through parsing, score layout,
 displayed signatures, keyboard seeking and the waterfall beat grid.
-The library checks cover collection search and selection, native keyboard
+The library checks cover book sections, search and selection, native keyboard
 activation, score-slider shortcuts, loop preference persistence, all 26 MIDI
 exports and catalog entries, and exact ZIP contents with CRC verification.
 ZIP bytes remain identical when source timestamps, permissions or file creation

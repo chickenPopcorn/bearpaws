@@ -8,7 +8,7 @@ import {
 import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
 import type { PedalSpan, Song, Hand } from "./song";
-import { builtInSongs } from "./lessons";
+import { classSongs } from "./lessons";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
 import { settings, write, progress, type Progress } from "./storage";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
@@ -27,7 +27,8 @@ export class Studio {
   // Where the current loop pass began. Earlier presses in this scoring
   // session belong to the previous pass.
   private passEpoch = -Infinity;
-  songs = builtInSongs();
+  /** George Bear’s Classes, in book order. */
+  songs = classSongs();
   // Start on the saved song, if it is still in the library.
   song =
     this.songs.find((song) => song.id === this.savedSelection) ?? this.songs[0];
