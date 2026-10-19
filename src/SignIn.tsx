@@ -4,10 +4,13 @@ import { useState } from "react";
 export function OpeningStudio({
   error,
   message = "Opening your studio…",
+  action = { label: "Try again", onClick: () => window.location.reload() },
   onSignOut,
 }: {
   error: string;
   message?: string;
+  /** The way forward offered with an error: by default, a reload. */
+  action?: { label: string; onClick: () => void };
   /** Offered with an error, so a shared device can still be signed out. */
   onSignOut?: () => void;
 }) {
@@ -30,9 +33,9 @@ export function OpeningStudio({
             <button
               type="button"
               className="signin-google"
-              onClick={() => window.location.reload()}
+              onClick={action.onClick}
             >
-              Try again
+              {action.label}
             </button>
             {onSignOut && (
               <button type="button" className="text-button" onClick={onSignOut}>

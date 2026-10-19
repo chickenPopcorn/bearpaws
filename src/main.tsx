@@ -23,7 +23,8 @@ import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { bookForSong, songsInBook } from "./books";
-import { BrowserStorageError, CloudSync } from "./cloud";
+import { BrowserStorageError, CloudSync, UnsentChangesError } from "./cloud";
+import { StudioClaim } from "./studioClaim";
 import { OpeningStudio, SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
@@ -946,6 +947,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
 type Gate =
   | { status: "loading" }
   | { status: "signing-out" }
+  | { status: "elsewhere" }
   | { status: "failed"; error: string }
   | { status: "signed-out"; error: string }
   | { status: "ready"; userId: string; email: string };
@@ -976,9 +978,22 @@ let currentUser: string | null = null;
 let readyGate: Extract<Gate, { status: "ready" }> | null = null;
 /** The sign-in still loading, so a newer auth event can stop it. */
 let loading: CloudSync | null = null;
+let currentEmail = "";
+/** This tab's claim on the studio, which only one tab runs at a time. */
+const claim = new StudioClaim(() => {
+  // Another tab took the studio over. The final save joins the upload queue
+  // in browser storage, which that tab sends.
+  loading?.stop();
+  loading = null;
+  if (cloud) {
+    studio.destroy();
+    cloud.stop();
+    cloud = null;
+  }
+  if (currentUser) setGate({ status: "elsewhere" });
+});
 
 async function openSession(userId: string, email: string) {
-  const client = supabase!;
   if (userId === currentUser) return;
   currentUser = userId;
   loading?.stop();
@@ -992,9 +1007,30 @@ async function openSession(userId: string, email: string) {
     cloud = null;
   }
   if (!userId) {
+    claim.give();
     setGate({ status: "signed-out", error: "" });
     return;
   }
+  currentEmail = email;
+  if (!(await claim.claim())) {
+    if (currentUser === userId) setGate({ status: "elsewhere" });
+    return;
+  }
+  if (currentUser === userId) await openStudio(userId, email);
+}
+
+/** Take the studio over from another tab. */
+async function useHere() {
+  const userId = currentUser;
+  if (!userId) return;
+  await claim.claim(true);
+  if (currentUser === userId && !cloud && !loading)
+    await openStudio(userId, currentEmail);
+}
+
+/** Load the account and the library, then open the studio. */
+async function openStudio(userId: string, email: string) {
+  const client = supabase!;
   setGate({ status: "loading" });
   const sync = new CloudSync(client, userId);
   loading = sync;
@@ -1028,6 +1064,26 @@ async function openSession(userId: string, email: string) {
   setGate(readyGate);
 }
 
+/**
+ * Sign `sync` out. If some practice has not reached the account, ask before
+ * dropping it; throws, still signed in, if the answer is no or sign-out fails.
+ */
+async function endSession(sync: CloudSync) {
+  try {
+    await sync.signOut();
+  } catch (error) {
+    if (
+      !(error instanceof UnsentChangesError) ||
+      !window.confirm(
+        `${error.message} Sign out anyway? It will be lost on this browser.`,
+      )
+    )
+      throw error;
+    await sync.signOut({ force: true });
+  }
+  claim.give();
+}
+
 async function signOut() {
   if (!cloud) return;
   const sync = cloud;
@@ -1036,12 +1092,15 @@ async function signOut() {
   studio.destroy();
   setGate({ status: "signing-out" });
   try {
-    await sync.signOut();
-  } catch {
-    // Supabase still holds the session: reopen the studio, and say so,
-    // unless another tab has since opened a different session here.
+    await endSession(sync);
+  } catch (error) {
+    // Still signed in: reopen the studio, and say why, unless another tab
+    // has since opened a different session here.
     if (cloud !== sync) return;
-    studio.notice = "Sign-out failed. Check your connection and try again.";
+    studio.notice =
+      error instanceof UnsentChangesError
+        ? "Still signed in. Your practice keeps trying to reach your account."
+        : "Sign-out failed. Check your connection and try again.";
     if (readyGate) setGate(readyGate);
     return;
   }
@@ -1060,11 +1119,11 @@ async function leaveFailedSignIn() {
   const failed = gate;
   setGate({ status: "signing-out" });
   try {
-    await sync.signOut();
-  } catch {
+    await endSession(sync);
+  } catch (error) {
     if (loading !== sync) return;
     setGate(
-      failed.status === "failed"
+      failed.status === "failed" && !(error instanceof UnsentChangesError)
         ? {
             ...failed,
             error: "Sign-out failed. Check your connection and try again.",
@@ -1109,6 +1168,13 @@ function Root() {
   if (current.status === "loading") return <OpeningStudio error="" />;
   if (current.status === "signing-out")
     return <OpeningStudio error="" message="Signing out…" />;
+  if (current.status === "elsewhere")
+    return (
+      <OpeningStudio
+        error="Paw Pal is open in another tab. Practice there, or move it here."
+        action={{ label: "Use here", onClick: () => void useHere() }}
+      />
+    );
   if (current.status === "failed")
     return (
       <OpeningStudio

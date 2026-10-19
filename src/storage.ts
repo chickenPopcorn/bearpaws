@@ -57,18 +57,6 @@ export function write(key: string, value: unknown) {
   }
 }
 /** Throws when browser storage is blocked. */
-/** The stored keys that start with `prefix`, as read() and write() name them. */
-export function storedKeys(prefix: string): string[] {
-  const keys: string[] = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(storageKey(prefix)))
-        keys.push(key.slice(storageKey("").length));
-    }
-  } catch {}
-  return keys;
-}
 /** Remove a stored value. Throws when browser storage is blocked. */
 export function remove(key: string) {
   localStorage.removeItem(storageKey(key));
@@ -152,20 +140,15 @@ export function progress(id: string, duration: number): Progress {
   };
 }
 /**
- * Forget the signed-in account's settings and progress on this browser, such
- * as at sign-out. Other accounts' unsent changes (`stash:<user id>`) stay,
- * kept for their owners.
+ * Forget the signed-in account's settings, progress and upload queue on this
+ * browser, such as at sign-out.
  */
 export function clearAccountData() {
   try {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (
-        key?.startsWith(storageKey("")) &&
-        !key.startsWith(storageKey("stash:"))
-      )
-        keys.push(key);
+      if (key?.startsWith(storageKey(""))) keys.push(key);
     }
     for (const key of keys) localStorage.removeItem(key);
   } catch {}
