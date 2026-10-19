@@ -5,6 +5,8 @@ const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 const GOAL_MINUTES = DAILY_GOAL_SECONDS / 60;
 /** How long today's star celebrates once the goal is met. */
 const CELEBRATE_MS = 2400;
+/** How often an open page checks whether the local day has changed. */
+const DAY_CHECK_MS = 60 * 1000;
 const minutes = (seconds: number) => Math.floor(seconds / 60);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -33,6 +35,25 @@ function Ring({ seconds }: { seconds: number }) {
       />
     </svg>
   );
+}
+
+/**
+ * The local day that `today` reports. The component renders again when the
+ * day changes, even while nothing else does, such as across midnight with
+ * playback paused or the tab hidden.
+ */
+export function useLocalDay(today: () => string) {
+  const [, setDay] = useState(today);
+  useEffect(() => {
+    const check = () => setDay(today());
+    const timer = setInterval(check, DAY_CHECK_MS);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [today]);
+  return today();
 }
 
 /**

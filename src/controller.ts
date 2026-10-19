@@ -578,7 +578,9 @@ export class Studio {
     const edge = this.input.message(data);
     if (edge) {
       this.lastVelocity = edge.velocity;
-      this.lastKeyAt = now;
+      // Only presses during playback that counts keep practice time going;
+      // one made while paused or in Listen would credit idle time after.
+      if (wasPlaying && this.settings.mode !== "listen") this.lastKeyAt = now;
       // A Rhythm press within the timing window before a loop wrap, delivered
       // after it, is scored in the new pass's time. There it can be early for
       // the pass's first notes or late for the previous pass's last ones.

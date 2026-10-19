@@ -29,12 +29,13 @@ import { BrowserStorageError, CloudSync } from "./cloud";
 import { OpeningStudio, SignIn } from "./SignIn";
 import { signInWithGoogle, supabase } from "./supabase";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
-import { PracticeCalendar } from "./PracticeCalendar";
+import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
 import "./style.css";
 // One studio per signed-in session, created once the account's songs and
 // progress are on this browser. App only renders while it exists.
 let studio!: Studio;
 let cloud: CloudSync | null = null;
+const practiceDay = () => studio.practiceLog.today();
 /** Storage serves `?download=` as an attachment, which cross-origin links need. */
 const downloadUrl = (midi: string, id: string) => {
   const url = new URL(midi);
@@ -550,7 +551,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   const misses = p.recentMisses,
     stats = p.stats,
     recent = p.feedback.at(-1);
-  const today = studio.practiceLog.today();
+  const today = useLocalDay(practiceDay);
   // Totals change at most once a second, when a day gains a whole second.
   const practiceRevision = studio.practiceLog.revision;
   const practiceTotals = useMemo(

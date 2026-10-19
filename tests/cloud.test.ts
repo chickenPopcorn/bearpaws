@@ -516,6 +516,26 @@ describe("account sync", () => {
     expect(clearAccountData).not.toHaveBeenCalled();
   });
 
+  it("signs out of a failed sign-in without losing an unsent practice session", async () => {
+    const b = backend();
+    const session = {
+      id: "s1",
+      day: "2026-10-18",
+      startedAt: "2026-10-18T09:00:00.000Z",
+      seconds: 40,
+      songs: { song: 40 },
+    };
+    write("owner", USER);
+    write("practice", [session]);
+    write("unsynced", { practice: ["s1"] });
+    b.failReads = true;
+    const sync = new CloudSync(client(b), USER);
+    await expect(sync.pull()).rejects.toBeTruthy();
+    await sync.signOut();
+    expect(clearAccountData).not.toHaveBeenCalled();
+    expect(read("practice", [])).toEqual([session]);
+  });
+
   it("holds a new sync's uploads until the replaced sync's request settles", async () => {
     const b = backend();
     const old = new CloudSync(client(b), USER);

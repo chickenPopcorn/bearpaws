@@ -501,7 +501,8 @@ export class CloudSync implements SyncHooks {
       this.pending ||
       !!marker.settings ||
       !!marker.progress?.length ||
-      !!marker.deleted?.length;
+      !!marker.deleted?.length ||
+      !!marker.practice?.length;
     // What this browser held before its first successful pull is kept too,
     // for that sign-in to adopt.
     const owned = read<string | null>("owner", null) === this.userId;

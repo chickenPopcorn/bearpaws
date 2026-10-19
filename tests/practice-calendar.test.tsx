@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PracticeCalendar } from "../src/PracticeCalendar";
+import { PracticeCalendar, useLocalDay } from "../src/PracticeCalendar";
 import { DAILY_GOAL_SECONDS } from "../src/practiceLog";
 
 const goal = DAILY_GOAL_SECONDS;
@@ -92,5 +92,27 @@ describe("practice calendar", () => {
     root = createRoot(container);
     await render([["2026-10-18", goal]]);
     expect(container.querySelector(".celebrate")).toBeNull();
+  });
+});
+
+describe("local day", () => {
+  it("renders the new day after midnight while nothing else changes", async () => {
+    vi.useFakeTimers();
+    let current = "2026-10-18";
+    const today = () => current;
+    function Day() {
+      return <span>{useLocalDay(today)}</span>;
+    }
+    await act(async () => root.render(<Day />));
+    expect(container.textContent).toBe("2026-10-18");
+    current = "2026-10-19";
+    await act(async () => vi.advanceTimersByTime(60 * 1000));
+    expect(container.textContent).toBe("2026-10-19");
+    // Returning to a hidden tab checks at once.
+    current = "2026-10-20";
+    await act(async () =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
+    expect(container.textContent).toBe("2026-10-20");
   });
 });

@@ -1577,6 +1577,24 @@ describe("practice time", () => {
     expect(today(studio)).toBe(2);
   });
 
+  it("ignores key presses made while paused or in Listen", async () => {
+    const studio = create(held());
+    midi(studio, [0x90, 72, 80]);
+    await studio.play();
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(0);
+    studio.pause();
+
+    studio.mode("listen");
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    studio.pause();
+    studio.mode("wait");
+    await studio.play();
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(0);
+  });
+
   it("reports practice sessions to the account as they grow", async () => {
     const sync = {
       settings: vi.fn(),
