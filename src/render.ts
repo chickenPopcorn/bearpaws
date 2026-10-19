@@ -50,25 +50,31 @@ export function keyLayout(min: number, max: number) {
     };
   });
 }
-/** The keys to show: whole octaves around the notes, and the duet's with `duet`. */
+/**
+ * The keys to show: whole octaves around the notes, at least C3 to C6. With
+ * `duet`, the keys reach just past the student's and the duet's notes to a
+ * white key, since the duet's span already squeezes them and a whole octave
+ * for one bass note would leave most of it empty.
+ */
 export function range(song: Song, duet = false): [number, number] {
-  const cache = duet && song.duet ? duetRanges : ranges;
+  const withDuet = duet && !!song.duet?.notes.length;
+  const cache = withDuet ? duetRanges : ranges;
   const cached = cache.get(song);
   if (cached) return cached;
-  let lo = 48,
-    hi = 84;
-  for (const notes of [
-    song.notes,
-    cache === duetRanges ? song.duet!.notes : [],
-  ])
+  let lo = withDuet ? 127 : 48,
+    hi = withDuet ? 0 : 84;
+  for (const notes of [song.notes, withDuet ? song.duet!.notes : []])
     for (const note of notes) {
       lo = Math.min(lo, note.pitch);
       hi = Math.max(hi, note.pitch);
     }
-  const result: [number, number] = [
-    Math.max(0, Math.floor(lo / 12) * 12),
-    Math.min(127, Math.ceil(hi / 12) * 12),
-  ];
+  // A black key's neighbours are white, and C0 and G9 are white.
+  const result: [number, number] = withDuet
+    ? [black(lo) ? lo - 1 : lo, black(hi) ? hi + 1 : hi]
+    : [
+        Math.max(0, Math.floor(lo / 12) * 12),
+        Math.min(127, Math.ceil(hi / 12) * 12),
+      ];
   cache.set(song, result);
   return result;
 }

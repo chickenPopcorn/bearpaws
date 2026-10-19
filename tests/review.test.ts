@@ -203,7 +203,7 @@ describe("teacher duet in the waterfall", () => {
     ]);
     expect(DUET_ALPHA).toBe(0.25);
     // C2 is now on the keyboard, so the teacher's bass is visible.
-    expect(range(fixture, true)).toEqual([36, 84]);
+    expect(range(fixture, true)).toEqual([36, 72]);
   });
 
   it("draws the duet from what is left of the shared budget, once per outline", () => {
