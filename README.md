@@ -1,6 +1,6 @@
 # Paw Pal · MIDI piano practice
 
-A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, browser storage, and Google sign-in through Supabase. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
+A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, browser storage, and Supabase accounts with Google sign-in. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
 
 ## Run locally
 
@@ -141,13 +141,18 @@ no pedal, so they use only release harmonics and key noise. See the
 [adaptation notes](public/audio/accurate-salamander/LICENSE.md) for how each
 voice follows the SFZ preset.
 
-## Sign-in, local data and file support
+## Accounts, data and file support
 
-Sign-in with Google is required to open the studio. Supabase (project `pawpal`) handles the sign-in and returns to the page it started from; it only returns to addresses in the project's redirect allow list (`https://piano.pollos.us/**` and localhost). **Sign out** in the header signs out this browser only; other devices stay signed in. Sign-in does not sync anything yet: settings and progress stay on this browser, shared by whoever signs in here.
+Sign-in with Google is required to open the studio. Supabase (project `pawpal`) handles the sign-in and returns to the page it started from; it only returns to addresses in the project's redirect allow list (`https://piano.pollos.us/**` and localhost). **Sign out** in the header signs out this browser only; other devices stay signed in.
 
-Settings and per-song position, track assignments, passage, number of starts, and best matched-note proportion are stored in localStorage. Best proportion uses all eligible notes in the current passage, including upcoming notes. The app has no MIDI import. Songs imported by earlier versions stay in this browser's IndexedDB, untouched; the app no longer reads them. Storage failures show a message and allow session-only use. Browser storage is specific to the origin/browser/profile; clearing it removes your progress.
+Supabase holds each user's settings and practice progress, and row-level security limits every row to the user who owns it:
 
-The songs come from the shared library bucket (see above), the same for everyone and read-only. No MIDI input is uploaded. There is no analytics, billing, cloud sync, Bluetooth integration, sheet-music recognition, or teacher dashboard.
+- `settings`: one row per user, the studio settings.
+- `progress`: per song, the position, track assignments, passage, number of starts, and best matched-note proportion. Each account keeps at most 200 songs' progress, 16 KiB each (`progress_quota`), which a direct Data API caller cannot exceed either.
+
+The account is the record. At sign-in the browser takes the account's settings and progress (the first account on a browser also takes progress saved there before sign-in, where the account has none). Changes upload about two seconds after they happen, one upload at a time; a failed upload stays queued in localStorage, survives a reload and is retried, and a request that takes over 30 seconds is aborted. The server merges progress uploads (`progress_merge` trigger): the best proportion and the number of starts only grow, and position, passage and hands follow whichever copy was saved later, so a late upload from one device never undoes practice from another. Only one tab runs the studio at a time; another tab offers to move it there. Signing out uploads what is waiting first and asks before dropping anything that could not upload; it then clears this browser's copy of the account's settings and progress (the calendar's practice history stays on the browser). Signing in with a different account clears the previous one's copy, including anything it had not uploaded. Best proportion uses all eligible notes in the current passage, including upcoming notes.
+
+The songs come from the shared library bucket (see above), the same for everyone and read-only. The app has no MIDI import. Songs imported by earlier versions stay in this browser's IndexedDB, untouched; the app no longer reads them. MIDI input from your piano is never uploaded. There is no analytics, billing, Bluetooth integration, sheet-music recognition, or teacher dashboard.
 
 The app needs two public values: the Supabase project URL and its publishable key (Supabase dashboard → Project Settings → API Keys). For local development, put them in `.env.local`, which git ignores:
 
@@ -156,7 +161,7 @@ VITE_SUPABASE_URL=https://ochjekqgxkojrilgsqud.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-Deployment reads the same two names from the repository's GitHub Actions variables. The publishable key only allows what row-level security allows; never use the secret key here. The bucket's schema is in `supabase/migrations/`.
+Deployment reads the same two names from the repository's GitHub Actions variables. The publishable key only allows what row-level security allows; never use the secret key here. The schema, including the bucket, is in `supabase/migrations/`.
 
 After a refresh, the page as it was left shows again at once, but only while this browser still holds an unexpired sign-in for the same account (`index.html`, `src/reloadSnapshot.ts`).
 
@@ -175,6 +180,7 @@ The practice calendar at the top of the sidebar shows this month: a star on each
 - `src/storage.ts`: validated settings and progress.
 - `src/library.ts`, `scripts/library.mjs`: the shared song library and its pull/push script.
 - `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in.
+- `src/cloud.ts`, `src/studioClaim.ts`: account sync, one studio tab at a time.
 - `src/main.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.

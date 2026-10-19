@@ -108,6 +108,22 @@ export function remove(key: string) {
 export function removeProgress(id: string) {
   localStorage.removeItem(storageKey(`progress:${id}`));
 }
+/** Every song's saved progress on this browser, unvalidated, for account sync. */
+export function localProgress() {
+  const saved: { id: string; progress: Partial<Progress> }[] = [];
+  try {
+    const prefix = storageKey("progress:");
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(prefix)) continue;
+      const id = key.slice(prefix.length);
+      const progress = read<Partial<Progress> | null>(`progress:${id}`, null);
+      if (progress && typeof progress === "object")
+        saved.push({ id, progress });
+    }
+  } catch {}
+  return saved;
+}
 export function settings(): Settings {
   const saved = read<Partial<Settings>>("settings", {}),
     s = { ...defaults, ...(saved && typeof saved === "object" ? saved : {}) };
@@ -174,4 +190,27 @@ export function progress(id: string, duration: number): Progress {
         ? loop
         : null,
   };
+}
+/**
+ * Forget the signed-in account's settings, progress and upload queue on this
+ * browser, such as at sign-out.
+ */
+export function clearAccountData() {
+  // Only what the account holds. Practice sessions belong to this browser
+  // (the account does not keep them), so the calendar keeps its history.
+  const account = (key: string) =>
+    ["settings", "owner", "pending"].includes(key) ||
+    key.startsWith("progress:");
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key?.startsWith(storageKey("")) &&
+        account(key.slice(storageKey("").length))
+      )
+        keys.push(key);
+    }
+    for (const key of keys) localStorage.removeItem(key);
+  } catch {}
 }

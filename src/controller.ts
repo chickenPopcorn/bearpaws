@@ -17,8 +17,12 @@ import {
   LEARNER_NAME_MAX,
   type Progress,
 } from "./storage";
+import type { SyncHooks } from "./cloud";
 import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
+/** A progress record's content, leaving out when it was saved. */
+const unstamped = ({ updated: _updated, ...rest }: Progress) =>
+  JSON.stringify(rest);
 const NO_PEDALS: readonly PedalSpan[] = [];
 const NO_NOTES: Note[] = [];
 export class Studio {
@@ -52,6 +56,8 @@ export class Studio {
   revision = 0;
   listeners = new Set<() => void>();
   lastSave = 0;
+  /** The current song's record as last written, without its stamp. */
+  private savedProgress = "";
   /** Playing time per day, for the practice calendar. */
   practiceLog = new PracticeLog();
   /** When a key was last pressed, on the audio clock. */
@@ -73,8 +79,14 @@ export class Studio {
   loopStart = 0;
   loopEnd: number;
   timer: ReturnType<typeof setInterval> | null = null;
-  /** `library` holds the shared songs (see src/library.ts). */
-  constructor(library: readonly Song[]) {
+  /**
+   * `library` holds the shared songs (see src/library.ts). `sync` copies
+   * saved changes to the signed-in account.
+   */
+  constructor(
+    library: readonly Song[],
+    private sync?: SyncHooks,
+  ) {
     if (!library.length) throw new Error("The song library is empty.");
     this.songs = [...library];
     // Start on the saved song, if it is still in the library.
@@ -230,24 +242,35 @@ export class Studio {
     if (!write("settings", this.settings))
       this.storageNotice =
         "Browser storage is full or blocked. Changes will last for this session.";
+    this.sync?.settings(this.settings);
   }
-  save() {
+  /** `loaded`: this save is made as the song opens, before any practice. */
+  save(loaded = false) {
     // Practice time grows on its own, so it is saved even when progress has
     // not changed.
     if (!this.practiceLog.commit())
       this.storageNotice = "Practice time could not be saved in this browser.";
-    this.progress = {
+    const next: Progress = {
       ...this.progress,
       position: this.position,
-      updated: new Date().toISOString(),
       assignments: Object.fromEntries(
         this.song.tracks.map((t) => [t.id, t.hand]),
       ),
       loopEnabled: this.loopEnabled,
       loop: [this.loopStart, this.loopEnd],
     };
+    // Only a change gets a new stamp and is written: the account keeps the
+    // position of the later save, so re-saving what was loaded must not look
+    // newer than practice saved since on another device.
+    if (unstamped(next) === this.savedProgress) {
+      if (loaded) this.sync?.progress(this.song.id, this.progress, true);
+      return;
+    }
+    this.progress = { ...next, updated: new Date().toISOString() };
+    this.savedProgress = unstamped(next);
     if (!write(`progress:${this.song.id}`, this.progress))
       this.storageNotice = "Progress could not be saved in this browser.";
+    this.sync?.progress(this.song.id, this.progress, loaded);
   }
   load(song: Song) {
     this.cancelPlaybackPreparation();
@@ -257,6 +280,7 @@ export class Studio {
     this.settings.selected = song.id;
     this.persist();
     this.progress = progress(song.id, song.duration);
+    this.savedProgress = this.progress.updated ? unstamped(this.progress) : "";
     for (const t of this.written.tracks) {
       const hand = this.progress.assignments[t.id];
       if (["left", "right", "off"].includes(hand)) t.hand = hand as Hand;
@@ -276,6 +300,9 @@ export class Studio {
     this.refreshSelection();
     this.restartScoring();
     this.notice = "";
+    // The account's starting point for this song, so closing it untouched
+    // uploads nothing.
+    this.save(true);
     this.emit();
   }
   rebuild() {
