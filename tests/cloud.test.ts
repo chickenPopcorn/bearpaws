@@ -168,7 +168,7 @@ const marker = () =>
   read<{
     settings?: string;
     progress?: Record<string, string>;
-    deleted?: string[];
+    deleted?: Record<string, string>;
     practice?: Record<string, string>;
   }>("unsynced", {});
 const unsynced = () => {
@@ -176,7 +176,7 @@ const unsynced = () => {
   return {
     settings: !!stored.settings,
     progress: Object.keys(stored.progress ?? {}),
-    deleted: stored.deleted ?? [],
+    deleted: Object.keys(stored.deleted ?? {}),
     practice: Object.keys(stored.practice ?? {}),
   };
 };
@@ -385,6 +385,37 @@ describe("account sync", () => {
     expect(marker().progress).toEqual({});
     tabA.stop();
     tabB.stop();
+  });
+
+  it("lets a save in one tab supersede an earlier removal in another", async () => {
+    const b = backend();
+    write("owner", USER);
+    const tabA = new CloudSync(client(b), USER);
+    const tabB = new CloudSync(client(b), USER);
+    b.failWrites = true;
+    vi.setSystemTime(new Date("2026-10-19T01:00:00.000Z"));
+    tabA.forgetProgress("song");
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(unsynced().deleted).toEqual(["song"]);
+    // Tab B still had the song open, and saves it afterwards.
+    const later = "2026-10-19T01:00:05.000Z";
+    write("progress:song", { best: 6, updated: later });
+    tabB.progress("song", { best: 6, updated: later } as never);
+    expect(unsynced()).toMatchObject({ progress: ["song"], deleted: [] });
+    tabA.stop();
+    tabB.stop();
+    // After a reload, only the save is sent: the one delete is tab A's
+    // earlier failed attempt.
+    b.failWrites = false;
+    await new CloudSync(client(b), USER).pull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.calls.filter((call) => call.startsWith("delete"))).toEqual([
+      "delete progress song",
+    ]);
+    expect(b.calls.at(-1)).toBe("upsert progress");
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "song", data: { best: 6, updated: later } },
+    ]);
   });
 
   it("keeps another tab's unconfirmed changes in the shared marker", async () => {

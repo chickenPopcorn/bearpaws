@@ -96,11 +96,12 @@ interface Unsynced {
   settings?: string;
   /** Song id to the `updated` stamp of its unconfirmed progress. */
   progress: Record<string, string>;
-  deleted: string[];
+  /** Song id to when its progress was removed. A song is in one list only. */
+  deleted: Record<string, string>;
   /** Practice session id to the version of its unconfirmed copy. */
   practice: Record<string, string>;
 }
-const EMPTY_UNSYNCED: Unsynced = { progress: {}, deleted: [], practice: {} };
+const EMPTY_UNSYNCED: Unsynced = { progress: {}, deleted: {}, practice: {} };
 
 /** A practice_sessions row as the Data API returns it. */
 interface PracticeRow {
@@ -145,7 +146,11 @@ function readUnsynced(): Unsynced {
       : progress && typeof progress === "object"
         ? (progress as Record<string, string>)
         : {},
-    deleted: Array.isArray(stored.deleted) ? stored.deleted.map(String) : [],
+    deleted: Array.isArray(stored.deleted)
+      ? unversioned(stored.deleted)
+      : stored.deleted && typeof stored.deleted === "object"
+        ? (stored.deleted as Record<string, string>)
+        : {},
     practice: Array.isArray(practice)
       ? unversioned(practice)
       : practice && typeof practice === "object"
@@ -174,7 +179,8 @@ export interface SyncHooks {
 export class CloudSync implements SyncHooks {
   private pendingSettings: Settings | null = null;
   private pendingProgress = new Map<string, Progress>();
-  private pendingDeletes = new Set<string>();
+  /** Song id to when its progress was removed. */
+  private pendingDeletes = new Map<string, string>();
   private pendingPractice = new Map<string, PracticeSession>();
   /** What the upload in progress carries, until the account confirms it. */
   private inFlight: Unsynced | null = null;
@@ -254,8 +260,11 @@ export class CloudSync implements SyncHooks {
     const remote = new Map(rows.map((row) => [row.song_id, row.data]));
     for (const [id, data] of remote) this.syncedProgress.set(id, canon(data));
     const changed = new Set(Object.keys(unsynced.progress));
-    for (const id of unsynced.deleted) {
-      this.pendingDeletes.add(id);
+    for (const [id, at] of Object.entries(unsynced.deleted)) {
+      // A marker from an earlier build can list a song both ways; the save
+      // came after the removal, or the progress would be gone.
+      if (id in unsynced.progress) continue;
+      this.pendingDeletes.set(id, at);
       remote.delete(id);
     }
     for (const { id, progress: local } of localProgress()) {
@@ -368,7 +377,7 @@ export class CloudSync implements SyncHooks {
     // Deletes join the upload queue, so an upload already under way cannot
     // land after the delete and bring the progress back.
     this.pendingProgress.delete(songId);
-    this.pendingDeletes.add(songId);
+    this.pendingDeletes.set(songId, new Date().toISOString());
     this.queued();
   }
 
@@ -420,44 +429,46 @@ export class CloudSync implements SyncHooks {
         (stored.settings !== confirmed?.settings
           ? stored.settings
           : undefined));
-    // Of two saves of a song or session, the later one is the one to protect.
-    const versions = (
-      field: "progress" | "practice",
-      pending: Iterable<[string, string]>,
+    // Of two saves of a song, or a save and a removal, the later one is the
+    // one to keep: a song is either saved or removed, never both.
+    const progress: Record<string, string> = {};
+    const deleted: Record<string, string> = {};
+    for (const [id, version] of Object.entries(stored.progress))
+      if (confirmed?.progress[id] !== version) progress[id] = version;
+    for (const [id, at] of Object.entries(stored.deleted))
+      if (confirmed?.deleted[id] !== at) deleted[id] = at;
+    const keep = (
+      into: Record<string, string>,
+      id: string,
+      version: string,
     ) => {
-      const kept: Record<string, string> = {};
-      for (const [id, version] of Object.entries(stored[field]))
-        if (confirmed?.[field][id] !== version) kept[id] = version;
-      for (const [id, version] of [
-        ...Object.entries(flight?.[field] ?? {}),
-        ...pending,
-      ])
-        if (!(id in kept) || version > kept[id]) kept[id] = version;
-      return kept;
+      if (!(id in into) || version > into[id]) into[id] = version;
     };
+    for (const [id, version] of Object.entries(flight?.progress ?? {}))
+      keep(progress, id, version);
+    for (const [id, at] of Object.entries(flight?.deleted ?? {}))
+      keep(deleted, id, at);
+    for (const [id, data] of this.pendingProgress)
+      keep(progress, id, progressVersion(data));
+    for (const [id, at] of this.pendingDeletes) keep(deleted, id, at);
+    // Sessions only grow, so the larger copy is the later one.
+    const practice: Record<string, string> = {};
+    for (const [id, version] of Object.entries(stored.practice))
+      if (confirmed?.practice[id] !== version) practice[id] = version;
+    for (const [id, version] of Object.entries(flight?.practice ?? {}))
+      keep(practice, id, version);
+    for (const [id, session] of this.pendingPractice)
+      keep(practice, id, practiceVersion(session));
+    for (const id of Object.keys(deleted))
+      if (id in progress) {
+        if (deleted[id] > progress[id]) delete progress[id];
+        else delete deleted[id];
+      }
     return write("unsynced", {
       settings,
-      progress: versions(
-        "progress",
-        [...this.pendingProgress].map(([id, data]) => [
-          id,
-          progressVersion(data),
-        ]),
-      ),
-      practice: versions(
-        "practice",
-        [...this.pendingPractice].map(([id, session]) => [
-          id,
-          practiceVersion(session),
-        ]),
-      ),
-      deleted: [
-        ...new Set([
-          ...stored.deleted.filter((id) => !confirmed?.deleted.includes(id)),
-          ...this.pendingDeletes,
-          ...(flight?.deleted ?? []),
-        ]),
-      ],
+      progress,
+      deleted,
+      practice,
     } satisfies Unsynced);
   }
 
@@ -491,19 +502,20 @@ export class CloudSync implements SyncHooks {
       progress = [...this.pendingProgress],
       deleted = [...this.pendingDeletes],
       practice = [...this.pendingPractice.values()];
+    const deletedIds = deleted.map(([id]) => id);
+    const practiceVersions = Object.fromEntries(
+      practice.map((session) => [session.id, practiceVersion(session)]),
+    );
     this.pendingSettings = null;
     this.pendingProgress.clear();
     this.pendingDeletes.clear();
     this.pendingPractice.clear();
-    const practiceVersions = Object.fromEntries(
-      practice.map((session) => [session.id, practiceVersion(session)]),
-    );
     this.inFlight = {
       settings: settings ? settingsVersion(settings) : undefined,
       progress: Object.fromEntries(
         progress.map(([id, data]) => [id, progressVersion(data)]),
       ),
-      deleted,
+      deleted: Object.fromEntries(deleted),
       practice: practiceVersions,
     };
     CloudSync.flushing = (async () => {
@@ -546,11 +558,11 @@ export class CloudSync implements SyncHooks {
                 .abortSignal(controller.signal),
           ),
           sent(
-            deleted.length > 0 &&
+            deletedIds.length > 0 &&
               this.client
                 .from("progress")
                 .delete()
-                .in("song_id", deleted)
+                .in("song_id", deletedIds)
                 .abortSignal(controller.signal),
           ),
           sent(
@@ -582,9 +594,10 @@ export class CloudSync implements SyncHooks {
         if (progressOk) this.syncedProgress.set(id, canon(data));
         else if (!this.pendingProgress.has(id) && !this.pendingDeletes.has(id))
           this.pendingProgress.set(id, data);
-      for (const id of deleted)
+      for (const [id, at] of deleted)
         if (deletesOk) this.syncedProgress.delete(id);
-        else if (!this.pendingProgress.has(id)) this.pendingDeletes.add(id);
+        else if (!this.pendingProgress.has(id) && !this.pendingDeletes.has(id))
+          this.pendingDeletes.set(id, at);
       if (!practiceOk)
         for (const session of practice)
           if (!this.pendingPractice.has(session.id))
@@ -600,7 +613,7 @@ export class CloudSync implements SyncHooks {
                 progress.map(([id, data]) => [id, progressVersion(data)]),
               )
             : {},
-          deleted: deletesOk ? deleted : [],
+          deleted: deletesOk ? Object.fromEntries(deleted) : {},
           practice: practiceOk ? practiceVersions : {},
         },
       });
@@ -645,7 +658,7 @@ export class CloudSync implements SyncHooks {
       this.pending ||
       !!marker.settings ||
       Object.keys(marker.progress).length > 0 ||
-      marker.deleted.length > 0 ||
+      Object.keys(marker.deleted).length > 0 ||
       Object.keys(marker.practice).length > 0;
     // What this browser held before its first successful pull is kept too,
     // for that sign-in to adopt.
