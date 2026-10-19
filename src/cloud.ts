@@ -125,6 +125,10 @@ export class CloudSync implements SyncHooks {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private uploading: Promise<void> | null = null;
   private stopped = false;
+  /** Another tab owns the studio and the stored queue; see detach(). */
+  private detached = false;
+  /** The account refused a new song for its 200-song limit this session. */
+  private full = false;
   error = "";
   /** Called when error changes. */
   onChange = () => {};
@@ -276,6 +280,7 @@ export class CloudSync implements SyncHooks {
 
   /** Keep the queue in browser storage. False if it is full. */
   private savePending(): boolean {
+    if (this.detached) return true;
     if (this.pending) return write("pending", this.queue);
     try {
       remove("pending");
@@ -289,6 +294,7 @@ export class CloudSync implements SyncHooks {
    * and say so.
    */
   private queued() {
+    if (this.detached) return;
     if (this.savePending()) return this.schedule();
     this.setError(STORAGE_FULL);
     if (this.timer !== null) clearTimeout(this.timer);
@@ -362,6 +368,9 @@ export class CloudSync implements SyncHooks {
         this.syncedSettings = canon(settings);
         if (this.queue.settings === settings) delete this.queue.settings;
       }
+      // A new song the account accepted means it has room again.
+      if (progressOk && progress.some(([id]) => !this.syncedProgress.has(id)))
+        this.full = false;
       if (progressOk)
         for (const [id, data] of progress) {
           this.syncedProgress.set(id, canon(data));
@@ -387,9 +396,12 @@ export class CloudSync implements SyncHooks {
       if (this.stopped) return;
       this.savePending();
       if (quotaReached) {
+        this.full = true;
         this.setError(FULL_ACCOUNT);
         if (this.pending) this.schedule(0);
-      } else if (settingsOk && progressOk) this.setError("");
+      } else if (settingsOk && progressOk)
+        // Saving the songs it has does not save the new ones it refused.
+        this.setError(this.full ? FULL_ACCOUNT : "");
       else {
         this.setError(RETRYING);
         this.schedule(RETRY_MS);
@@ -401,6 +413,43 @@ export class CloudSync implements SyncHooks {
   }
 
   /** Stop syncing, such as when the session ended elsewhere. Nothing more is sent. */
+  /**
+   * Another tab took the studio over, and with it the queue in browser
+   * storage. Changes from here on stay in memory for handOff() to send.
+   */
+  detach() {
+    this.detached = true;
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+  }
+
+  /**
+   * After detach(), send this tab's queued progress once, then stop. Browser
+   * storage may have had no room for it, and the server merges progress, so
+   * it can land in any order. Settings are left to the other tab, which has
+   * the stored queue: an old copy from here could undo a newer choice there.
+   */
+  async handOff() {
+    while (this.uploading) await this.uploading;
+    this.stop();
+    const progress = Object.entries(this.queue.progress);
+    if (!progress.length) return;
+    try {
+      await timed((signal) =>
+        this.client
+          .from("progress")
+          .upsert(
+            progress.map(([song_id, data]) => ({
+              user_id: this.userId,
+              song_id,
+              data,
+            })),
+          )
+          .abortSignal(signal),
+      );
+    } catch {}
+  }
+
   stop() {
     this.stopped = true;
     if (this.timer !== null) clearTimeout(this.timer);

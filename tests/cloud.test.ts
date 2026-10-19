@@ -463,6 +463,8 @@ describe("uploading changes", () => {
       { user_id: USER, song_id: "known", data: { best: 2 } },
     ]);
     expect(queue()).toBeNull();
+    // The new song is still not saved, so the notice stays.
+    expect(sync.error).toMatch(/200 songs/);
   });
 
   it("keeps a known song's waiting save when a full account refuses it at sign-in", async () => {
@@ -524,6 +526,24 @@ describe("uploading changes", () => {
     expect(b.upserts).toEqual([
       ["progress", [{ user_id: USER, song_id: "song", data: { best: 2 } }]],
     ]);
+  });
+
+  it("hands its progress off to the account without touching the stored queue", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    sync.progress("song", { best: 1 } as never);
+    // Another tab takes over and keeps saving into the stored queue.
+    sync.detach();
+    write("pending", { owner: USER, progress: { other: { best: 5 } } });
+    sync.settings({ mode: "rhythm" } as never);
+    sync.progress("song", { best: 2 } as never);
+    await sync.handOff();
+    await vi.advanceTimersByTimeAsync(20000);
+    // Only this tab's progress is sent, once; its settings are left alone.
+    expect(b.upserts).toEqual([
+      ["progress", [{ user_id: USER, song_id: "song", data: { best: 2 } }]],
+    ]);
+    expect(queued()).toEqual(["other"]);
   });
 
   it("keeps the queue across a reload, for the same account only", () => {

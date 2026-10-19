@@ -1001,16 +1001,17 @@ let loading: CloudSync | null = null;
 let currentEmail = "";
 /** This tab's claim on the studio, which only one tab runs at a time. */
 const claim = new StudioClaim(() => {
-  // Another tab took the studio over. The final save joins the upload queue,
-  // which is sent from here before syncing stops: browser storage may have
-  // had no room for it, and then the other tab could not send it.
+  // Another tab took the studio over, and with it the stored upload queue.
+  // The final save stays in this tab's memory, and its progress is sent
+  // from here before syncing stops (see CloudSync.handOff()).
   loading?.stop();
   loading = null;
   if (cloud) {
     const sync = cloud;
     cloud = null;
+    sync.detach();
     studio.destroy();
-    void sync.flush().finally(() => sync.stop());
+    void sync.handOff();
   }
   if (currentUser) setGate({ status: "elsewhere" });
 });
