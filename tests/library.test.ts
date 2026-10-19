@@ -213,6 +213,27 @@ describe("song library", () => {
       /pedals must be a list/,
     ],
     [
+      "overlapping pedals on one channel",
+      (song: Song) => ({
+        ...song,
+        pedals: [
+          { channel: 0, start: 0, end: 2 },
+          { channel: 0, start: 1, end: 1.5 },
+        ],
+      }),
+      /without overlaps/,
+    ],
+    [
+      "no beats in a bar",
+      (song: Song) => ({ ...song, beatsPerBar: 0 }),
+      /beatsPerBar must be a positive number/,
+    ],
+    [
+      "a negative lead-in",
+      (song: Song) => ({ ...song, leadInBeats: -1 }),
+      /leadInBeats must be zero or more/,
+    ],
+    [
       "pedals out of order",
       (song: Song) => ({
         ...song,

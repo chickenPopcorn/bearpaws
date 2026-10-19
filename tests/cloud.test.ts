@@ -125,16 +125,23 @@ const stored = new Map<string, string>();
 let storageBlocked = false;
 /** A key browser storage refuses, as when it is nearly full. */
 let refusedKey = "";
+/** Runs after each read of browser storage, as another tab might write. */
+let afterGet: ((key: string) => void) | null = null;
 beforeEach(() => {
   stored.clear();
   storageBlocked = false;
   refusedKey = "";
+  afterGet = null;
   vi.stubGlobal("localStorage", {
     get length() {
       return stored.size;
     },
     key: (i: number) => [...stored.keys()][i] ?? null,
-    getItem: (key: string) => stored.get(key) ?? null,
+    getItem: (key: string) => {
+      const value = stored.get(key) ?? null;
+      afterGet?.(key);
+      return value;
+    },
     setItem: (key: string, value: string) => {
       if (storageBlocked) throw new DOMException("Blocked", "SecurityError");
       if (key === refusedKey)
@@ -414,6 +421,60 @@ describe("account sync", () => {
     expect(read(`stash:${OTHER}`, null)).toBeNull();
   });
 
+  it("drops a restored stash even when that pull fails", async () => {
+    const OTHER = "22222222-2222-2222-2222-222222222222";
+    write(`stash:${USER}`, {
+      marker: { progress: { mine: "t" }, deleted: {} },
+      settings: null,
+      progress: { mine: { best: 4, updated: "t" } },
+    });
+    write("owner", OTHER);
+    const b = backend();
+    b.failReads = true;
+    await expect(new CloudSync(client(b), USER).pull()).rejects.toBeTruthy();
+    // Restored into the working copy, so the stash cannot win again later.
+    expect(read(`stash:${USER}`, null)).toBeNull();
+    expect(read("progress:mine", null)).toEqual({ best: 4, updated: "t" });
+    b.failReads = false;
+    await new CloudSync(client(b), USER).pull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "mine", data: { best: 4, updated: "t" } },
+    ]);
+  });
+
+  it("keeps a save another tab makes while sign-in reconciles", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.progress = [{ song_id: "song", data: { best: 1, updated: "a" } }];
+    let reads = 0;
+    afterGet = (key) => {
+      if (key !== "cadence:unsynced" || ++reads !== 1) return;
+      write("progress:song", { best: 9, updated: "b" });
+      write("unsynced", { progress: { song: "b" }, deleted: {} });
+    };
+    await new CloudSync(client(b), USER).pull();
+    afterGet = null;
+    expect(read("progress:song", null)).toEqual({ best: 9, updated: "b" });
+    expect(unsynced().progress).toEqual(["song"]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "song", data: { best: 9, updated: "b" } },
+    ]);
+  });
+
+  it("does not take an older record for a save the browser could not store", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.progress = [{ song_id: "song", data: { best: 5, updated: "c" } }];
+    write("progress:song", { best: 2, updated: "a" });
+    write("unsynced", { progress: { song: "b" }, deleted: {} });
+    await new CloudSync(client(b), USER).pull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read("progress:song", null)).toEqual({ best: 5, updated: "c" });
+    expect(b.upserts).toEqual([]);
+  });
+
   it("refuses to open when this browser cannot store the account's data", async () => {
     const b = backend();
     b.settings = [{ data: { mode: "rhythm" } }];
@@ -536,6 +597,44 @@ describe("account sync", () => {
     sync.progress("song", { best: 3, position: 0 } as never);
     await vi.advanceTimersByTimeAsync(2000);
     expect(b.calls).toEqual(["upsert progress"]);
+  });
+
+  it("sends the newest copy in this browser, even one another tab saved", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    sync.progress("song", { best: 1, updated: "a" } as never);
+    // Another tab saves the same song before this one uploads.
+    write("progress:song", { best: 2, updated: "b" });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.upserts).toEqual([
+      [
+        "progress",
+        [{ user_id: USER, song_id: "song", data: { best: 2, updated: "b" } }],
+      ],
+    ]);
+  });
+
+  it("uploads at once a record the browser could not store", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    sync.progress("song", { best: 1 } as never, false, false);
+    expect(sync.error).toMatch(/storage is full/);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.calls).toEqual(["upsert progress"]);
+  });
+
+  it("withdraws a settings change that returns to the account's", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.settings = [{ data: { mode: "wait" } }];
+    const sync = new CloudSync(client(b), USER);
+    await sync.pull();
+    sync.settings({ mode: "rhythm" } as never);
+    expect(unsynced().settings).toBe(true);
+    sync.settings({ mode: "wait" } as never);
+    expect(unsynced().settings).toBe(false);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(b.calls).toEqual([]);
   });
 
   it("holds a lock every tab shares while uploading", async () => {

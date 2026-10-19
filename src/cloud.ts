@@ -173,8 +173,16 @@ function stashUnsent(owner: string): boolean {
 /** What the studio reports so the signed-in account stays current. */
 export interface SyncHooks {
   settings(settings: Settings): void;
-  /** `loaded`: the save made as the song opens, before any practice. */
-  progress(songId: string, progress: Progress, loaded?: boolean): void;
+  /**
+   * `loaded`: the save made as the song opens, before any practice.
+   * `stored`: false if browser storage refused the record.
+   */
+  progress(
+    songId: string,
+    progress: Progress,
+    loaded?: boolean,
+    stored?: boolean,
+  ): void;
   /** The song was removed from this browser, so its progress goes too. */
   forgetProgress(songId: string): void;
 }
@@ -247,6 +255,13 @@ export class CloudSync implements SyncHooks {
         if (data) store(`progress:${id}`, data);
       store("unsynced", stash.marker);
       store("owner", this.userId);
+      // Now in the working copy, marked unconfirmed, where a failed pull
+      // retries from: the stash must not come back later and win again.
+      try {
+        remove(`stash:${this.userId}`);
+      } catch {
+        throw new BrowserStorageError();
+      }
     }
     // The first account on this browser adopts what was saved here before.
     // The owner mark is written only once the pull succeeds, so a failed
@@ -265,18 +280,22 @@ export class CloudSync implements SyncHooks {
       ? { progress: {}, deleted: {} }
       : readUnsynced();
 
+    // A marker entry newer than the record it names is for a save this
+    // browser could not store, so the record is not that change.
+    const unconfirmed = (id: string, local: Partial<Progress>) =>
+      id in unsynced.progress &&
+      progressVersion(local) >= unsynced.progress[id];
+
     // Settings: this browser's unconfirmed change wins, then the account's.
     const localSettings = read<Settings | null>("settings", null);
     if (settings.data) this.syncedSettings = canon(settings.data.data);
-    if (localSettings && (unsynced.settings || !settings.data))
-      this.pendingSettings = localSettings;
-    else if (settings.data) store("settings", settings.data.data);
+    let keepSettings =
+      !!localSettings && (!!unsynced.settings || !settings.data);
 
     // Progress: this browser's unconfirmed changes win; otherwise the account
     // is the record. Adopted progress fills in songs the account lacks.
     const remote = new Map(rows.map((row) => [row.song_id, row.data]));
     for (const [id, data] of remote) this.syncedProgress.set(id, canon(data));
-    const changed = new Set(Object.keys(unsynced.progress));
     for (const [id, at] of Object.entries(unsynced.deleted)) {
       // A marker from an earlier build can list a song both ways; the save
       // came after the removal, or the progress would be gone.
@@ -284,30 +303,52 @@ export class CloudSync implements SyncHooks {
       this.pendingDeletes.set(id, at);
       remote.delete(id);
     }
+    const removals = new Set<string>();
     for (const { id, progress: local } of localProgress()) {
-      if (changed.has(id) || (adopting && !remote.has(id))) {
+      if (unconfirmed(id, local) || (adopting && !remote.has(id))) {
         this.pendingProgress.set(id, local as Progress);
         remote.delete(id);
-      } else if (!remote.has(id) && !this.pendingDeletes.has(id)) {
+      } else if (!remote.has(id) && !this.pendingDeletes.has(id))
         // Uploaded before, and since removed from the account.
-        try {
-          removeProgress(id);
-        } catch {
-          throw new BrowserStorageError();
-        }
-      }
+        removals.add(id);
     }
+
+    // Another tab may have saved while this decided: entries added to the
+    // marker since it was read win too, before anything is overwritten.
+    if (!adopting) {
+      const latest = readUnsynced();
+      if (latest.settings !== unsynced.settings && localSettings)
+        keepSettings = true;
+      for (const [id, version] of Object.entries(latest.progress)) {
+        const local = read<Partial<Progress> | null>(`progress:${id}`, null);
+        if (unsynced.progress[id] === version || !local) continue;
+        if (progressVersion(local) < version) continue;
+        this.pendingDeletes.delete(id);
+        this.pendingProgress.set(id, local as Progress);
+        remote.delete(id);
+        removals.delete(id);
+      }
+      for (const [id, at] of Object.entries(latest.deleted))
+        if (unsynced.deleted[id] !== at && !(id in latest.progress)) {
+          this.pendingProgress.delete(id);
+          this.pendingDeletes.set(id, at);
+          remote.delete(id);
+        }
+    }
+
+    if (keepSettings) this.pendingSettings = localSettings;
+    else if (settings.data) store("settings", settings.data.data);
+    for (const id of removals)
+      try {
+        removeProgress(id);
+      } catch {
+        throw new BrowserStorageError();
+      }
     for (const [id, data] of remote) store(`progress:${id}`, data);
     // The marker goes first: once the owner is recorded, the next pull no
     // longer adopts, and only the marker would keep what this one adopted.
     if (!this.saveUnsynced({ exact: true })) throw new BrowserStorageError();
     store("owner", this.userId);
-    if (stash)
-      try {
-        remove(`stash:${this.userId}`);
-      } catch {
-        throw new BrowserStorageError();
-      }
     this.error = "";
     if (this.pending) this.schedule(0);
   }
@@ -340,13 +381,23 @@ export class CloudSync implements SyncHooks {
 
   settings(settings: Settings) {
     if (this.stopped) return;
-    if (!this.pendingSettings && canon(settings) === this.syncedSettings)
+    if (canon(settings) === this.syncedSettings) {
+      // Back where the account is, such as a selection restored once
+      // imported songs load: what was waiting is no longer a change.
+      if (this.pendingSettings) {
+        const withdrawn = settingsVersion(this.pendingSettings);
+        this.pendingSettings = null;
+        this.saveUnsynced({
+          confirmed: { settings: withdrawn, progress: {}, deleted: {} },
+        });
+      }
       return;
+    }
     this.pendingSettings = { ...settings };
     this.queued();
   }
 
-  progress(songId: string, progress: Progress, loaded = false) {
+  progress(songId: string, progress: Progress, loaded = false, stored = true) {
     if (this.stopped) return;
     // A song the account has no progress for takes the save made as it opens
     // as its baseline: an untouched song is no change, and uploading it could
@@ -368,7 +419,8 @@ export class CloudSync implements SyncHooks {
       return;
     this.pendingDeletes.delete(songId);
     this.pendingProgress.set(songId, { ...progress });
-    this.queued();
+    // A record the browser could not keep exists only here until it uploads.
+    this.queued(!stored);
   }
 
   forgetProgress(songId: string) {
@@ -382,11 +434,11 @@ export class CloudSync implements SyncHooks {
 
   /**
    * Remember a queued change and schedule its upload. If browser storage
-   * cannot hold the marker, a reload before the upload lands would let the
-   * account's older copy win, so upload at once and say so.
+   * cannot hold the marker, or (`urgent`) the change itself, a reload before
+   * the upload lands would lose it, so upload at once and say so.
    */
-  private queued() {
-    if (this.saveUnsynced()) return this.schedule();
+  private queued(urgent = false) {
+    if (this.saveUnsynced() && !urgent) return this.schedule();
     this.setError(STORAGE_FULL);
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
@@ -473,9 +525,9 @@ export class CloudSync implements SyncHooks {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    const settings = this.pendingSettings,
-      progress = [...this.pendingProgress],
-      deleted = [...this.pendingDeletes];
+    let settings = this.pendingSettings,
+      progress = [...this.pendingProgress];
+    const deleted = [...this.pendingDeletes];
     const deletedIds = deleted.map(([id]) => id);
     this.pendingSettings = null;
     this.pendingProgress.clear();
@@ -488,6 +540,24 @@ export class CloudSync implements SyncHooks {
       deleted: Object.fromEntries(deleted),
     };
     const upload = async () => {
+      // Another tab may have saved these since they were queued, and its
+      // upload may already have landed: send the newest copy this browser
+      // holds, so an older one never lands last.
+      const latestSettings = read<Settings | null>("settings", null);
+      if (settings && latestSettings) settings = latestSettings;
+      progress = progress.map(([id, data]) => {
+        const local = read<Progress | null>(`progress:${id}`, null);
+        return local && progressVersion(local) > progressVersion(data)
+          ? [id, local]
+          : [id, data];
+      });
+      this.inFlight = {
+        settings: settings ? settingsVersion(settings) : undefined,
+        progress: Object.fromEntries(
+          progress.map(([id, data]) => [id, progressVersion(data)]),
+        ),
+        deleted: Object.fromEntries(deleted),
+      };
       // Aborting at the time limit settles the request, so it cannot land
       // after the retry that replaces it.
       const controller = new AbortController();

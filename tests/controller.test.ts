@@ -1489,12 +1489,14 @@ describe("account sync hooks", () => {
       "controller-fixture",
       expect.any(Object),
       true,
+      true,
     );
     studio.save();
     expect(sync.progress).toHaveBeenLastCalledWith(
       "controller-fixture",
       expect.objectContaining({ updated: expect.any(String) }),
       false,
+      true,
     );
   });
 
