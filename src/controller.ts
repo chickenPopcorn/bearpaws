@@ -247,7 +247,8 @@ export class Studio {
         "Browser storage is full or blocked. Changes will last for this session.";
     this.sync?.settings(this.settings);
   }
-  save() {
+  /** `loaded`: this save is made as the song opens, before any practice. */
+  save(loaded = false) {
     this.progress = {
       ...this.progress,
       position: this.position,
@@ -260,7 +261,7 @@ export class Studio {
     };
     if (!write(`progress:${this.song.id}`, this.progress))
       this.storageNotice = "Progress could not be saved in this browser.";
-    this.sync?.progress(this.song.id, this.progress);
+    this.sync?.progress(this.song.id, this.progress, loaded);
     if (!this.practiceLog.commit())
       this.storageNotice = "Practice time could not be saved in this browser.";
   }
@@ -290,6 +291,9 @@ export class Studio {
     this.refreshSelection();
     this.restartScoring();
     this.notice = "";
+    // The account's starting point for this song, so closing it untouched
+    // uploads nothing.
+    this.save(true);
     this.emit();
   }
   rebuild() {
