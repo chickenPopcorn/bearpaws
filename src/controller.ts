@@ -32,8 +32,6 @@ export class Studio {
   private playbackPending = false;
   outputChanging = false;
   private midiDuetRouted = false;
-  private midiPassStart = 0;
-  private midiTick = 0;
   private audioPreparations = new Set<AbortController>();
   private virtualRequests = new Map<number, number>();
   private nextVirtualRequest = 0;
@@ -508,7 +506,6 @@ export class Studio {
       );
     this.transport.seek(position, this.audio.now());
     this.position = this.transport.at(this.audio.now());
-    this.midiPassStart = this.position;
     this.restartScoring();
     this.notice = "";
     this.save();
@@ -585,7 +582,6 @@ export class Studio {
         this.seek(this.loopStart);
       this.audio.setPlaybackNotes(playbackNotes, this.pedals);
       this.transport.play(this.audio.now());
-      this.midiPassStart = this.position;
       this.progress.attempts++;
       this.notice = "";
       this.save();
@@ -632,24 +628,12 @@ export class Studio {
     if (resume) void this.play();
   }
   tick(now = this.audio.now()) {
-    this.midiTick++;
-    if (!this.transport.playing) this.midi.duet.pulse(this.midiTick);
     const playing = this.transport.playing,
       cycle = this.transport.cycle,
       held = this.transport.held;
     if (playing) {
       this.position = this.transport.update(now, this.waitGate);
       if (cycle !== this.transport.cycle) {
-        // Finish attacks crossed before the wrap, then begin the new pass.
-        this.midi.duet.schedule(
-          this.inPassage(this.duetNotes),
-          this.loopEnd,
-          cycle,
-          false,
-          this.midiPassStart,
-          this.midiTick,
-        );
-        this.midiPassStart = this.loopStart;
         this.passEpoch =
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();
@@ -695,7 +679,7 @@ export class Studio {
       if (!this.transport.playing) {
         // The transport has finished, but the final piano release can still
         // be ringing. Explicit pause/seek/song changes continue to stop audio.
-        this.midi.duet.finish();
+        this.midi.duet.stop();
         this.audio.setPlaybackNotes([]);
         this.notice = "";
         this.save();
@@ -736,8 +720,6 @@ export class Studio {
       this.position,
       this.transport.cycle,
       this.transport.held,
-      this.midiPassStart,
-      this.midiTick,
     );
     const browserNotes = this.midi.duet.connected ? reference : notes;
     this.audio.schedule(

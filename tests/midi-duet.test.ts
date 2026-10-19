@@ -109,89 +109,6 @@ describe("teacher MIDI output", () => {
     expect(send).toHaveBeenCalledTimes(4);
   });
 
-  it("plays a short note crossed between clock callbacks once, sounding until the next one", () => {
-    const { duet, send } = setup();
-    const notes = [note("short", 48, 0.005, 0.01)];
-    duet.schedule(notes, 0, 1, false);
-    duet.schedule(notes, 0.02, 1, false);
-    // Not a zero-length note: the release waits for the next callback.
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
-    duet.schedule(notes, 0.04, 1, false);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x80, 48, 0]]]);
-    duet.schedule(notes, 0.06, 1, false);
-    expect(send).toHaveBeenCalledTimes(2);
-  });
-
-  it("catches short notes before the first tick but skips finished notes before a seek", () => {
-    const { duet, send } = setup();
-    const notes = [
-      note("old", 45, 0.005, 0.01),
-      note("short", 48, 1.005, 1.01),
-    ];
-    duet.schedule(notes, 1.02, 1, false, 1);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
-    duet.schedule(notes, 1.04, 1, false);
-    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
-  });
-
-  it("gives each same-pitch note crossed in one tick a tick of its own", () => {
-    const { duet, send } = setup();
-    const notes = [
-      note("a", 48, 0.002, 0.005),
-      note("b", 48, 0.01, 0.015),
-      note("c", 48, 0.016, 0.018),
-    ];
-    // A delayed callback crosses all three.
-    duet.schedule(notes, 0.02, 1, false, 0);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
-    duet.schedule(notes, 0.04, 1, false);
-    duet.schedule(notes, 0.06, 1, false);
-    duet.schedule(notes, 0.08, 1, false);
-    expect(send.mock.calls).toEqual([
-      [[0x90, 48, 64]],
-      [[0x80, 48, 0]],
-      [[0x90, 48, 64]],
-      [[0x80, 48, 0]],
-      [[0x90, 48, 64]],
-      [[0x80, 48, 0]],
-    ]);
-  });
-
-  it("preserves crossed attacks across two passes scheduled in the same tick", () => {
-    const { duet, send } = setup();
-    const notes = [note("a", 48, 0.002, 0.005), note("b", 48, 0.01, 0.015)];
-    duet.schedule(notes, 0.02, 1, false, 0, 1);
-    duet.schedule(notes, 0, 2, false, 0, 1);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
-    duet.schedule([], 0, 2, false, 0, 2);
-    expect(send.mock.calls).toEqual([
-      [[0x90, 48, 64]],
-      [[0x80, 48, 0]],
-      [[0x90, 48, 64]],
-    ]);
-    duet.schedule([], 0, 2, false, 0, 3);
-    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
-    expect(send).toHaveBeenCalledTimes(4);
-  });
-
-  it("drains final crossed attacks after completion and cancels them on explicit stop", () => {
-    const { duet, send } = setup();
-    const notes = [note("a", 48, 0.002, 0.005), note("b", 48, 0.01, 0.015)];
-    duet.schedule(notes, 0.02, 1, false, 0, 1);
-    duet.finish();
-    expect(send).toHaveBeenCalledTimes(1);
-    duet.pulse(2);
-    expect(send).toHaveBeenCalledTimes(3);
-    duet.pulse(3);
-    expect(send).toHaveBeenCalledTimes(4);
-    duet.stop();
-    duet.schedule(notes, 0.02, 2, false, 0, 4);
-    duet.finish();
-    duet.stop();
-    duet.pulse(5);
-    expect(send).toHaveBeenCalledTimes(6);
-  });
-
   it("keeps a long legato part within one tick of the song, without drifting", () => {
     const { duet, send } = setup();
     const notes = Array.from({ length: 240 }, (_, i) =>
@@ -211,34 +128,76 @@ describe("teacher MIDI output", () => {
     });
   });
 
-  it("lets an attack just before a loop wrap ring for a tick into the next pass", () => {
+  it("sounds a note for at least one tick, and never strikes it twice in a pass", () => {
     const { duet, send } = setup();
-    const notes = [note("last", 48, 0.99, 1.5), note("first", 52, 0, 0.5)];
-    duet.schedule(notes, 0.98, 1, false);
-    // The wrap: the old pass is finished up to its end, then the new one begins.
-    duet.schedule(notes, 1, 1, false, 0, 2);
-    duet.schedule(notes, 0.005, 2, false, 0, 2);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x90, 52, 64]]]);
-    duet.schedule(notes, 0.025, 2, false);
-    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
-    duet.stop();
-    expect(send).toHaveBeenLastCalledWith([0x80, 52, 0]);
-  });
-
-  it("restrikes a pitch the new pass opens with while the old pass's note rings", () => {
-    const { duet, send } = setup();
-    const notes = [note("last", 48, 0.99, 1.5), note("first", 48, 0, 0.5)];
-    duet.schedule(notes, 1, 1, false, 0.98, 1);
-    duet.schedule(notes, 0.005, 2, false, 0, 1);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
-    duet.schedule(notes, 0.025, 2, false, 0, 2);
+    const notes = [note("a", 48, 0, 0.03), note("b", 48, 0.01, 1)];
+    duet.schedule(notes, 0, 1, false);
+    // b restarts the key; a no longer owns it, and is not struck again.
+    duet.schedule(notes, 0.02, 1, false);
+    duet.schedule(notes, 0.04, 1, false);
     expect(send.mock.calls).toEqual([
       [[0x90, 48, 64]],
       [[0x80, 48, 0]],
       [[0x90, 48, 64]],
     ]);
-    // The new pass's note keeps the key past the old note's extra tick.
-    duet.schedule(notes, 0.025, 2, false);
+    // An input reset silences b; Listen continues without striking it again.
+    duet.silence();
+    duet.schedule(notes, 0.06, 1, false);
+    expect(send).toHaveBeenCalledTimes(4);
+    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+  });
+
+  it("releases a note that ended before a Wait gate, but holds one ending at it", () => {
+    const { duet, send } = setup();
+    const notes = [note("early", 48, 0, 0.99), note("through", 52, 0, 1)];
+    duet.schedule(notes, 0.98, 1, false);
+    // This tick reaches the gate at 1 s, past the end of "early".
+    duet.schedule(notes, 1, 1, true);
+    duet.schedule(notes, 1, 1, true);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x90, 52, 64]],
+      [[0x80, 48, 0]],
+    ]);
+    duet.schedule(notes, 1.02, 1, false);
+    expect(send).toHaveBeenLastCalledWith([0x80, 52, 0]);
+  });
+
+  it("plays a note a late tick passed whole, for one tick, but not after a seek", () => {
+    const { duet, send } = setup();
+    const notes = [note("short", 48, 0.03, 0.08), note("old", 50, 0.1, 0.2)];
+    duet.schedule(notes, 0.02, 1, false);
+    // The main thread stalls from 0.02 s to 0.25 s.
+    duet.schedule(notes, 0.25, 1, false);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x90, 50, 64]]]);
+    duet.schedule(notes, 0.27, 1, false);
+    expect(send.mock.calls.slice(2)).toEqual([
+      [[0x80, 48, 0]],
+      [[0x80, 50, 0]],
+    ]);
+    // After a seek past them, finished notes are not replayed.
+    duet.stop();
+    duet.schedule(notes, 0.5, 2, false);
+    expect(send).toHaveBeenCalledTimes(4);
+  });
+
+  it("skips a zero-length note a late tick passes, and plays notes in time order", () => {
+    const { duet, send } = setup();
+    // Out of order on purpose: "late" starts after "early" on the same key.
+    const notes = [
+      note("late", 48, 0.05, 1),
+      note("early", 48, 0.03, 1),
+      note("zero", 52, 0.04, 0.04),
+    ];
+    duet.schedule(notes, 0.02, 1, false);
+    duet.schedule(notes, 0.1, 1, false);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+      [[0x90, 48, 64]],
+    ]);
+    // The later note owns the key until it ends.
+    duet.schedule(notes, 0.5, 1, false);
     expect(send).toHaveBeenCalledTimes(3);
   });
 
