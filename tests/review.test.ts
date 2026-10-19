@@ -161,12 +161,15 @@ afterEach(() => {
 });
 
 describe("teacher duet in the waterfall", () => {
-  it("draws the duet yellow at quarter opacity behind both hands, widening the keys", () => {
+  it("draws the duet yellow at quarter opacity behind both hands, on the student's keys", () => {
     vi.stubGlobal("window", { devicePixelRatio: 1 });
     const student = note("student", 72, 1, 2);
     const fixture = {
       ...song([student]),
-      duet: { octaves: 1, notes: [note("teacher", 36, 1, 2, 2)] },
+      duet: {
+        octaves: 1,
+        notes: [note("teacher", 52, 1, 2, 2), note("bass", 36, 1, 2, 2)],
+      },
     };
     const selected = [student];
     const { canvas, noteFills } = drawingCanvas();
@@ -202,8 +205,8 @@ describe("teacher duet in the waterfall", () => {
       { color: rightColor, alpha: 1 },
     ]);
     expect(DUET_ALPHA).toBe(0.25);
-    // C2 is now on the keyboard, so the teacher's bass is visible.
-    expect(range(fixture, true)).toEqual([36, 72]);
+    // The keys stay on the student's part: the bass under C3 is left off.
+    expect(range(fixture)).toEqual([48, 84]);
   });
 
   it("draws the duet from what is left of the shared budget, once per outline", () => {
@@ -212,10 +215,10 @@ describe("teacher duet in the waterfall", () => {
       note(`s${i}`, 60 + (i % 12), 1 + i * 0.0005, 2),
     );
     const teacher = [
-      note("t0", 40, 1, 2, 2),
-      note("t0-again", 40, 1, 2, 2),
-      note("t1", 41, 1, 2, 2),
-      note("t2", 42, 1, 2, 2),
+      note("t0", 52, 1, 2, 2),
+      note("t0-again", 52, 1, 2, 2),
+      note("t1", 53, 1, 2, 2),
+      note("t2", 54, 1, 2, 2),
     ];
     const fixture = { ...song(students), duet: { octaves: 1, notes: teacher } };
     const { canvas, noteFills } = drawingCanvas();
