@@ -85,7 +85,10 @@ export interface Song {
   /** Set on songs from the shared library bucket. */
   library?: {
     book: LibraryBook;
-    /** Public URL of the song's MIDI file, for its Download button. */
+    /**
+     * URL of the song's MIDI file, for its Download button. Only a signed-in
+     * request can read it (see signedInFetch).
+     */
     midi?: string;
   };
 }

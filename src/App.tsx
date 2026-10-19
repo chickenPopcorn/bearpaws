@@ -24,12 +24,28 @@ import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { bookForSong, songsInBook } from "./books";
 import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
 import { cloud, currentUser, studio } from "./session";
-/** Storage serves `?download=` as an attachment, which cross-origin links need. */
-const downloadUrl = (midi: string, id: string) => {
-  const url = new URL(midi);
-  url.searchParams.set("download", `${id}.mid`);
-  return url.toString();
-};
+import { signedInFetch } from "./supabase";
+/**
+ * Save a library song's MIDI file. Only a signed-in request can read it, so
+ * a plain link cannot: fetch it, then save it from this page.
+ */
+async function downloadMidi(song: Song) {
+  const midi = song.library?.midi;
+  if (!midi) return;
+  try {
+    const response = await (await signedInFetch())(midi);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(await response.blob());
+    link.download = `${song.id}.mid`;
+    link.click();
+    // The browser has the file once the save starts.
+    setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+  } catch {
+    studio.notice = `${song.title} could not be downloaded. Check your connection and try again.`;
+    studio.emit();
+  }
+}
 const practiceDay = () => studio.practiceLog.today();
 const setLearnerName = (name: string) => studio.learnerName(name);
 const setDailyGoal = (minutes: number) => studio.dailyGoal(minutes);
@@ -723,14 +739,14 @@ export function App({
             <div className="song-tools">
               <span className="chip">{book.title}</span>
               {studio.song.library?.midi && (
-                <a
+                <button
+                  type="button"
                   className="song-midi-download"
-                  href={downloadUrl(studio.song.library.midi, studio.song.id)}
-                  download
+                  onClick={() => void downloadMidi(studio.song)}
                   aria-label={`Download ${studio.song.title} MIDI`}
                 >
                   Download MIDI
-                </a>
+                </button>
               )}
             </div>
           </div>

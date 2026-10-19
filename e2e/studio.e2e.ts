@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { expect, SUPABASE_URL, test } from "./fake-supabase";
+import { expect, test } from "./fake-supabase";
 
 const songTitle = (page: Page) => page.getByRole("heading", { level: 1 });
 const book = (page: Page, title: string) =>
@@ -32,12 +32,19 @@ test("the studio shows George Bear’s Classes from the library", async ({
   // Songs from other collections stay out of the studio.
   await expect(page.getByText("Ode to Joy")).toHaveCount(0);
 
-  await expect(
-    page.getByRole("link", { name: "Download Dancing Raindrops MIDI" }),
-  ).toHaveAttribute(
-    "href",
-    `${SUPABASE_URL}/storage/v1/object/public/library/songs/cadence-dancing-raindrops-v1.mid?download=cadence-dancing-raindrops-v1.mid`,
-  );
+  // Only a signed-in request reads the MIDI file, so the page fetches it and
+  // saves it under the song's id.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page
+      .getByRole("button", { name: "Download Dancing Raindrops MIDI" })
+      .click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("cadence-dancing-raindrops-v1.mid");
+  const saved = await download.createReadStream();
+  const bytes: Buffer[] = [];
+  for await (const chunk of saved) bytes.push(chunk as Buffer);
+  expect(Buffer.concat(bytes).toString()).toBe("MThd");
   await expect(
     page.getByRole("region", { name: "Sheet music timeline" }),
   ).toBeVisible();

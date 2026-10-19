@@ -45,7 +45,7 @@ piano**.
 
 - [Practicing](docs/usage.md): the classes, modes, Duet, shortcuts, sound and the practice calendar
 - [MIDI and USB pianos](docs/midi.md): connecting, and playing the app's sound on the piano
-- [The song library](docs/library.md): `npm run library:pull` and `npm run library:push`
+- [The song library](docs/library.md): `npm run library:pull` and `npm run library:push`, who can read it, and the course CD's audio
 - [Accounts and data](docs/accounts.md): Google sign-in, sync and Supabase setup
 - [Development](docs/development.md): scripts, tests and architecture
 - [Deployment](docs/deploy.md), including the merge queue, and [GitHub Pages setup](docs/github-pages.md)
