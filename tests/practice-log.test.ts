@@ -112,6 +112,25 @@ describe("practice log", () => {
     ]);
   });
 
+  it("keeps other tabs' sessions when saving its own", () => {
+    const tabA = new PracticeLog(() => {}, clock);
+    const tabB = new PracticeLog(() => {}, clock);
+    tabA.add(3, "ode");
+    tabA.commit();
+    tabB.add(2, "lamb");
+    tabB.commit();
+    tabA.add(4, "ode");
+    tabA.commit();
+    tabB.add(1, "lamb");
+    tabB.commit();
+    // Neither tab's save erases or shrinks the other's session.
+    expect(saved().map((s) => [s.songs, s.seconds])).toEqual([
+      [{ ode: 7 }, 7],
+      [{ lamb: 3 }, 3],
+    ]);
+    expect(tabB.totals().get("2026-10-18")).toBe(10);
+  });
+
   it("counts a streak of days that met the goal", () => {
     const goal = 5 * 60;
     const totals = new Map([

@@ -79,6 +79,8 @@ export function streak(
  */
 export class PracticeLog {
   private sessions = new Map<string, PracticeSession>();
+  /** Sessions this page started. Other tabs save their own. */
+  private own = new Set<string>();
   private current: PracticeSession | null = null;
   /** Unrounded seconds of the session in progress. */
   private exact = 0;
@@ -119,6 +121,7 @@ export class PracticeLog {
       };
       this.exact = 0;
       this.songExact = {};
+      this.own.add(this.current.id);
       this.sessions.set(this.current.id, this.current);
     }
     this.lastAdd = now.getTime();
@@ -143,7 +146,17 @@ export class PracticeLog {
       ),
     };
     this.current = updated;
-    this.sessions.set(updated.id, updated);
+    // Other tabs on this browser save to the same list: take their latest
+    // copies, so this save never erases or shrinks their sessions.
+    const sessions = new Map<string, PracticeSession>();
+    for (const s of storedSessions())
+      if (!this.own.has(s.id)) sessions.set(s.id, s);
+    for (const id of this.own) {
+      const s = this.sessions.get(id);
+      if (s) sessions.set(id, s);
+    }
+    sessions.set(updated.id, updated);
+    this.sessions = sessions;
     const oldest = addDays(updated.day, -HISTORY_DAYS);
     for (const [id, s] of this.sessions)
       if (s.day < oldest) this.sessions.delete(id);

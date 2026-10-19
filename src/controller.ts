@@ -533,9 +533,10 @@ export class Studio {
       }
       // Practice time counts while someone plays along: not in Listen, and
       // not once the keys have been quiet for a while, such as a Wait gate
-      // left waiting.
-      if (
-        this.lastPracticeTick !== null &&
+      // left waiting. Each playback run needs its own key press, so one from
+      // before a pause or the song's end cannot count the next run's start.
+      if (this.lastPracticeTick === null) this.lastKeyAt = -Infinity;
+      else if (
         this.settings.mode !== "listen" &&
         now - this.lastKeyAt <= IDLE_SECONDS
       )

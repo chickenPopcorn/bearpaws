@@ -1581,6 +1581,21 @@ describe("practice time", () => {
     expect(today(studio)).toBe(2);
   });
 
+  it("needs a new key press after resuming playback", async () => {
+    const studio = create(held());
+    await studio.play();
+    midi(studio, [0x90, 72, 80]);
+    for (let i = 0; i < 2; i++) advance(studio, 1);
+    expect(today(studio)).toBe(2);
+    studio.pause();
+    await studio.play();
+    for (let i = 0; i < 3; i++) advance(studio, 1);
+    expect(today(studio)).toBe(2);
+    midi(studio, [0x90, 74, 80]);
+    advance(studio, 1);
+    expect(today(studio)).toBe(3);
+  });
+
   it("ignores key presses made while paused or in Listen", async () => {
     const studio = create(held());
     midi(studio, [0x90, 72, 80]);
