@@ -1,13 +1,16 @@
-/** Shown while the studio loads, or when it could not load. */
+/** Shown while the studio loads or signs out, or when it could not. */
 export function OpeningStudio({
   error,
   message = "Opening your studio…",
   action = { label: "Try again", onClick: () => window.location.reload() },
+  onSignOut,
 }: {
   error: string;
   message?: string;
   /** The way forward offered with an error: by default, a reload. */
   action?: { label: string; onClick: () => void };
+  /** Offered with an error, so a shared device can still be signed out. */
+  onSignOut?: () => void;
 }) {
   return (
     <main className="signin" aria-busy={!error}>
@@ -32,6 +35,11 @@ export function OpeningStudio({
             >
               {action.label}
             </button>
+            {onSignOut && (
+              <button type="button" className="text-button" onClick={onSignOut}>
+                Sign out
+              </button>
+            )}
           </>
         ) : (
           <p role="status">{message}</p>

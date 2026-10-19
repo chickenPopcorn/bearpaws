@@ -182,7 +182,11 @@ span.device {
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
 }
-/* The page shown while the studio loads, or when it cannot. */
+.account {
+  font-size: var(--text-sm);
+  background: #f7f6fa;
+}
+/* The sign-in page, and the page shown while the studio loads or cannot. */
 .signin {
   min-height: 100vh;
   display: grid;

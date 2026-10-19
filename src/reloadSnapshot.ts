@@ -6,7 +6,11 @@
  */
 export const RELOAD_SNAPSHOT_KEY = "cadence:reload-snapshot";
 
-const store = (snapshot: { html: string; canvases: string[] }) => {
+const store = (snapshot: {
+  html: string;
+  canvases: string[];
+  user: string;
+}) => {
   try {
     sessionStorage.setItem(RELOAD_SNAPSHOT_KEY, JSON.stringify(snapshot));
     return true;
@@ -42,7 +46,11 @@ function markup(root: HTMLElement) {
   return copy.innerHTML;
 }
 
-export function saveReloadSnapshot(root: HTMLElement) {
+/**
+ * `user` is the signed-in account's id: the page shows that account's songs
+ * and progress, so it comes back only while the same account is signed in.
+ */
+export function saveReloadSnapshot(root: HTMLElement, user: string) {
   const html = markup(root);
   const canvases = [...root.querySelectorAll("canvas")].map((canvas) => {
     try {
@@ -52,7 +60,8 @@ export function saveReloadSnapshot(root: HTMLElement) {
     }
   });
   // Without room for the images, the markup alone still helps.
-  if (store({ html, canvases }) || store({ html, canvases: [] })) return;
+  if (store({ html, canvases, user }) || store({ html, canvases: [], user }))
+    return;
   try {
     sessionStorage.removeItem(RELOAD_SNAPSHOT_KEY);
   } catch {

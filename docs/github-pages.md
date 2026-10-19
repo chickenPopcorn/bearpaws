@@ -69,8 +69,8 @@ npm run preview
 ```
 
 After deployment, open **https://piano.pollos.us/** in desktop Chrome or Edge and
-check that the logo, sheet-music fonts, piano samples, library songs and MIDI
-downloads load.
+check that Google sign-in works and that the logo, sheet-music fonts, piano
+samples, library songs and MIDI downloads load.
 Try Listen, full screen and the song-navigation controls. Grant MIDI permission
 on this new origin and verify the physical piano, including chords and pedal.
 
@@ -78,8 +78,11 @@ Settings and practice progress stay in each origin's browser storage. The app
 no longer imports MIDI files: songs that earlier versions imported stay in that
 origin's browser storage, unused, and are not available on `piano.pollos.us`.
 
-The build reads `VITE_SUPABASE_URL`, where the song library bucket lives, from
-the repository's Actions variables.
+The build reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` from the
+repository's Actions variables. Supabase only returns signed-in users to origins
+in its redirect allow list (`https://piano.pollos.us/**` and localhost), so
+sign-in from `chickenpopcorn.github.io` needs that origin added in the Supabase
+project's URL configuration first.
 
 The sample bank makes the static output roughly **755 MiB** (about 792 MB),
 within GitHub Pages’

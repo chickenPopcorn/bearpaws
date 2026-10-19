@@ -43,7 +43,23 @@
           var key = "cadence:reload-snapshot";
           var saved = JSON.parse(sessionStorage.getItem(key) || "null");
           sessionStorage.removeItem(key);
-          if (!saved || !document.querySelector('link[rel="stylesheet"]'))
+          // The saved page shows an account's songs and progress, so show it
+          // only while Supabase holds an unexpired sign-in for that same
+          // account. The page itself checks the sign-in with Supabase.
+          var user = "";
+          for (var k = 0; k < localStorage.length; k++) {
+            var name = localStorage.key(k) || "";
+            if (!/^sb-.+-auth-token$/.test(name)) continue;
+            var session = JSON.parse(localStorage.getItem(name) || "null");
+            if (session && session.expires_at * 1000 > Date.now())
+              user = (session.user && session.user.id) || "";
+          }
+          if (
+            !saved ||
+            !user ||
+            saved.user !== user ||
+            !document.querySelector('link[rel="stylesheet"]')
+          )
             return;
           var root = document.getElementById("root");
           root.innerHTML = saved.html;
