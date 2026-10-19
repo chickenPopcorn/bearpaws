@@ -1,14 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import {
-  deleteSong,
-  library,
-  progress,
-  removeProgress,
-  saveSong,
-  settings,
-  write,
-} from "../src/storage";
-import type { Song } from "../src/song";
+import { progress, removeProgress, settings, write } from "../src/storage";
 let values: Map<string, string>;
 beforeEach(() => {
   values = new Map();
@@ -157,65 +148,4 @@ it("reports quota or denied storage instead of throwing", () => {
   expect(write("settings", {})).toBe(false);
   expect(settings().speed).toBe(1);
   expect(progress("blocked", 5).position).toBe(0);
-});
-
-/** A minimal IndexedDB whose transactions either commit or abort at commit time. */
-function stubIndexedDB(outcome: "complete" | "abort", rows: unknown[] = []) {
-  const close = vi.fn();
-  const database = {
-    close,
-    transaction: () => {
-      const request: { result?: unknown; onsuccess?: () => void } = {};
-      const tx = {
-        error: null as DOMException | null,
-        oncomplete: null as null | (() => void),
-        onabort: null as null | (() => void),
-        objectStore: () => ({
-          getAll: () => request,
-          put: () => request,
-          delete: () => request,
-        }),
-      };
-      queueMicrotask(() => {
-        if (outcome === "complete") {
-          request.result = rows;
-          request.onsuccess?.();
-          tx.oncomplete?.();
-        } else {
-          // Quota failures surface at commit as an abort, without an error event.
-          tx.error = new DOMException("Disk is full", "QuotaExceededError");
-          tx.onabort?.();
-        }
-      });
-      return tx;
-    },
-  };
-  vi.stubGlobal("indexedDB", {
-    open: () => {
-      const request = {
-        result: database,
-        onsuccess: null as null | (() => void),
-      };
-      queueMicrotask(() => request.onsuccess?.());
-      return request;
-    },
-  });
-  return close;
-}
-const storedSong = { id: "stored" } as Song;
-it("returns stored songs and closes the database", async () => {
-  const close = stubIndexedDB("complete", [storedSong]);
-  await expect(library()).resolves.toEqual([storedSong]);
-  await expect(saveSong(storedSong)).resolves.toBeUndefined();
-  await expect(deleteSong(storedSong.id)).resolves.toBeUndefined();
-  expect(close).toHaveBeenCalledTimes(3);
-});
-it.each([
-  ["library", () => library()],
-  ["saveSong", () => saveSong(storedSong)],
-  ["deleteSong", () => deleteSong(storedSong.id)],
-])("rejects when %s's transaction aborts at commit", async (_, run) => {
-  const close = stubIndexedDB("abort");
-  await expect(run()).rejects.toMatchObject({ name: "QuotaExceededError" });
-  expect(close).toHaveBeenCalledOnce();
 });

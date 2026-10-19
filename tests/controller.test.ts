@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
 import type { Song } from "../src/song";
-import { deleteSong, library } from "../src/storage";
 import { builtInSongs } from "../src/lessons";
 
 const env = vi.hoisted(() => ({
   now: 100,
   values: new Map<string, unknown>(),
-  songs: [] as unknown[],
   resets: [] as (() => void)[],
   unlockWait: null as Promise<void> | null,
   prepareWait: null as Promise<void> | null,
@@ -84,12 +82,6 @@ vi.mock("../src/storage", () => ({
       loopEnabled: true,
       ...((env.values.get(`progress:${id}`) as object) ?? {}),
     }),
-  library: vi.fn(async () => env.songs),
-  saveSong: vi.fn(async () => {}),
-  deleteSong: vi.fn(async () => {}),
-  removeProgress: (id: string) =>
-    localStorage.removeItem(`cadence:progress:${id}`),
-  songId: vi.fn(async () => "fixture-hash"),
 }));
 
 function song(pitches: [number, number][], id = "controller-fixture"): Song {
@@ -134,7 +126,6 @@ function midi(studio: Studio, data: number[], delay = 0) {
 beforeEach(() => {
   env.now = 100;
   env.values.clear();
-  env.songs = [];
   env.resets = [];
   env.unlockWait = null;
   env.prepareWait = null;
@@ -276,19 +267,15 @@ describe("practice studio integration", () => {
   it("initializes once and recreates MIDI after the studio is restarted", async () => {
     const studio = create();
     const originalMidi = studio.midi;
-    const loadLibrary = vi.mocked(library).mockClear();
-    const first = studio.init();
-    expect(studio.init()).toBe(first);
-    await first;
+    studio.init();
     const timer = studio.timer;
-    await studio.init();
-    expect(loadLibrary).toHaveBeenCalledOnce();
+    studio.init();
     expect(originalMidi.autoConnect).toHaveBeenCalledOnce();
     expect(studio.timer).toBe(timer);
     studio.destroy();
     expect(studio.timer).toBeNull();
     expect(originalMidi.dispose).toHaveBeenCalledOnce();
-    await studio.init();
+    studio.init();
     expect(studio.midi).not.toBe(originalMidi);
     expect(studio.midi.autoConnect).toHaveBeenCalledOnce();
     await studio.midi.connect();
@@ -301,53 +288,10 @@ describe("practice studio integration", () => {
     vi.mocked(studio.midi.autoConnect).mockReturnValue(
       new Promise<void>(() => {}),
     );
-    await studio.init();
+    studio.init();
     expect(studio.timer).not.toBeNull();
     expect(studio.songs.length).toBeGreaterThan(0);
     expect(studio.midi.autoConnect).toHaveBeenCalledOnce();
-  });
-
-  it("ignores an old library load after destruction and restart", async () => {
-    let finish!: (songs: Song[]) => void;
-    vi.mocked(library).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
-    const studio = create();
-    const pending = studio.init();
-    studio.destroy();
-    expect(studio.timer).toBeNull();
-    env.songs = [song([[62, 1]], "new-library")];
-    await studio.init();
-    const timer = studio.timer;
-    finish([song([[60, 1]], "old-library")]);
-    await pending;
-    expect(studio.timer).toBe(timer);
-    expect(studio.songs.some((entry) => entry.id === "new-library")).toBe(true);
-    expect(studio.songs.some((entry) => entry.id === "old-library")).toBe(
-      false,
-    );
-  });
-
-  it("does not start a timer if destroyed while the library is loading", async () => {
-    let finish!: (songs: Song[]) => void;
-    vi.mocked(library).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
-    const studio = create();
-    const pending = studio.init();
-    studio.destroy();
-    finish([song([[60, 1]], "late-library")]);
-    await pending;
-    expect(studio.timer).toBeNull();
-    expect(studio.songs.some((entry) => entry.id === "late-library")).toBe(
-      false,
-    );
   });
 
   it.each(["song", "mode", "seek", "pause"] as const)(
@@ -826,23 +770,12 @@ describe("practice studio integration", () => {
     expect(studio.audio.prepare).toHaveBeenCalledOnce();
   });
 
-  it("keeps every built-in piece and restores the selected one after library loading", async () => {
-    const builtIns = builtInSongs();
-    env.values.set("settings", { selected: builtIns[1].id });
-    env.songs = [song([[60, 1]], "saved-import")];
-    const studio = create();
-    await studio.init();
-    expect(studio.songs.map((s) => s.id)).toEqual([
-      ...builtIns.map((s) => s.id),
-      "saved-import",
-    ]);
-    expect(studio.song.id).toBe(builtIns[1].id);
-    for (const piece of builtIns) {
-      studio.load(piece);
-      await studio.remove();
-      expect(studio.songs.some((s) => s.id === piece.id)).toBe(true);
-    }
-    expect(deleteSong).not.toHaveBeenCalled();
+  it("starts on the saved song, or the first one once it leaves the library", () => {
+    const songs = builtInSongs();
+    env.values.set("settings", { selected: songs[1].id });
+    expect(create().song.id).toBe(songs[1].id);
+    env.values.set("settings", { selected: "gone-from-library" });
+    expect(create().song.id).toBe(songs[0].id);
   });
 
   it("restores the full An Jing arrangement and practices each suggested hand independently", async () => {
@@ -851,7 +784,6 @@ describe("practice studio integration", () => {
     )!;
     env.values.set("settings", { selected: arrangement.id });
     const studio = create();
-    await studio.init();
 
     expect(studio.song.id).toBe(arrangement.id);
     expect(studio.song.source).toEqual(arrangement.source);
@@ -1279,25 +1211,6 @@ describe("practice studio integration", () => {
     expect(studio.practice.gate).toBeUndefined();
   });
 
-  it("finishes removing an IndexedDB song when clearing its local progress fails", async () => {
-    const imported = song([[60, 1]], "remove-imported");
-    const studio = create(imported);
-    const fallback = studio.songs[0];
-    studio.songs.push(imported);
-    const removeItem = vi.fn(() => {
-      throw new DOMException("Storage blocked", "SecurityError");
-    });
-    vi.stubGlobal("localStorage", { removeItem });
-    vi.mocked(deleteSong).mockClear();
-    await studio.remove();
-    expect(deleteSong).toHaveBeenCalledWith(imported.id);
-    expect(removeItem).toHaveBeenCalledWith(`cadence:progress:${imported.id}`);
-    expect(studio.songs.some((s) => s.id === imported.id)).toBe(false);
-    expect(studio.song.id).toBe(fallback.id);
-    expect(`${studio.storageNotice} ${studio.notice}`).toMatch(/progress/i);
-    expect(studio.notice).not.toMatch(/song could not be removed/i);
-  });
-
   it.each(["song", "mode", "seek", "pause"] as const)(
     "cancels pending audio startup when %s changes before unlock resolves",
     async (change) => {
@@ -1442,51 +1355,5 @@ describe("practice studio integration", () => {
     expect(restored.settings.tolerance).toBe(0.35);
     expect(restored.song.tracks[0].hand).toBe("left");
     expect(restored.transport.loop).toEqual([0.5, 2.5]);
-  });
-
-  it("does not restart practice on the saved built-in song when the library loads late", async () => {
-    const saved = builtInSongs()[2];
-    env.values.set("settings", { selected: saved.id });
-    let finish!: (songs: Song[]) => void;
-    vi.mocked(library).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
-    const studio = create();
-    const loading = studio.init();
-    await studio.play();
-    expect(studio.transport.playing).toBe(true);
-    const transport = studio.transport;
-    finish([]);
-    await loading;
-    expect(studio.song.id).toBe(saved.id);
-    expect(studio.transport).toBe(transport);
-    expect(studio.transport.playing).toBe(true);
-  });
-
-  it("keeps the saved built-in song when the local library is unavailable", async () => {
-    const saved = builtInSongs()[2];
-    env.values.set("settings", { selected: saved.id });
-    const studio = new Studio();
-    active.push(studio);
-    expect(studio.song.id).toBe(saved.id);
-    expect(env.values.get("settings")).toMatchObject({ selected: saved.id });
-    vi.mocked(library).mockRejectedValueOnce(new Error("blocked"));
-    await studio.init();
-    expect(studio.song.id).toBe(saved.id);
-    expect(studio.storageNotice).toMatch(/unavailable/);
-    expect(env.values.get("settings")).toMatchObject({ selected: saved.id });
-  });
-
-  it("restores the previously selected imported song after loading the local library", async () => {
-    const imported = song([[60, 1]], "imported");
-    env.values.set("settings", { selected: "imported" });
-    env.songs = [imported];
-    const studio = new Studio();
-    active.push(studio);
-    await studio.init();
-    expect(studio.song.id).toBe("imported");
   });
 });

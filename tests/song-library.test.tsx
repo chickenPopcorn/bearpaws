@@ -74,7 +74,6 @@ beforeEach(() => {
     songs,
     selected: songs[1].id,
     onSelect: vi.fn(),
-    onImport: vi.fn(),
   };
 });
 afterEach(async () => {
@@ -85,7 +84,7 @@ afterEach(async () => {
 });
 
 describe("song library", () => {
-  it("shows every collection and identifies the selected song and imported files", async () => {
+  it("shows every collection and identifies the selected song", async () => {
     await render();
     expect(titles()).toEqual([
       "Dancing Raindrops",
@@ -97,10 +96,8 @@ describe("song library", () => {
     expect(
       container.querySelector(".song[aria-pressed=true]")?.textContent,
     ).toContain("Frère Jacques");
-    expect(groupContent("songs").textContent).toContain(
-      "Imported MIDI · On this browser",
-    );
     expect(container.querySelector(".nav-label span")?.textContent).toBe("4");
+    expect(container.textContent).not.toContain("Import MIDI");
   });
 
   it.each([
@@ -246,15 +243,13 @@ describe("song library", () => {
     expect(titles()).toEqual(["Frère Jacques", "Jasmine Flower"]);
   });
 
-  it("dispatches selection and import actions with the selected song object", async () => {
+  it("dispatches selection with the selected song object", async () => {
     await render();
     const raindrops = container.querySelector<HTMLButtonElement>(
       "#library-classes .song",
     )!;
     await click(raindrops);
     expect(props.onSelect).toHaveBeenCalledExactlyOnceWith(songs[0]);
-    await click(container.querySelector<HTMLButtonElement>(".import")!);
-    expect(props.onImport).toHaveBeenCalledOnce();
   });
 
   it("shows search-specific empty results and restores songs after clearing", async () => {
@@ -270,12 +265,10 @@ describe("song library", () => {
     expect(titles()).toHaveLength(songs.length);
   });
 
-  it("shows an empty-library message while retaining the import action", async () => {
+  it("shows an empty-library message", async () => {
     await render({ songs: [] });
     expect(titles()).toEqual([]);
-    expect(container.textContent).toContain("Songs you add will appear here.");
-    await click(container.querySelector<HTMLButtonElement>(".import")!);
-    expect(props.onImport).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain("No songs here yet.");
   });
 
   it.each(["./", "/practice/"])(

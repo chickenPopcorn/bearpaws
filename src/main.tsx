@@ -1,6 +1,5 @@
 import React, {
   memo,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -23,7 +22,6 @@ import { LoopBoundInput } from "./LoopBoundInput";
 import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
-import { isBuiltInSong } from "./lessons";
 import { collectionForSong, songsInCollection } from "./collections";
 import "./style.css";
 const studio = new Studio();
@@ -295,11 +293,6 @@ const PassagePanel = memo(function PassagePanel({
           {w}
         </p>
       ))}
-      {!isBuiltInSong(song.id) && (
-        <button className="text-button" onClick={() => void studio.remove()}>
-          Remove this local song
-        </button>
-      )}
     </section>
   );
 });
@@ -432,8 +425,6 @@ function App() {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [connectTried, setConnectTried] = useState(false),
     [busy, setBusy] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
-  const openImport = useCallback(() => file.current?.click(), []);
   const fullscreen = usePianoFullscreen(() => {
     if (!studio.transport.playing && !busy) void startPlayback();
   });
@@ -453,7 +444,7 @@ function App() {
   const previousSong = collectionSongs[songIndex - 1];
   const nextSong = collectionSongs[songIndex + 1];
   useEffect(() => {
-    void studio.init();
+    studio.init();
     const down = (e: KeyboardEvent) => {
       if (
         (e.target as HTMLElement).closest(
@@ -607,21 +598,9 @@ function App() {
             selected={studio.song.id}
             savedSelection={studio.savedSelection}
             onSelect={selectSong}
-            onImport={openImport}
-          />
-          <input
-            ref={file}
-            className="sr-only"
-            type="file"
-            accept=".mid,.midi,audio/midi,audio/x-midi"
-            aria-label="Import MIDI file"
-            onChange={(e) => {
-              if (e.target.files?.[0]) void studio.import(e.target.files[0]);
-              e.target.value = "";
-            }}
           />
           <p className="privacy">
-            Your songs stay here.
+            Progress stays on this browser.
             <br />
             No uploads. No account.
           </p>
@@ -654,22 +633,20 @@ function App() {
                 ) : studio.song.lesson ? (
                   `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
                 ) : (
-                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`
+                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events`
                 )}
               </p>
             </div>
             <div className="song-tools">
               <span className="chip">Saved on this browser</span>
-              {isBuiltInSong(studio.song.id) && (
-                <a
-                  className="song-midi-download"
-                  href={`${import.meta.env.BASE_URL}midi/${studio.song.id}.mid`}
-                  download
-                  aria-label={`Download ${studio.song.title} MIDI`}
-                >
-                  Download MIDI
-                </a>
-              )}
+              <a
+                className="song-midi-download"
+                href={`${import.meta.env.BASE_URL}midi/${studio.song.id}.mid`}
+                download
+                aria-label={`Download ${studio.song.title} MIDI`}
+              >
+                Download MIDI
+              </a>
             </div>
           </div>
           {studio.storageNotice && (
@@ -948,14 +925,4 @@ function App() {
 }
 const container = document.getElementById("root")!;
 const root = createRoot(container);
-const render = () => root.render(<App />);
-// A saved import loads from browser storage. While the page as it was left is
-// on screen, wait briefly for it, so the first render does not show another
-// song. With nothing on screen, rendering now beats a blank wait.
-if (isBuiltInSong(studio.savedSelection) || !container.hasChildNodes())
-  render();
-else
-  void Promise.race([
-    studio.init(),
-    new Promise((resolve) => setTimeout(resolve, 1000)),
-  ]).then(render);
+root.render(<App />);
