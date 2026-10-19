@@ -56,7 +56,8 @@ The MP3 files of the course CD, _Music for Little Mozarts: Lesson and
 Discovery, Level 3_ (Alfred Music, 2015), live in the private bucket
 `cd-audio`, apart from `library`, whose push removes files its index does not
 list. The recordings are copyrighted: they never go into this repository. The
-app does not use them yet.
+app plays the story tracks, with the **Story** button (see
+[how the app uses them](#how-the-app-plays-the-story)).
 
 - `mflm-3/disc-<n>/<nn>.mp3` is each of the 112 tracks, by disc and track
   number (`mflm-3/disc-1/15.mp3` is disc 1, track 15), as `audio/mpeg`, cached
@@ -80,6 +81,22 @@ track already in the bucket with the same size, and uploads the manifest last.
 A recording is never replaced under the same name, since browsers keep each
 for a year; add `--dry-run` to check the folder and print the manifest
 without uploading.
+
+### How the app plays the story
+
+The **Story** button on a piece of Lesson Book 3 plays the story tracks just
+before that piece on disc 1: the track before it, and for the first piece
+(track 3) the opening story too, tracks 1 and 2 in turn. The closing story,
+track 86, comes after the last piece and is not played, nor is disc 2
+(`src/story.ts`).
+
+The app reads `mflm-3/manifest.json` once per page, as the signed-in user
+(`signedInFetch`), the first time a piece of Lesson Book 3 is shown; if it
+cannot, no piece shows the button, and the next piece of Lesson Book 3 shown
+tries again. A story's tracks are fetched only when it plays, the same way,
+and play from object URLs on an audio element of their own, apart from the
+piano's Web Audio. The last four tracks played stay in memory for a story
+played again, and are freed when the studio closes, as on sign-out.
 
 ## Who can read the buckets
 

@@ -1856,6 +1856,51 @@ describe("account sync hooks", () => {
   });
 });
 
+describe("the CD's story", () => {
+  const narration = () => ({ stop: vi.fn() });
+
+  it("stops as practice starts, before its piano sound loads", async () => {
+    const studio = create(song([[60, 1]]));
+    studio.mode("listen");
+    const story = narration();
+    studio.narration = story;
+    let finish!: () => void;
+    env.prepareWait = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const playing = studio.play();
+    expect(story.stop).toHaveBeenCalledOnce();
+    expect(studio.transport.playing).toBe(false);
+    finish();
+    await playing;
+    expect(studio.transport.playing).toBe(true);
+    // Pausing leaves it be: nothing plays to stop.
+    studio.pause();
+    expect(story.stop).toHaveBeenCalledOnce();
+  });
+
+  it("keeps playing when Play has nothing to play", async () => {
+    const studio = create(song([[60, 1]]));
+    const story = narration();
+    studio.narration = story;
+    studio.hand("left");
+    studio.hand("right");
+    await studio.play();
+    expect(studio.notice).toMatch(/Turn on Left, Right/);
+    expect(story.stop).not.toHaveBeenCalled();
+  });
+
+  it("stops as another song opens and as the studio closes", () => {
+    const studio = create(song([[60, 1]]));
+    const story = narration();
+    studio.narration = story;
+    studio.load(song([[62, 1]], "another-song"));
+    expect(story.stop).toHaveBeenCalledOnce();
+    studio.destroy();
+    expect(story.stop).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("practice time", () => {
   // A wrong key holds Wait mode at its first note, so playback keeps running.
   const held = () => song([[60, 1]]);

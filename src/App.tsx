@@ -24,6 +24,7 @@ import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { bookForSong, songsInBook } from "./books";
 import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
 import { cloud, currentUser, studio } from "./session";
+import { CD_AUDIO_BUCKET, StoryPlayer } from "./story";
 import { signedInFetch } from "./supabase";
 /**
  * Save a library song's MIDI file. Only a signed-in request can read it, so
@@ -45,6 +46,20 @@ async function downloadMidi(song: Song) {
     studio.notice = `${song.title} could not be downloaded. Check your connection and try again.`;
     studio.emit();
   }
+}
+/** The course CD's story before each piece of Lesson Book 3. */
+const story = new StoryPlayer(
+  (path) =>
+    `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/authenticated/${CD_AUDIO_BUCKET}/${path}`,
+  signedInFetch,
+);
+/** Play the story before `song`. Practice pauses first: they never sound together. */
+function playStory(song: Song) {
+  studio.pause();
+  story.play(song.id).catch(() => {
+    studio.notice = `The story before ${song.title} could not be played. Check your connection and try again.`;
+    studio.emit();
+  });
 }
 const practiceDay = () => studio.practiceLog.today();
 const setLearnerName = (name: string) => studio.learnerName(name);
@@ -149,6 +164,36 @@ const Piano = memo(function Piano() {
       onPointerCancel={release}
       onLostPointerCapture={release}
     />
+  );
+});
+/**
+ * Play or stop the CD's story that leads into a piece of Lesson Book 3, once
+ * the CD's manifest says the piece has one.
+ */
+const StoryButton = memo(function StoryButton({ song }: { song: Song }) {
+  useSyncExternalStore(story.subscribe, story.snapshot);
+  const lesson = song.library?.book === "lesson-3";
+  // The manifest loads with the first piece of Lesson Book 3 shown.
+  useEffect(() => {
+    if (lesson) story.load();
+  }, [lesson, song.id]);
+  if (!story.has(song.id)) return null;
+  const playing = story.playing === song.id;
+  return (
+    <button
+      type="button"
+      className="song-story"
+      aria-pressed={playing}
+      aria-label={playing ? "Stop story" : "Play story"}
+      title="The story from the CD that leads into this piece"
+      // A click leaves the focus where it was, so Space and Enter go on
+      // controlling practice rather than this button.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => (playing ? story.stop() : playStory(song))}
+    >
+      <span aria-hidden="true">{playing ? "■" : "▷"}</span>{" "}
+      {playing ? "Stop story" : "Story"}
+    </button>
   );
 });
 /** Where the mode switcher's highlight sits, measured from the active button. */
@@ -498,6 +543,7 @@ export function App({
   const nextSong = bookSongs[songIndex + 1];
   useEffect(() => {
     studio.init();
+    studio.narration = story;
     const down = (e: KeyboardEvent) => {
       if (
         (e.target as HTMLElement).closest(
@@ -543,6 +589,8 @@ export function App({
     document.addEventListener("visibilitychange", hidden);
     return () => {
       studio.destroy();
+      studio.narration = null;
+      story.dispose();
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur);
@@ -550,6 +598,10 @@ export function App({
       document.removeEventListener("visibilitychange", hidden);
     };
   }, []);
+  // Full screen is for practice.
+  useEffect(() => {
+    if (fullscreen.expanded) story.stop();
+  }, [fullscreen.expanded]);
   const stageNotice = studio.audio.loading
     ? "Loading grand piano sound…"
     : studio.notice;
@@ -737,6 +789,7 @@ export function App({
             </div>
             <div className="song-tools">
               <span className="chip">{book.title}</span>
+              <StoryButton song={studio.song} />
               {studio.song.library?.midi && (
                 <button
                   type="button"
