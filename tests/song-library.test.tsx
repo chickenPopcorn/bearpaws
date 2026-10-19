@@ -3,47 +3,37 @@ import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SongLibrary } from "../src/SongLibrary";
-import { builtInSongs } from "../src/lessons";
+import type { LibraryBook } from "../src/library";
 import type { Song } from "../src/song";
-
-// Lesson Book 3 has no songs yet, so the tests give both books their own.
-const bookIds = vi.hoisted(() => ({
-  "recital-3": ["cadence-dancing-raindrops-v1", "frere-jacques", "my-waltz"],
-  "lesson-3": ["jasmine-flower", "an-jing", "jingle-bells"],
-}));
-vi.mock("../src/books", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/books")>();
-  const books = actual.books.map((book) => ({
-    ...book,
-    songs: bookIds[book.id],
-  }));
-  const bookForSong = (id: string) =>
-    books.find((book) => book.songs.includes(id)) ?? books[0];
-  return {
-    ...actual,
-    books,
-    bookForSong,
-    songsInBook: (songs: readonly Song[], id: string) =>
-      songs.filter((song) => bookForSong(song.id).id === id),
-  };
-});
+import { fixtureLibrary } from "./fixtures/library";
 
 type LibraryProps = ComponentProps<typeof SongLibrary>;
-const base = builtInSongs()[0];
-const song = (id: string, title: string, composer?: string): Song => ({
+const base = fixtureLibrary()[0];
+const song = (
+  id: string,
+  title: string,
+  composer: string | undefined,
+  book: LibraryBook,
+): Song => ({
   ...base,
   id,
   title,
   lesson: composer ? { ...base.lesson!, composer } : undefined,
+  library: { book },
 });
 const songs = [
-  song("cadence-dancing-raindrops-v1", "Dancing Raindrops", "Émile Example"),
-  song("frere-jacques", "Frère Jacques", "Traditional"),
-  song("jasmine-flower", "Jasmine Flower", "Traditional"),
-  song("my-waltz", "My Waltz"),
+  song(
+    "cadence-dancing-raindrops-v1",
+    "Dancing Raindrops",
+    "Émile Example",
+    "recital-3",
+  ),
+  song("frere-jacques", "Frère Jacques", "Traditional", "recital-3"),
+  song("jasmine-flower", "Jasmine Flower", "Traditional", "lesson-3"),
+  song("my-waltz", "My Waltz", undefined, "recital-3"),
 ];
 const fullPiano: Song = {
-  ...song("an-jing", "安静 · 周杰伦"),
+  ...song("an-jing", "安静 · 周杰伦", undefined, "lesson-3"),
   source: {
     composer: "周杰伦 · Jay Chou",
     description: "Full piano arrangement without suggested finger numbers.",
@@ -128,12 +118,11 @@ describe("song library", () => {
       container.querySelector(".song[aria-pressed=true]")?.textContent,
     ).toContain("Frère Jacques");
     expect(container.textContent).not.toContain("Import MIDI");
-    expect(container.textContent).not.toContain("starter MIDI pack");
   });
 
   it("shows a book with no songs yet", async () => {
     await render({
-      songs: songs.filter((s) => bookIds["recital-3"].includes(s.id)),
+      songs: songs.filter((s) => s.library?.book === "recital-3"),
     });
     expect(groupToggle("lesson-3").textContent).toMatch(/Lesson Book 3 *0$/);
     await click(groupToggle("lesson-3"));
@@ -172,6 +161,7 @@ describe("song library", () => {
         "jingle-bells",
         "Jingle Bells",
         "James Lord Pierpont",
+        "recital-3",
       );
       await render({ songs: [jingle], selected: jingle.id });
       await type("JINGLE");

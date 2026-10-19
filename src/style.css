@@ -182,6 +182,52 @@ span.device {
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
 }
+/* The page shown while the studio loads, or when it cannot. */
+.signin {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+}
+.signin-card {
+  width: min(100%, 380px);
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 8px 40px #3e28530a;
+}
+.signin-card h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -1px;
+}
+.signin-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+.signin-google {
+  width: 100%;
+  margin-top: var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.signin-google:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+.signin .signin-error {
+  color: #a2324d;
+  font-size: var(--text-sm);
+}
 .dot {
   width: 7px;
   height: 7px;

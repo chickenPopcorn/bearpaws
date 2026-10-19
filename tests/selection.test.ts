@@ -1,10 +1,11 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
 import type { Song } from "../src/song";
+import { fixtureLibrary } from "./fixtures/library";
 afterEach(() => vi.unstubAllGlobals());
 it("reuses selected notes between clock/render reads and invalidates on hand or assignment changes", () => {
   vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
-  const studio = new Studio();
+  const studio = new Studio(fixtureLibrary());
   let handReads = 0;
   const tracks = Array.from({ length: 256 }, (_, id) => ({
     id,

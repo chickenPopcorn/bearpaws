@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { SheetTimeline } from "../src/SheetTimeline";
-import { builtInSongs } from "../src/lessons";
+import { fixtureLibrary } from "./fixtures/library";
 import type { Mode } from "../src/engine";
 import type { Note, Song } from "../src/song";
 
@@ -277,7 +277,7 @@ describe("sheet timeline SVG progress", () => {
   });
 
   it("draws a silent 3/4 bar as a whole rest and keeps dotted-half notes dotted", () => {
-    const piece = builtInSongs().find(
+    const piece = fixtureLibrary().find(
       (candidate) => candidate.id === "pawpal-five-oclock-v1",
     )!;
     const markup = render(piece);
@@ -305,7 +305,7 @@ describe("sheet timeline SVG progress", () => {
   });
 
   it("puts Dancing Raindrops' G3 label above E3 without changing their notes or fingers", () => {
-    const piece = builtInSongs().find(
+    const piece = fixtureLibrary().find(
       (candidate) => candidate.id === "cadence-dancing-raindrops-v1",
     )!;
     const e = piece.notes.find(

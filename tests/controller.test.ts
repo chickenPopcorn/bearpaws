@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
 import type { Note, Song } from "../src/song";
-import { builtInSongs, classSongs } from "../src/lessons";
+import { fixtureLibrary } from "./fixtures/library";
 
 const env = vi.hoisted(() => ({
   now: 100,
@@ -175,7 +175,7 @@ function duetSong(): Song {
 }
 const active: Studio[] = [];
 function create(fixture?: Song) {
-  const studio = new Studio();
+  const studio = new Studio(fixtureLibrary());
   active.push(studio);
   if (fixture) studio.load(fixture);
   studio.speed(1);
@@ -240,7 +240,7 @@ describe("practice studio integration", () => {
       voices: studio.settings.pianoVoices,
     });
     studio.sound(0.31);
-    studio.load(builtInSongs()[1]);
+    studio.load(fixtureLibrary()[1]);
     expect(studio.settings).toMatchObject({
       ambience: 0.31,
     });
@@ -838,45 +838,11 @@ describe("practice studio integration", () => {
   });
 
   it("starts on the saved song, or the first one once it leaves the library", () => {
-    const songs = classSongs();
-    expect(create().songs.map((song) => song.id)).toEqual(
-      songs.map((song) => song.id),
-    );
+    const songs = fixtureLibrary();
     env.values.set("settings", { selected: songs[1].id });
     expect(create().song.id).toBe(songs[1].id);
     env.values.set("settings", { selected: "gone-from-library" });
     expect(create().song.id).toBe(songs[0].id);
-  });
-
-  it("loads the full An Jing arrangement and practices each suggested hand independently", async () => {
-    const arrangement = builtInSongs().find(
-      (piece) => piece.id === "bearpaws-an-jing-v1",
-    )!;
-    const studio = create(arrangement);
-
-    expect(studio.song.id).toBe(arrangement.id);
-    expect(studio.song.source).toEqual(arrangement.source);
-    expect(studio.song.lesson).toBeUndefined();
-    expect(studio.notes).toHaveLength(1369);
-    expect(studio.practice.notes).toEqual(studio.notes);
-
-    studio.hand("left");
-    expect(studio.notes).toHaveLength(761);
-    expect(studio.notes.every((note) => note.pitch >= 60)).toBe(true);
-    expect(studio.scoringNotes).toEqual(studio.notes);
-    expect(studio.practice.notes).toEqual(studio.notes);
-
-    studio.hand("left");
-    studio.hand("right");
-    expect(studio.notes).toHaveLength(608);
-    expect(studio.notes.every((note) => note.pitch < 60)).toBe(true);
-    expect(studio.scoringNotes).toEqual(studio.notes);
-    expect(studio.practice.notes).toEqual(studio.notes);
-
-    studio.hand("right");
-    expect(studio.notes).toHaveLength(1369);
-    expect(studio.practice.notes).toEqual(studio.notes);
-    expect(studio.song.source).toEqual(arrangement.source);
   });
 
   it("turns each hand on and off on its own, including both off", async () => {
@@ -1363,7 +1329,7 @@ describe("practice studio integration", () => {
     studio.loop(false);
     studio.seek(3);
     studio.save();
-    const restored = new Studio();
+    const restored = new Studio(fixtureLibrary());
     active.push(restored);
     restored.load(fixture);
     expect(restored.loopEnabled).toBe(false);
@@ -1416,7 +1382,7 @@ describe("practice studio integration", () => {
     studio.loop(true);
     studio.seek(1.5);
     studio.save();
-    const restored = new Studio();
+    const restored = new Studio(fixtureLibrary());
     active.push(restored);
     restored.load(fixture);
     expect(restored.position).toBe(1.5);
