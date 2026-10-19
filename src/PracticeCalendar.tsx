@@ -18,6 +18,18 @@ function Star() {
   );
 }
 
+/** A week's stamp: grey until every day of the week earned its star. */
+function Stamp() {
+  return (
+    <img
+      className="practice-stamp-mark"
+      src={`${import.meta.env.BASE_URL}bearpaws.svg?v=3`}
+      alt=""
+      aria-hidden="true"
+    />
+  );
+}
+
 /** Today's progress toward the goal, as a ring around the date. */
 function Ring({ seconds, goal }: { seconds: number; goal: number }) {
   const length = 2 * Math.PI * 15;
@@ -58,7 +70,8 @@ export function useLocalDay(today: () => string) {
 
 /**
  * This month's practice: a star on each day with at least the daily goal, a
- * dot on days with some practice, and a ring filling up for today. Today's
+ * dot on days with some practice, and a ring filling up for today. Each week
+ * ends with a stamp, coloured in once all seven days have their star. Today's
  * star pops when the goal is met while the studio is open. The learner's name
  * and the goal can be edited here.
  */
@@ -104,11 +117,75 @@ export const PracticeCalendar = memo(function PracticeCalendar({
     { length: new Date(year, month, 0).getDate() },
     (_, i) => addDays(`${today.slice(0, 8)}01`, i),
   );
+  // One row per week, Monday to Sunday; a week can reach into the months
+  // around this one, and its stamp counts those days too.
+  const weeks = Array.from(
+    { length: Math.ceil((blanks + dates.length) / 7) },
+    (_, row) => addDays(dates[0], row * 7 - blanks),
+  );
   const run = streak(totals, today, goal);
   const done = todaySeconds >= goal;
 
+  const dayCell = (day: string) => {
+    const seconds = totals.get(day) ?? 0;
+    const date = Number(day.slice(8));
+    const isToday = day === today;
+    const met = seconds >= goal;
+    const state = met
+      ? "done"
+      : isToday
+        ? "today"
+        : day > today
+          ? "future"
+          : seconds > 0
+            ? "some"
+            : "";
+    const label = `${monthName} ${date}${isToday ? ", today" : ""}: ${
+      met
+        ? `${plural(minutes(seconds), "minute")}, star earned`
+        : isToday
+          ? `${minutes(seconds)} of ${goalMinutes} minutes`
+          : day > today
+            ? "coming up"
+            : seconds > 0
+              ? plural(minutes(seconds), "minute")
+              : "no practice"
+    }`;
+    return (
+      <span
+        key={day}
+        role="listitem"
+        aria-label={label}
+        title={label}
+        className={`practice-day ${state} ${isToday ? "is-today" : ""} ${
+          isToday && celebrating ? "celebrate" : ""
+        }`}
+      >
+        {met ? <Star /> : date}
+        {isToday && !met && <Ring seconds={seconds} goal={goal} />}
+        {isToday &&
+          celebrating &&
+          Array.from({ length: 8 }, (_, i) => (
+            <i
+              key={i}
+              className="practice-spark"
+              style={
+                {
+                  "--angle": `${i * 45}deg`,
+                } as CSSProperties
+              }
+            />
+          ))}
+      </span>
+    );
+  };
+
   return (
-    <section className="practice-calendar" aria-labelledby="practice-month">
+    <section
+      className={`practice-calendar ${name ? "has-learner" : ""}`}
+      aria-labelledby="practice-month"
+    >
+      {name && <p className="practice-learner">{name}’s practice</p>}
       <div className="practice-calendar-head">
         <strong id="practice-month">{monthName}</strong>
         {run > 0 && (
@@ -124,61 +201,32 @@ export const PracticeCalendar = memo(function PracticeCalendar({
             {name}
           </span>
         ))}
-        {Array.from({ length: blanks }, (_, i) => (
-          <span key={`blank-${i}`} aria-hidden="true" />
-        ))}
-        {dates.map((day) => {
-          const seconds = totals.get(day) ?? 0;
-          const date = Number(day.slice(8));
-          const isToday = day === today;
-          const met = seconds >= goal;
-          const state = met
-            ? "done"
-            : isToday
-              ? "today"
-              : day > today
-                ? "future"
-                : seconds > 0
-                  ? "some"
-                  : "";
-          const label = `${monthName} ${date}${isToday ? ", today" : ""}: ${
-            met
-              ? `${plural(minutes(seconds), "minute")}, star earned`
-              : isToday
-                ? `${minutes(seconds)} of ${goalMinutes} minutes`
-                : day > today
-                  ? "coming up"
-                  : seconds > 0
-                    ? plural(minutes(seconds), "minute")
-                    : "no practice"
-          }`;
-          return (
+        <span aria-hidden="true" />
+        {weeks.map((monday) => {
+          const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+          const stars = week.filter((d) => (totals.get(d) ?? 0) >= goal).length;
+          const earned = stars === 7;
+          const stampLabel = `Week of ${monthName} ${Number(
+            week.find((d) => d.slice(0, 7) === today.slice(0, 7))!.slice(8),
+          )}: ${earned ? "stamp earned" : `${stars} of 7 stars`}`;
+          return [
+            ...week.map((d) =>
+              d.slice(0, 7) === today.slice(0, 7) ? (
+                dayCell(d)
+              ) : (
+                <span key={d} aria-hidden="true" />
+              ),
+            ),
             <span
-              key={day}
+              key={`stamp-${monday}`}
               role="listitem"
-              aria-label={label}
-              title={label}
-              className={`practice-day ${state} ${isToday ? "is-today" : ""} ${
-                isToday && celebrating ? "celebrate" : ""
-              }`}
+              aria-label={stampLabel}
+              title={stampLabel}
+              className={`practice-stamp ${earned ? "earned" : ""}`}
             >
-              {met ? <Star /> : date}
-              {isToday && !met && <Ring seconds={seconds} goal={goal} />}
-              {isToday &&
-                celebrating &&
-                Array.from({ length: 8 }, (_, i) => (
-                  <i
-                    key={i}
-                    className="practice-spark"
-                    style={
-                      {
-                        "--angle": `${i * 45}deg`,
-                      } as CSSProperties
-                    }
-                  />
-                ))}
-            </span>
-          );
+              <Stamp />
+            </span>,
+          ];
         })}
       </div>
       <div className="practice-foot">
