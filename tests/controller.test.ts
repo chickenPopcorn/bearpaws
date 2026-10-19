@@ -7,8 +7,10 @@ const env = vi.hoisted(() => ({
   now: 100,
   values: new Map<string, unknown>(),
   resets: [] as (() => void)[],
-  /** Each studio's report that its duet MIDI output was lost. */
+  /** Each studio's report that its MIDI output was lost. */
   outputLosses: [] as (() => void)[],
+  /** Each studio's report that the app chose a MIDI output itself. */
+  outputChoices: [] as ((id: string, opened: Promise<void>) => void)[],
   unlockWait: null as Promise<void> | null,
   prepareWait: null as Promise<void> | null,
   /** What each studio does when another tab changes stored practice. */
@@ -43,12 +45,23 @@ vi.mock("../src/midi", () => ({
     status = "disconnected";
     message = "No piano";
     devices = [];
-    duet = { connected: false, stop: vi.fn(), schedule: vi.fn() };
+    player = {
+      connected: false,
+      stop: vi.fn(),
+      schedule: vi.fn(),
+      keyDown: vi.fn(),
+      keyUp: vi.fn(),
+    };
     selectOutput = vi.fn(async () => {});
     selectedId = "";
-    constructor(callbacks: { onReset(): void; onOutputLost(): void }) {
+    constructor(callbacks: {
+      onReset(): void;
+      onOutputLost(): void;
+      onOutputChosen(id: string, opened: Promise<void>): void;
+    }) {
       env.resets.push(callbacks.onReset);
       env.outputLosses.push(callbacks.onOutputLost);
+      env.outputChoices.push(callbacks.onOutputChosen);
     }
     connect = vi.fn(async () => {});
     autoConnect = vi.fn(async () => {});
@@ -66,7 +79,6 @@ vi.mock("../src/storage", () => ({
     right: true,
     duet: false,
     tolerance: 0.22,
-    reference: true,
     names: true,
     selected: "cadence-ode-to-joy-v1",
     ambience: 0.22,
@@ -193,6 +205,13 @@ function advance(studio: Studio, seconds: number) {
 function midi(studio: Studio, data: number[], delay = 0) {
   studio.receive(new Uint8Array(data), (env.now - delay) * 1000);
 }
+/** A MIDI output is open, or with `false`, has gone. */
+function output(studio: Studio, connected = true) {
+  Object.defineProperty(studio.midi.player, "connected", {
+    value: connected,
+    configurable: true,
+  });
+}
 
 beforeEach(() => {
   env.now = 100;
@@ -200,6 +219,7 @@ beforeEach(() => {
   env.watchers.clear();
   env.resets = [];
   env.outputLosses = [];
+  env.outputChoices = [];
   env.unlockWait = null;
   env.prepareWait = null;
   vi.spyOn(performance, "now").mockImplementation(() => env.now * 1000);
@@ -394,21 +414,25 @@ describe("practice studio integration", () => {
     },
   );
 
-  it.each([false, true])(
-    "keeps browser playback going after losing an unused output (duet enabled: %s)",
-    async (enabled) => {
-      const studio = create(enabled ? song([[60, 1]]) : duetSong());
-      if (enabled) studio.duet();
-      studio.mode("listen");
-      Object.defineProperty(studio.midi.duet, "connected", {
-        value: true,
-        configurable: true,
-      });
+  it.each([
+    ["listen", false, true],
+    ["wait", false, false],
+    ["rhythm", false, false],
+    ["rhythm", true, true],
+  ] as const)(
+    "after losing the MIDI output in %s (duet: %s), stops only a run that sent it notes: %s",
+    async (mode, duet, stops) => {
+      const studio = create(duetSong());
+      if (duet) studio.duet();
+      studio.mode(mode);
+      output(studio);
       await studio.play();
-      Object.defineProperty(studio.midi.duet, "connected", { value: false });
+      output(studio, false);
       env.outputLosses.at(-1)!();
-      expect(studio.transport.playing).toBe(true);
-      expect(studio.notice).toBe("");
+      expect(studio.transport.playing).toBe(!stops);
+      expect(studio.notice).toBe(
+        stops ? "Piano output disconnected. Press Play to continue." : "",
+      );
     },
   );
 
@@ -423,18 +447,58 @@ describe("practice studio integration", () => {
           finish = resolve;
         }),
     );
-    Object.defineProperty(studio.midi.duet, "connected", { value: true });
-    const selecting = studio.duetOutput("first");
+    output(studio);
+    const selecting = studio.soundOutput("first");
     expect(studio.outputChanging).toBe(true);
     expect(studio.transport.playing).toBe(false);
     await studio.play();
     expect(studio.transport.playing).toBe(false);
-    await studio.duetOutput("second");
+    await studio.soundOutput("second");
     expect(studio.midi.selectOutput).toHaveBeenCalledExactlyOnceWith("first");
     finish();
     await selecting;
     expect(studio.transport.playing).toBe(true);
     expect(studio.outputChanging).toBe(false);
+  });
+
+  it("moves a run to the piano output the app chooses as it connects", async () => {
+    const studio = create(duetSong());
+    studio.mode("listen");
+    await studio.play();
+    advance(studio, 0.5);
+    let finish!: () => void;
+    const opened = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    vi.mocked(studio.audio.prepare).mockClear();
+    env.outputChoices.at(-1)!("piano", opened);
+    // Nothing plays, or starts, until the piano is open.
+    expect(studio.outputChanging).toBe(true);
+    expect(studio.transport.playing).toBe(false);
+    await studio.play();
+    expect(studio.transport.playing).toBe(false);
+    output(studio);
+    finish();
+    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
+    expect(studio.outputChanging).toBe(false);
+    expect(studio.position).toBeCloseTo(0.5);
+    // The piano plays it all, so the laptop loads nothing.
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([], []);
+  });
+
+  it("stays paused when the piano output the app chose fails to open", async () => {
+    const studio = create(duetSong());
+    studio.mode("listen");
+    await studio.play();
+    const choosing = Promise.resolve();
+    env.outputChoices.at(-1)!("piano", choosing);
+    await choosing;
+    await vi.waitFor(() => expect(studio.outputChanging).toBe(false));
+    await Promise.resolve();
+    expect(studio.transport.playing).toBe(false);
+    await studio.play();
+    expect(studio.transport.playing).toBe(true);
   });
 
   it("starts no run while an output choice is still opening", async () => {
@@ -447,8 +511,8 @@ describe("practice studio integration", () => {
           finish = resolve;
         }),
     );
-    const selecting = studio.duetOutput("piano");
-    // A run started now would prepare the duet for the laptop.
+    const selecting = studio.soundOutput("piano");
+    // A run started now would prepare its notes for the laptop.
     await studio.play();
     expect(studio.transport.playing).toBe(false);
     expect(studio.audio.prepare).not.toHaveBeenCalled();
@@ -476,10 +540,33 @@ describe("practice studio integration", () => {
     await vi.waitFor(() => expect(studio.audio.tone).toHaveBeenCalledOnce());
   });
 
+  it("plays on-screen keys on the MIDI output while they are held, and never echoes the piano's own", async () => {
+    const studio = create(song([[60, 1]]));
+    output(studio);
+    midi(studio, [0x90, 64, 100]);
+    midi(studio, [0x80, 64, 0]);
+    expect(studio.midi.player.keyDown).not.toHaveBeenCalled();
+    studio.virtual(60, true);
+    expect(studio.midi.player.keyDown).toHaveBeenCalledExactlyOnceWith(60, 0.6);
+    expect(studio.input.down.has(60)).toBe(true);
+    studio.virtual(60, false);
+    expect(studio.midi.player.keyUp).toHaveBeenCalledExactlyOnceWith(60);
+    // A computer shortcut held as the window loses focus comes up too.
+    studio.virtual(62, true);
+    studio.releaseKeys();
+    expect(studio.midi.player.keyUp).toHaveBeenLastCalledWith(62);
+    expect(studio.input.down.size).toBe(0);
+    await Promise.resolve();
+    expect(studio.audio.unlock).not.toHaveBeenCalled();
+    expect(studio.audio.tone).not.toHaveBeenCalled();
+  });
+
   it.each(["listen", "rhythm"] as const)(
     "handles a bound MIDI source reset while %s samples are preparing",
     async (mode) => {
-      const studio = create(song([[60, 1]]));
+      // Rhythm plays only the duet, which needs its samples.
+      const studio = create(duetSong());
+      studio.duet();
       studio.mode(mode);
       let finish!: () => void;
       env.prepareWait = new Promise<void>((resolve) => {
@@ -805,8 +892,10 @@ describe("practice studio integration", () => {
   });
 
   it.each(["wait", "rhythm"] as const)(
-    "starts %s practice without loading or pinning the sample bank when reference is off",
+    "starts %s practice without loading or pinning the sample bank",
     async (mode) => {
+      // An older save's Rhythm reference sound no longer plays the part.
+      env.values.set("settings", { reference: true });
       const studio = create(
         song([
           [60, 0.5],
@@ -814,7 +903,6 @@ describe("practice studio integration", () => {
         ]),
       );
       studio.mode(mode);
-      studio.reference(false);
       vi.mocked(studio.audio.prepare).mockRejectedValue(
         new Error("sample bank unavailable"),
       );
@@ -844,69 +932,6 @@ describe("practice studio integration", () => {
       expect.any(AbortSignal),
       undefined,
     );
-  });
-
-  it("prepares reference samples before resuming an active quiet Rhythm session", async () => {
-    const studio = create(
-      song([
-        [60, 0.5],
-        [63, 2.5],
-      ]),
-    );
-    studio.mode("rhythm");
-    studio.reference(false);
-    await studio.play();
-    advance(studio, 0.25);
-    let finish!: () => void;
-    env.prepareWait = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-    studio.reference(true);
-    expect(studio.transport.playing).toBe(false);
-    await vi.waitFor(() =>
-      expect(studio.audio.prepare).toHaveBeenCalledExactlyOnceWith(
-        studio.notes,
-        expect.any(AbortSignal),
-        [],
-      ),
-    );
-    advance(studio, 1);
-    expect(studio.position).toBe(0.25);
-    finish();
-    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
-    expect(studio.position).toBe(0.25);
-    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith(
-      studio.notes,
-      [],
-    );
-  });
-
-  it("can disable reference during preparation and ignores that stale completion", async () => {
-    const studio = create(
-      song([
-        [60, 0.5],
-        [63, 2.5],
-      ]),
-    );
-    studio.mode("rhythm");
-    studio.reference(false);
-    await studio.play();
-    let finish!: () => void;
-    env.prepareWait = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-    studio.reference(true);
-    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
-    const preparation = vi.mocked(studio.audio.prepare).mock.results[0].value;
-    studio.reference(false);
-    await vi.waitFor(() => expect(studio.transport.playing).toBe(true));
-    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([], []);
-    finish();
-    await preparation;
-    await Promise.resolve();
-    expect(studio.settings.reference).toBe(false);
-    expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([], []);
-    expect(studio.audio.prepare).toHaveBeenCalledOnce();
   });
 
   it("starts on the saved song, or the first one once it leaves the library", () => {
@@ -1467,15 +1492,20 @@ describe("practice studio integration", () => {
 
 describe("teacher duet", () => {
   const ids = (notes: readonly { id: string }[]) => notes.map((n) => n.id);
-  /** The notes the last audio schedule() call was given, if it was enabled. */
   /**
    * The notes the last audio schedule() call was given for this pass, or with
    * `next` for a loop's next pass, if it was enabled.
    */
   const scheduled = (studio: Studio, next = false) => {
-    const calls = vi.mocked(studio.audio.schedule).mock.calls;
-    const [notes, , enabled, , ahead] = calls.at(-1)!;
+    const call = vi.mocked(studio.audio.schedule).mock.calls.at(-1);
+    if (!call) return [];
+    const [notes, , enabled, , ahead] = call;
     return enabled ? ids(next ? (ahead ?? notes) : notes) : [];
+  };
+  /** The notes the last MIDI tick was given. */
+  const sent = (studio: Studio) => {
+    const call = vi.mocked(studio.midi.player.schedule).mock.calls.at(-1);
+    return call ? ids(call[0]) : [];
   };
 
   it("starts off, and moves the student part up the printed octaves when on", () => {
@@ -1582,50 +1612,44 @@ describe("teacher duet", () => {
     expect(studio.audio.hold).toHaveBeenCalledOnce();
   });
 
-  it("routes only the teacher to MIDI, waits at gates and silences output on pause and seek", async () => {
+  it("sends only the teacher to MIDI in Wait for me, waits at gates and silences output on pause and seek", async () => {
     const studio = create(duetSong());
-    Object.defineProperty(studio.midi.duet, "connected", { value: true });
+    output(studio);
     studio.duet();
     await studio.play();
     expect(studio.audio.prepare).not.toHaveBeenCalled();
     advance(studio, 1);
-    expect(scheduled(studio)).toEqual([]);
-    let call = vi.mocked(studio.midi.duet.schedule).mock.calls.at(-1)!;
+    expect(studio.audio.schedule).not.toHaveBeenCalled();
+    let call = vi.mocked(studio.midi.player.schedule).mock.calls.at(-1)!;
     expect(ids(call[0])).toEqual(["duet-0"]);
     expect(call[3]).toBe(true);
     midi(studio, [0x90, 72, 100]);
-    call = vi.mocked(studio.midi.duet.schedule).mock.calls.at(-1)!;
+    call = vi.mocked(studio.midi.player.schedule).mock.calls.at(-1)!;
     expect(ids(call[0])).toEqual(["duet-0", "duet-1", "duet-2"]);
     expect(call[3]).toBe(false);
-    vi.mocked(studio.midi.duet.stop).mockClear();
+    vi.mocked(studio.midi.player.stop).mockClear();
     studio.pause();
-    expect(studio.midi.duet.stop).toHaveBeenCalledOnce();
+    expect(studio.midi.player.stop).toHaveBeenCalledOnce();
     studio.seek(0);
-    expect(studio.midi.duet.stop).toHaveBeenCalledTimes(2);
+    expect(studio.midi.player.stop).toHaveBeenCalledTimes(2);
   });
 
-  it("cancels a start still loading when the duet's MIDI output is lost", async () => {
+  it("cancels a start still opening audio when its MIDI output is lost", async () => {
     const studio = create(duetSong());
     studio.mode("listen");
-    studio.duet();
-    Object.defineProperty(studio.midi.duet, "connected", {
-      value: true,
-      configurable: true,
-    });
+    output(studio);
     let finish!: () => void;
-    env.prepareWait = new Promise<void>((resolve) => {
+    env.unlockWait = new Promise<void>((resolve) => {
       finish = resolve;
     });
     const starting = studio.play();
-    await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
-    const signal = vi.mocked(studio.audio.prepare).mock.calls[0][1]!;
-    Object.defineProperty(studio.midi.duet, "connected", { value: false });
+    output(studio, false);
     env.outputLosses.at(-1)!();
-    expect(signal.aborted).toBe(true);
     expect(studio.notice).toMatch(/Piano output disconnected.*Press Play/);
     finish();
     await starting;
     expect(studio.transport.playing).toBe(false);
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
   });
 
   it("sounds a duet note a Wait loop seek lands in", async () => {
@@ -1660,40 +1684,80 @@ describe("teacher duet", () => {
     expect(scheduled(studio, true)).toEqual(["duet-0"]);
   });
 
-  it("plays along in Listen and Rhythm, and only the duet with Rhythm's reference off", async () => {
-    const studio = create(duetSong());
-    const played = () =>
-      ids(
-        vi
-          .mocked(studio.audio.setPlaybackNotes)
-          .mock.calls.at(-1)![0] as readonly Note[],
-      );
+  const student = ["note-0", "note-1"],
+    teacher = ["duet-0", "duet-1", "duet-2", "duet-3"];
+  /**
+   * What each mode plays, with Duet off and on: the passage, and what sounds
+   * 0.6 s in. Only Listen plays the student part. Wait for me holds the
+   * teacher at the student's first note, at 1 s.
+   */
+  const plays = [
+    ["listen", false, student, student],
+    ["listen", true, [...student, ...teacher], [...student, ...teacher]],
+    ["wait", false, [], []],
+    ["wait", true, teacher, ["duet-0"]],
+    ["rhythm", false, [], []],
+    ["rhythm", true, teacher, teacher],
+  ] as const;
+
+  it.each(plays)(
+    "in %s with Duet %s, plays %j on the laptop",
+    async (mode, duet, passage, now) => {
+      const studio = create(duetSong());
+      if (duet) studio.duet();
+      studio.mode(mode);
+      await studio.play();
+      const prepared = vi
+        .mocked(studio.audio.setPlaybackNotes)
+        .mock.calls.at(-1)![0] as readonly Note[];
+      expect(ids(prepared)).toEqual(passage);
+      if (!passage.length) expect(studio.audio.prepare).not.toHaveBeenCalled();
+      advance(studio, 0.6);
+      expect(scheduled(studio)).toEqual(now);
+      expect(studio.midi.player.schedule).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(plays)(
+    "in %s with Duet %s, sends %j to a MIDI output and nothing to the laptop",
+    async (mode, duet, _passage, now) => {
+      const studio = create(duetSong());
+      if (duet) studio.duet();
+      studio.mode(mode);
+      output(studio);
+      await studio.play();
+      expect(studio.audio.prepare).not.toHaveBeenCalled();
+      expect(studio.audio.setPlaybackNotes).toHaveBeenLastCalledWith([], []);
+      advance(studio, 0.6);
+      expect(sent(studio)).toEqual(now);
+      expect(studio.audio.schedule).not.toHaveBeenCalled();
+    },
+  );
+
+  it("sends the song's sustain pedal to a MIDI output with the notes", async () => {
+    const fixture: Song = {
+      ...duetSong(),
+      pedals: [{ channel: 0, start: 0.5, end: 1.5 }],
+    };
+    const studio = create(fixture);
     studio.mode("listen");
+    output(studio);
     await studio.play();
-    expect(played()).toEqual(["note-0", "note-1"]);
-    studio.duet();
-    await studio.play();
-    expect(played()).toEqual([
-      "note-0",
-      "note-1",
-      "duet-0",
-      "duet-1",
-      "duet-2",
-      "duet-3",
-    ]);
-    studio.mode("rhythm");
-    studio.reference(false);
-    await studio.play();
-    expect(played()).toEqual(["duet-0", "duet-1", "duet-2", "duet-3"]);
     advance(studio, 0.6);
-    expect(scheduled(studio)).toEqual(["duet-0", "duet-1", "duet-2", "duet-3"]);
+    const call = vi.mocked(studio.midi.player.schedule).mock.calls.at(-1)!;
+    expect(call[1]).toBeCloseTo(0.6);
+    expect(call[4]).toEqual(fixture.pedals);
   });
 
-  it("schedules nothing in Wait without a duet, as before", async () => {
+  it("keeps MIDI playback going when a laptop voice turns on", async () => {
     const studio = create(duetSong());
+    studio.mode("listen");
+    output(studio);
     await studio.play();
-    advance(studio, 0.5);
-    expect(scheduled(studio)).toEqual([]);
+    studio.pianoVoice("resonance", false);
+    studio.pianoVoice("resonance", true);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
   });
 });
 

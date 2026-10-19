@@ -100,6 +100,11 @@ it("preserves the room amount and discards the removed sound profile", () => {
   });
   expect(settings()).not.toHaveProperty("soundProfile");
 });
+it("discards the removed Rhythm reference sound", () => {
+  write("settings", { mode: "rhythm", reference: true });
+  expect(settings().mode).toBe("rhythm");
+  expect(settings()).not.toHaveProperty("reference");
+});
 it.each([
   [{ soundProfile: "unknown", ambience: "loud" }, { ambience: 0.22 }],
   [{ soundProfile: "natural", ambience: -1 }, { ambience: 0 }],

@@ -514,7 +514,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
       }
     };
     const blur = () => {
-      studio.input.clear();
+      studio.releaseKeys();
       if (studio.transport.playing && studio.settings.mode !== "listen")
         studio.pause();
       else studio.emit();
@@ -636,17 +636,18 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
             </button>
           )}
         </div>
-        {/* Keep output selection and retry available without an input. */}
+        {/* The piano's output is chosen as it connects. Keep the choice, and
+            retry, available without an input. */}
         {(connected ||
           studio.midi.outputs.length > 0 ||
           studio.midi.selectedOutputId) && (
           <label>
-            Duet sound
+            Sound
             <select
-              aria-label="Duet sound"
+              aria-label="Sound"
               disabled={studio.outputChanging}
               value={studio.midi.selectedOutputId}
-              onChange={(e) => void studio.duetOutput(e.target.value)}
+              onChange={(e) => void studio.soundOutput(e.target.value)}
             >
               <option value="">Laptop</option>
               {studio.midi.outputs.map((port) => (
@@ -962,14 +963,6 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
                 <option value="0.22">Relaxed · ±220 ms</option>
                 <option value="0.35">Gentle · ±350 ms</option>
               </select>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={s.reference}
-                onChange={(e) => studio.reference(e.target.checked)}
-              />{" "}
-              Reference sound in Rhythm
             </label>
             <label>
               <input

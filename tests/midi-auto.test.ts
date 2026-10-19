@@ -36,6 +36,7 @@ function setup(inputs: MIDIInput[] = []) {
     onMessage: vi.fn(),
     onReset: vi.fn(),
     onChange: vi.fn(),
+    onOutputChosen: vi.fn(),
     onOutputLost: vi.fn(),
   };
   const midi = new MidiConnection(callbacks, source);
@@ -156,6 +157,7 @@ describe("automatic MIDI connection", () => {
       onMessage: vi.fn(),
       onReset: vi.fn(),
       onChange: vi.fn(),
+      onOutputChosen: vi.fn(),
       onOutputLost: vi.fn(),
     };
     const midi = new MidiConnection(callbacks, { requestMIDIAccess });

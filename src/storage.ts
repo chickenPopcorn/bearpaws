@@ -15,7 +15,6 @@ export interface Settings {
   /** The teacher duet plays along, for songs that have one. */
   duet: boolean;
   tolerance: number;
-  reference: boolean;
   names: boolean;
   selected: string;
   ambience: number;
@@ -42,7 +41,6 @@ export const defaults: Settings = {
   right: true,
   duet: false,
   tolerance: 0.22,
-  reference: true,
   names: true,
   selected: "cadence-ode-to-joy-v1",
   ambience: DEFAULT_PIANO_SOUND.ambience,
@@ -150,7 +148,6 @@ export function settings(): Settings {
     left: !!s.left,
     right: !!s.right,
     duet: !!s.duet,
-    reference: !!s.reference,
     names: !!s.names,
     selected: typeof s.selected === "string" ? s.selected : defaults.selected,
     ambience: sound.ambience,
