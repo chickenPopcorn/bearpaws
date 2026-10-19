@@ -1,5 +1,11 @@
 name: Practice engine checks
-on: [push, pull_request]
+on:
+  push:
+    # A merge queue's gh-readonly-queue/* branches also fire push; the
+    # merge_group run below already checks them.
+    branches-ignore: ["gh-readonly-queue/**"]
+  pull_request:
+  merge_group:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest

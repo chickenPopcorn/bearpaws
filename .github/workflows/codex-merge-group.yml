@@ -1,0 +1,25 @@
+name: Codex review gate (merge queue)
+
+# A pull request enters the merge queue only after its own Codex review gate
+# passed, so the queue's merge commit gets the same required status here.
+# Trigger on merge_group only: a skipped job on a pull request would still add
+# a check run to its head, and that could satisfy the required check in place
+# of the real gate in codex-review-gate.yml.
+on:
+  merge_group:
+
+permissions:
+  statuses: write
+
+jobs:
+  pass-merge-group:
+    runs-on: ubuntu-latest
+    steps:
+      - run: >-
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA"
+          -f state=success
+          -f context="Codex review gate"
+          -f description="Each queued pull request passed its own Codex review gate."
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
