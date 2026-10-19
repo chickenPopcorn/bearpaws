@@ -1,6 +1,6 @@
 # Paw Pal · MIDI piano practice
 
-A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, and local browser storage. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
+A desktop-first, static piano-learning app built with React, TypeScript, Vite, Canvas, Web MIDI, Web Audio, browser storage, and Google sign-in through Supabase. Practice in a falling-note studio with teal left-hand notes and lavender right-hand notes. The implementation replaces the simulated design concept in `docs/design/`.
 
 ## Run locally
 
@@ -54,7 +54,7 @@ with barlines. General MIDI players may ignore these text events.
 ### The song library
 
 The songs live in the public Supabase bucket `library`, not in this repository.
-The app loads them when it opens:
+The app loads them after sign-in:
 
 - `index.json` lists the songs in order, with each one's title, collection
   (`classes`, `songs` or `pops`) and file names. The app loads only `classes`,
@@ -141,19 +141,24 @@ no pedal, so they use only release harmonics and key noise. See the
 [adaptation notes](public/audio/accurate-salamander/LICENSE.md) for how each
 voice follows the SFZ preset.
 
-## Local data and file support
+## Sign-in, local data and file support
+
+Sign-in with Google is required to open the studio. Supabase (project `pawpal`) handles the sign-in and returns to the page it started from; it only returns to addresses in the project's redirect allow list (`https://piano.pollos.us/**` and localhost). **Sign out** in the header signs out this browser only; other devices stay signed in. Sign-in does not sync anything yet: settings and progress stay on this browser, shared by whoever signs in here.
 
 Settings and per-song position, track assignments, passage, number of starts, and best matched-note proportion are stored in localStorage. Best proportion uses all eligible notes in the current passage, including upcoming notes. The app has no MIDI import. Songs imported by earlier versions stay in this browser's IndexedDB, untouched; the app no longer reads them. Storage failures show a message and allow session-only use. Browser storage is specific to the origin/browser/profile; clearing it removes your progress.
 
-The songs come from the shared library bucket (see above), the same for everyone and read-only. No MIDI input is uploaded. There is no account, analytics, billing, cloud sync, Bluetooth integration, sheet-music recognition, or teacher dashboard.
+The songs come from the shared library bucket (see above), the same for everyone and read-only. No MIDI input is uploaded. There is no analytics, billing, cloud sync, Bluetooth integration, sheet-music recognition, or teacher dashboard.
 
-The app needs one public value, the Supabase project URL, to find the bucket. For local development, put it in `.env.local`, which git ignores:
+The app needs two public values: the Supabase project URL and its publishable key (Supabase dashboard → Project Settings → API Keys). For local development, put them in `.env.local`, which git ignores:
 
 ```sh
 VITE_SUPABASE_URL=https://ochjekqgxkojrilgsqud.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-Deployment reads it from the repository's GitHub Actions variables. The bucket's schema is in `supabase/migrations/`.
+Deployment reads the same two names from the repository's GitHub Actions variables. The publishable key only allows what row-level security allows; never use the secret key here. The bucket's schema is in `supabase/migrations/`.
+
+After a refresh, the page as it was left shows again at once, but only while this browser still holds an unexpired sign-in for the same account (`index.html`, `src/reloadSnapshot.ts`).
 
 The practice calendar at the top of the sidebar shows this month: a star on each day that met the daily goal, a dot on days with less, and a ring filling up for today, with the current streak. The goal is 5 minutes unless changed under **Edit** (5, 10, 15, 20 or 30), where the learner's name can also be set for the calendar's praise. Practice time counts only while a song plays in Wait for me or Rhythm and a key was pressed within the last 15 seconds; Listen, paused time and a Wait gate left waiting do not count. Days follow the device's local calendar. Playing time is kept in localStorage as sessions, one per page visit per day with seconds per song, for the last 92 days, today included. Each session has its own key, written only by the tab that plays it, so tabs on the same browser add up without overwriting each other.
 
@@ -169,6 +174,7 @@ The practice calendar at the top of the sidebar shows this month: a star on each
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings and progress.
 - `src/library.ts`, `scripts/library.mjs`: the shared song library and its pull/push script.
+- `src/supabase.ts`, `src/SignIn.tsx`: Google sign-in.
 - `src/main.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.

@@ -32,8 +32,10 @@ jobs:
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: npm run build
         env:
-          # Public: where the song library bucket lives.
+          # Public values; the song library bucket is public and sign-in
+          # needs them.
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - run: node scripts/check-built-fonts.mjs
       - name: Upload static site
         uses: actions/upload-pages-artifact@v4

@@ -26,13 +26,13 @@ import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { bookForSong, songsInBook } from "./books";
 import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
 import { OpeningStudio } from "./OpeningStudio";
+import { SignIn } from "./SignIn";
+import { signInWithGoogle, supabase } from "./supabase";
 import { LIBRARY_BUCKET, loadLibrary } from "./library";
 import "./style.css";
-// Created once the song library has loaded; App only renders after that.
+// One studio per signed-in session, created once the song library has loaded.
+// App only renders while it exists.
 let studio!: Studio;
-/** The public URL of a file in the song library bucket. */
-const libraryUrl = (path: string) =>
-  `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${LIBRARY_BUCKET}/${path}`;
 /** Storage serves `?download=` as an attachment, which cross-origin links need. */
 const downloadUrl = (midi: string, id: string) => {
   const url = new URL(midi);
@@ -463,7 +463,7 @@ const KeyboardHelp = memo(function KeyboardHelp({
     </details>
   );
 });
-function App() {
+function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [connectTried, setConnectTried] = useState(false),
     [busy, setBusy] = useState(false);
@@ -521,7 +521,7 @@ function App() {
     };
     const save = () => {
       studio.save();
-      saveReloadSnapshot(document.getElementById("root")!);
+      saveReloadSnapshot(document.getElementById("root")!, currentUser ?? "");
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -632,6 +632,13 @@ function App() {
             </button>
           )}
         </div>
+        <button
+          className="account"
+          title={email ? `Signed in as ${email}` : undefined}
+          onClick={onSignOut}
+        >
+          Sign out
+        </button>
       </header>
       <p className="sr-only" role="status">
         {studio.midi.message}
@@ -659,7 +666,7 @@ function App() {
           <p className="privacy">
             Progress stays on this browser.
             <br />
-            No uploads. No account.
+            No uploads.
           </p>
           <div className="side-footer">
             <strong>One phrase at a time.</strong>Slow it down.
@@ -997,29 +1004,142 @@ function App() {
     </div>
   );
 }
+type Gate =
+  | { status: "loading" }
+  | { status: "signing-out" }
+  | { status: "failed"; error: string }
+  | { status: "signed-out"; error: string }
+  | { status: "ready"; userId: string; email: string };
+
+// Sign-in runs outside React, from the moment the page loads, so a refresh
+// can keep the page as it was left on screen until the studio is ready.
 const container = document.getElementById("root")!;
-const root = createRoot(container);
 /** After a refresh, src/reloadSnapshot.ts has put the page as it was left back. */
 const snapshotOnScreen = container.hasChildNodes();
-
-/** Load the song library, then open the studio. */
-async function start() {
-  // The page as it was left stays on screen while the library loads.
-  if (!snapshotOnScreen) root.render(<OpeningStudio error="" />);
-  if (!import.meta.env.VITE_SUPABASE_URL) {
-    root.render(
-      <OpeningStudio error="The song library is not set up for this site." />,
-    );
-    return;
-  }
-  try {
-    studio = new Studio(await loadLibrary(libraryUrl));
-  } catch {
-    root.render(
-      <OpeningStudio error="The songs could not be loaded. Check your connection and try again." />,
-    );
-    return;
-  }
-  root.render(<App />);
+let gate: Gate = { status: "loading" };
+const gateListeners = new Set<() => void>();
+let settle!: () => void;
+/** Resolves once sign-in has decided what to show first. */
+const settled = new Promise<void>((resolve) => (settle = resolve));
+function setGate(next: Gate) {
+  gate = next;
+  if (next.status !== "loading") settle();
+  for (const listener of gateListeners) listener();
 }
-void start();
+const subscribeGate = (listener: () => void) => {
+  gateListeners.add(listener);
+  return () => gateListeners.delete(listener);
+};
+// The user whose studio is open or opening: null until the first auth event
+// says whether anyone is signed in, and "" once nobody is.
+let currentUser: string | null = null;
+
+/** The public URL of a file in the song library bucket. */
+const libraryUrl = (path: string) =>
+  `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${LIBRARY_BUCKET}/${path}`;
+let library: Promise<Song[]> | undefined;
+/** The song library, loaded once per page; a failed load is tried again. */
+function loadSongs() {
+  library ??= loadLibrary(libraryUrl).catch((error) => {
+    library = undefined;
+    throw error;
+  });
+  return library;
+}
+
+async function openSession(userId: string, email: string) {
+  if (userId === currentUser) return;
+  currentUser = userId;
+  if (!userId) {
+    // Closing the studio, if one is open, saves it (see App's effect).
+    setGate({ status: "signed-out", error: "" });
+    return;
+  }
+  setGate({ status: "loading" });
+  let songs: Song[];
+  try {
+    songs = await loadSongs();
+  } catch {
+    if (currentUser !== userId) return;
+    setGate({
+      status: "failed",
+      error:
+        "The songs could not be loaded. Check your connection and try again.",
+    });
+    return;
+  }
+  // A newer auth event moved on while the library loaded.
+  if (currentUser !== userId) return;
+  studio = new Studio(songs);
+  setGate({ status: "ready", userId, email });
+}
+
+async function signOut() {
+  const userId = currentUser;
+  // Closing the studio saves it (see App's effect).
+  setGate({ status: "signing-out" });
+  // Only this browser signs out; other devices stay signed in.
+  const { error } = await supabase!.auth.signOut({ scope: "local" });
+  // A sign-out that worked shows the sign-in page from its auth event.
+  if (error && currentUser === userId)
+    setGate({
+      status: "failed",
+      error: "Sign-out failed. Check your connection and try again.",
+    });
+}
+
+if (!supabase) {
+  setGate({
+    status: "signed-out",
+    error: "Sign-in is not set up for this site.",
+  });
+} else {
+  // Supabase asks that auth callbacks not await its own calls directly.
+  supabase.auth.onAuthStateChange((_event, session) => {
+    setTimeout(
+      () => void openSession(session?.user.id ?? "", session?.user.email ?? ""),
+      0,
+    );
+  });
+}
+
+/** Shows sign-in, loading and errors, then the studio. */
+function Root() {
+  const current = useSyncExternalStore(subscribeGate, () => gate);
+  if (current.status === "ready")
+    return (
+      <App
+        key={current.userId}
+        email={current.email}
+        onSignOut={() => void signOut()}
+      />
+    );
+  if (current.status === "loading") return <OpeningStudio error="" />;
+  if (current.status === "signing-out")
+    return <OpeningStudio error="" message="Signing out…" />;
+  if (current.status === "failed")
+    return (
+      <OpeningStudio error={current.error} onSignOut={() => void signOut()} />
+    );
+  return (
+    <SignIn
+      error={current.error}
+      onSignIn={async () => {
+        const { error } = await signInWithGoogle();
+        if (error) throw error;
+      }}
+    />
+  );
+}
+
+const root = createRoot(container);
+const render = () => root.render(<Root />);
+// While the page as it was left is on screen, keep it there until sign-in
+// settles (briefly), so the first render shows the studio rather than a
+// loading screen. With nothing on screen, rendering now beats a blank wait.
+if (!snapshotOnScreen) render();
+else
+  void Promise.race([
+    settled,
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ]).then(render);
