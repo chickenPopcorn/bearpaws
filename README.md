@@ -8,7 +8,7 @@ A desktop-first, static piano-learning app built with React, TypeScript, Vite, C
 
 ## Run locally
 
-Use Node.js 22.12+ (validated in this environment with Node 24.19) and npm.
+Use Node.js 22.13+ (validated in this environment with Node 24.19) and npm.
 
 ```sh
 npm ci
