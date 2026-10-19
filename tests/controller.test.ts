@@ -1484,10 +1484,17 @@ describe("account sync hooks", () => {
     expect(sync.settings).toHaveBeenLastCalledWith(
       expect.objectContaining({ selected: "controller-fixture" }),
     );
+    // Opening the song reports its save as the starting point.
+    expect(sync.progress).toHaveBeenLastCalledWith(
+      "controller-fixture",
+      expect.any(Object),
+      true,
+    );
     studio.save();
     expect(sync.progress).toHaveBeenLastCalledWith(
       "controller-fixture",
       expect.objectContaining({ updated: expect.any(String) }),
+      false,
     );
   });
 

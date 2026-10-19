@@ -3,6 +3,7 @@ import {
   clearAccountData,
   localProgress,
   read,
+  remove,
   removeProgress,
   write,
   type Progress,
@@ -53,6 +54,18 @@ export class BrowserStorageError extends Error {
       "This browser is blocking site storage, so your account cannot load here. Allow site data for this page and try again.",
     );
   }
+}
+
+/**
+ * Run `upload` holding a lock that every tab of this site shares, so uploads
+ * from different tabs land one at a time, in order: a slow, older request from
+ * one tab cannot land after a newer one from another. Browsers without Web
+ * Locks run it at once.
+ */
+async function withUploadLock(upload: () => Promise<void>) {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (locks) await locks.request("pawpal-account-upload", upload);
+  else await upload();
 }
 
 /** Run a request with a time limit. Past it, the request is aborted. */
@@ -129,10 +142,39 @@ function readUnsynced(): Unsynced {
   };
 }
 
+/**
+ * One account's changes its account has not confirmed, set aside when another
+ * account signs in on this browser, until the first signs in again.
+ */
+interface Stash {
+  marker: Unsynced;
+  settings: Settings | null;
+  progress: Record<string, Partial<Progress> | null>;
+}
+
+/** Set aside what `owner` has not uploaded. False if storage refused it. */
+function stashUnsent(owner: string): boolean {
+  const marker = readUnsynced();
+  const songs = Object.keys(marker.progress);
+  if (!marker.settings && !songs.length && !Object.keys(marker.deleted).length)
+    return true;
+  return write(`stash:${owner}`, {
+    marker,
+    settings: marker.settings ? read<Settings | null>("settings", null) : null,
+    progress: Object.fromEntries(
+      songs.map((id) => [
+        id,
+        read<Partial<Progress> | null>(`progress:${id}`, null),
+      ]),
+    ),
+  } satisfies Stash);
+}
+
 /** What the studio reports so the signed-in account stays current. */
 export interface SyncHooks {
   settings(settings: Settings): void;
-  progress(songId: string, progress: Progress): void;
+  /** `loaded`: the save made as the song opens, before any practice. */
+  progress(songId: string, progress: Progress, loaded?: boolean): void;
   /** The song was removed from this browser, so its progress goes too. */
   forgetProgress(songId: string): void;
 }
@@ -152,7 +194,8 @@ export class CloudSync implements SyncHooks {
   private inFlight: Unsynced | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   /**
-   * The upload under way, shared by every CloudSync: a sync that replaces
+   * The upload under way, shared by every CloudSync in this tab (tabs share
+   * a Web Lock, see withUploadLock): a sync that replaces
    * another, such as after signing back in, waits for the old one's request
    * to settle, so that request cannot land after newer data and undo it.
    */
@@ -185,13 +228,30 @@ export class CloudSync implements SyncHooks {
       if (!write(key, value)) throw new BrowserStorageError();
     };
     // Another account's settings and progress must not show in, or upload
-    // to, this one. Imported songs belong to the browser and stay.
+    // to, this one: what it has not uploaded is set aside for it, and the rest
+    // cleared. Imported songs belong to the browser and stay.
     const owner = read<string | null>("owner", null);
-    if (owner && owner !== this.userId) clearAccountData();
+    if (owner && owner !== this.userId) {
+      if (!stashUnsent(owner)) throw new BrowserStorageError();
+      clearAccountData();
+    }
+    // Changes this account had not uploaded when another signed in here come
+    // back first, marked unconfirmed, so they win over the account's copy.
+    const stash =
+      owner === this.userId
+        ? null
+        : read<Stash | null>(`stash:${this.userId}`, null);
+    if (stash) {
+      if (stash.settings) store("settings", stash.settings);
+      for (const [id, data] of Object.entries(stash.progress))
+        if (data) store(`progress:${id}`, data);
+      store("unsynced", stash.marker);
+      store("owner", this.userId);
+    }
     // The first account on this browser adopts what was saved here before.
     // The owner mark is written only once the pull succeeds, so a failed
     // first pull still adopts on the next try.
-    const adopting = owner !== this.userId;
+    const adopting = owner !== this.userId && !stash;
     const [settings, rows] = await Promise.all([
       timed(() => this.client.from("settings").select("data").maybeSingle()),
       this.allProgress(),
@@ -242,6 +302,12 @@ export class CloudSync implements SyncHooks {
     // longer adopts, and only the marker would keep what this one adopted.
     if (!this.saveUnsynced({ exact: true })) throw new BrowserStorageError();
     store("owner", this.userId);
+    if (stash)
+      try {
+        remove(`stash:${this.userId}`);
+      } catch {
+        throw new BrowserStorageError();
+      }
     this.error = "";
     if (this.pending) this.schedule(0);
   }
@@ -280,8 +346,20 @@ export class CloudSync implements SyncHooks {
     this.queued();
   }
 
-  progress(songId: string, progress: Progress) {
+  progress(songId: string, progress: Progress, loaded = false) {
     if (this.stopped) return;
+    // A song the account has no progress for takes the save made as it opens
+    // as its baseline: an untouched song is no change, and uploading it could
+    // overwrite practice another device adds meanwhile.
+    if (
+      loaded &&
+      !this.syncedProgress.has(songId) &&
+      !this.pendingProgress.has(songId) &&
+      !this.pendingDeletes.has(songId)
+    ) {
+      this.syncedProgress.set(songId, canon(progress));
+      return;
+    }
     if (
       !this.pendingProgress.has(songId) &&
       !this.pendingDeletes.has(songId) &&
@@ -409,7 +487,7 @@ export class CloudSync implements SyncHooks {
       ),
       deleted: Object.fromEntries(deleted),
     };
-    CloudSync.flushing = (async () => {
+    const upload = async () => {
       // Aborting at the time limit settles the request, so it cannot land
       // after the retry that replaces it.
       const controller = new AbortController();
@@ -490,7 +568,8 @@ export class CloudSync implements SyncHooks {
         this.setError("Changes could not be saved to your account. Retrying.");
         this.schedule(RETRY_MS);
       }
-    })().finally(() => {
+    };
+    CloudSync.flushing = withUploadLock(upload).finally(() => {
       CloudSync.flushing = null;
     });
     await CloudSync.flushing;

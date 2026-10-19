@@ -383,6 +383,37 @@ describe("account sync", () => {
     expect(read("owner", "")).toBe(USER);
   });
 
+  it("keeps another account's unsent changes for its next sign-in here", async () => {
+    const OTHER = "22222222-2222-2222-2222-222222222222";
+    write("owner", OTHER);
+    write("progress:theirs", { best: 5, updated: "t" });
+    write("unsynced", { progress: { theirs: "t" }, deleted: {} });
+    const b = backend();
+    await new CloudSync(client(b), USER).pull();
+    // Not this account's to see or upload.
+    expect(read("progress:theirs", null)).toBeNull();
+    expect(unsynced().progress).toEqual([]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts).toEqual([]);
+    // The other account signs back in and uploads it.
+    await new CloudSync(client(b), OTHER).pull();
+    expect(read("progress:theirs", null)).toEqual({ best: 5, updated: "t" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts).toEqual([
+      [
+        "progress",
+        [
+          {
+            user_id: OTHER,
+            song_id: "theirs",
+            data: { best: 5, updated: "t" },
+          },
+        ],
+      ],
+    ]);
+    expect(read(`stash:${OTHER}`, null)).toBeNull();
+  });
+
   it("refuses to open when this browser cannot store the account's data", async () => {
     const b = backend();
     b.settings = [{ data: { mode: "rhythm" } }];
@@ -489,6 +520,36 @@ describe("account sync", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(b.calls).toEqual(["upsert progress"]);
     expect(sync.error).toBe("");
+  });
+
+  it("takes a song's opening save as its starting point when the account has none", async () => {
+    const b = backend();
+    write("owner", USER);
+    const sync = new CloudSync(client(b), USER);
+    await sync.pull();
+    // Closing the song untouched must not overwrite practice another device
+    // adds meanwhile.
+    sync.progress("song", { best: 0, position: 0 } as never, true);
+    sync.progress("song", { best: 0, position: 0 } as never);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(b.calls).toEqual([]);
+    sync.progress("song", { best: 3, position: 0 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.calls).toEqual(["upsert progress"]);
+  });
+
+  it("holds a lock every tab shares while uploading", async () => {
+    const request = vi.fn((_name: string, task: () => Promise<void>) => task());
+    vi.stubGlobal("navigator", { locks: { request } });
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    sync.progress("song", { best: 1 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(request).toHaveBeenCalledWith(
+      "pawpal-account-upload",
+      expect.any(Function),
+    );
+    expect(b.calls).toEqual(["upsert progress"]);
   });
 
   it("aborts a timed-out upload and holds newer changes until it settles", async () => {

@@ -58,6 +58,10 @@ export function write(key: string, value: unknown) {
   }
 }
 /** Throws when browser storage is blocked. */
+/** Remove a stored value. Throws when browser storage is blocked. */
+export function remove(key: string) {
+  localStorage.removeItem(storageKey(key));
+}
 export function removeProgress(id: string) {
   localStorage.removeItem(storageKey(`progress:${id}`));
 }
@@ -196,14 +200,19 @@ export async function deleteSong(id: string) {
 }
 /**
  * Forget the signed-in account's settings and progress on this browser, such
- * as at sign-out. Imported songs belong to the browser and stay.
+ * as at sign-out. Imported songs belong to the browser and stay, and so do
+ * other accounts' unsent changes (`stash:<user id>`), kept for their owners.
  */
 export function clearAccountData() {
   try {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith(storageKey(""))) keys.push(key);
+      if (
+        key?.startsWith(storageKey("")) &&
+        !key.startsWith(storageKey("stash:"))
+      )
+        keys.push(key);
     }
     for (const key of keys) localStorage.removeItem(key);
   } catch {}

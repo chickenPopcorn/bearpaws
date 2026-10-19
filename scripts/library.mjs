@@ -157,14 +157,15 @@ async function push(bucket, validateIndex, validateSong) {
       const was = before.get(entry.id);
       if (song.sourceMidi === undefined) {
         // A song file from before this record: vouch for it only if its
-        // MIDI file is the one already published with it.
-        if (was?.midi && was.midi !== hash(midiBytes))
+        // MIDI file is the one already published with it. A new song needs
+        // its record, or a song file built here from its MIDI file.
+        if (was?.midi !== hash(midiBytes))
           throw new Error(
-            `${entry.id}: ${entry.midi} changed, and ${entry.song} does not ` +
-              `say which MIDI file it was built from. Delete ${entry.song} to ` +
-              `rebuild it from the MIDI file (that drops any lesson details ` +
-              `and fingering), or set its sourceMidi to ${hash(midiBytes)} ` +
-              `once it matches.`,
+            `${entry.id}: ${entry.song} does not say which MIDI file it was ` +
+              `built from, and ${entry.midi} is not the one published with ` +
+              `it. Delete ${entry.song} to rebuild it from the MIDI file ` +
+              `(that drops any lesson details and fingering), or set its ` +
+              `sourceMidi to ${hash(midiBytes)} once it matches.`,
           );
         song.sourceMidi = hash(midiBytes);
         writeFileSync(songPath, JSON.stringify(song, null, 1) + "\n");
