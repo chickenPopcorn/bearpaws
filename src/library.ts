@@ -111,6 +111,7 @@ export function validateSong(value: unknown, id: string): Song {
           isRecord(t) &&
           whole(t.tick) &&
           (t.tick as number) >= 0 &&
+          (t.tick as number) <= 2 ** 40 &&
           whole(t.numerator) &&
           (t.numerator as number) >= 1 &&
           (t.numerator as number) <= 255 &&

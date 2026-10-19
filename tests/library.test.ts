@@ -124,6 +124,14 @@ describe("song library", () => {
       /denominator a power of two/,
     ],
     [
+      "a time signature past the score's last tick",
+      (song: Song) => ({
+        ...song,
+        timeSignatures: [{ tick: 2 ** 40 + 1, numerator: 3, denominator: 4 }],
+      }),
+      /denominator a power of two/,
+    ],
+    [
       "a note written with a negative length",
       (song: Song) => ({
         ...song,
