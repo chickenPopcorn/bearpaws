@@ -158,11 +158,30 @@ export function validateSong(value: unknown, id: string): Song {
       Array.isArray(value.pedals) &&
       value.pedals.every(
         (p) =>
-          isRecord(p) && whole(p.channel) && finite(p.start) && finite(p.end),
+          isRecord(p) &&
+          whole(p.channel) &&
+          finite(p.start) &&
+          finite(p.end) &&
+          (p.start as number) >= 0 &&
+          (p.end as number) >= (p.start as number) &&
+          (p.end as number) <= (value.duration as number) + 1e-6,
       )
     )
   )
-    fail(where, "pedals must be a list of { channel, start, end }");
+    fail(
+      where,
+      "pedals must be a list of { channel, start, end } inside the song",
+    );
+  // Pedal lookup searches each channel's spans by start time.
+  const pedalStarts = new Map<number, number>();
+  for (const p of (value.pedals ?? []) as {
+    channel: number;
+    start: number;
+  }[]) {
+    if (p.start < (pedalStarts.get(p.channel) ?? 0))
+      fail(where, "pedals must be in start order on each channel");
+    pedalStarts.set(p.channel, p.start);
+  }
   if (!Array.isArray(value.tracks) || !value.tracks.length)
     fail(where, "missing tracks");
   const tracks = new Set<number>();
@@ -172,7 +191,8 @@ export function validateSong(value: unknown, id: string): Song {
       !whole(track.id) ||
       typeof track.name !== "string" ||
       !["left", "right", "off"].includes(track.hand as string) ||
-      !whole(track.count)
+      !whole(track.count) ||
+      (track.count as number) < 0
     )
       fail(where, "each track needs id, name, hand and count");
     if (tracks.has(track.id as number))
@@ -214,6 +234,14 @@ export function validateSong(value: unknown, id: string): Song {
     if (notes.has(note.id as string))
       fail(where, `duplicate note id ${note.id}`);
     notes.add(note.id as string);
+  }
+  // The assignment panel lists tracks by count, so each must be exact.
+  for (const track of value.tracks as { id: number; count: number }[]) {
+    const owned = (value.notes as { track: number }[]).filter(
+      (note) => note.track === track.id,
+    ).length;
+    if (track.count !== owned)
+      fail(where, `track ${track.id} count is ${track.count}, not ${owned}`);
   }
   return value as unknown as Song;
 }

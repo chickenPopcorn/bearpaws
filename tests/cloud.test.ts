@@ -299,6 +299,18 @@ describe("account sync", () => {
     expect(b.calls).toEqual(["upsert progress", "upsert progress"]);
   });
 
+  it("uploads at once and says so when storage cannot hold the marker", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    storageBlocked = true;
+    sync.progress("song", { best: 1 } as never);
+    // A reload now would let the account's older copy win, so do not wait.
+    expect(sync.error).toMatch(/storage is full/);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.calls).toEqual(["upsert progress"]);
+    expect(sync.error).toBe("");
+  });
+
   it("aborts a timed-out upload and holds newer changes until it settles", async () => {
     const b = backend();
     const sync = new CloudSync(client(b), USER);

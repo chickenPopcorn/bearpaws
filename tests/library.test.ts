@@ -147,6 +147,43 @@ describe("song library", () => {
       /bad note/,
     ],
     [
+      "a track count that does not match its notes",
+      (song: Song) => ({
+        ...song,
+        tracks: song.tracks.map((track, i) =>
+          i ? track : { ...track, count: 0 },
+        ),
+      }),
+      /count is 0/,
+    ],
+    [
+      "a pedal that lifts before it presses",
+      (song: Song) => ({
+        ...song,
+        pedals: [{ channel: 0, start: 2, end: 1 }],
+      }),
+      /pedals must be a list/,
+    ],
+    [
+      "a pedal past the song's end",
+      (song: Song) => ({
+        ...song,
+        pedals: [{ channel: 0, start: 0, end: song.duration + 1 }],
+      }),
+      /pedals must be a list/,
+    ],
+    [
+      "pedals out of order",
+      (song: Song) => ({
+        ...song,
+        pedals: [
+          { channel: 0, start: 2, end: 3 },
+          { channel: 0, start: 0, end: 1 },
+        ],
+      }),
+      /start order/,
+    ],
+    [
       "two tracks with one id",
       (song: Song) => ({ ...song, tracks: [song.tracks[0], song.tracks[0]] }),
       /duplicate track id/,

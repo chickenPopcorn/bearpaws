@@ -100,11 +100,23 @@ async function push(bucket, validateIndex, validateSong) {
   /** The index as published: every path carries its file's hash. */
   const published = structuredClone(index);
   // The live index, to notice a MIDI file replaced without its song data.
-  const live = await fetch(
+  // Only a bucket with no index yet (the first push) goes without; any other
+  // failure stops the push rather than skip the check.
+  const liveResponse = await fetch(
     `${url}/storage/v1/object/public/${bucket}/index.json?t=${Date.now()}`,
+  );
+  const liveBody = await liveResponse.text();
+  let live;
+  if (liveResponse.ok) live = JSON.parse(liveBody);
+  else if (
+    liveResponse.status === 404 ||
+    /"code"\s*:\s*"NoSuchKey"/.test(liveBody)
   )
-    .then((response) => (response.ok ? response.json() : { songs: [] }))
-    .catch(() => ({ songs: [] }));
+    live = { songs: [] };
+  else
+    throw new Error(
+      `Could not read the live index.json (HTTP ${liveResponse.status}); try again.`,
+    );
   const hashOf = (path) => /\.([0-9a-f]{16})\.\w+$/.exec(path ?? "")?.[1];
   const before = new Map(
     (live.songs ?? []).map((song) => [

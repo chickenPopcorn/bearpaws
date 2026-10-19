@@ -16,6 +16,8 @@ const RETRY_MS = 15000;
 /** A request that takes longer than this is aborted and treated as failed. */
 const TIMEOUT_MS = 30000;
 const NO_RESPONSE = "The account service did not respond.";
+const STORAGE_FULL =
+  "This browser's storage is full, so changes are uploading now. Free up site storage to keep them safe.";
 /** The Data API returns at most this many rows per request (Supabase's default). */
 const PAGE = 1000;
 
@@ -183,8 +185,9 @@ export class CloudSync implements SyncHooks {
     }
     for (const [id, data] of remote) store(`progress:${id}`, data);
     store("owner", this.userId);
+    // Without the marker, the next pull would drop what this one adopted.
+    if (!this.saveUnsynced()) throw new BrowserStorageError();
     this.error = "";
-    this.saveUnsynced();
     if (this.pending) this.schedule(0);
   }
 
@@ -210,8 +213,7 @@ export class CloudSync implements SyncHooks {
     if (!this.pendingSettings && canon(settings) === this.syncedSettings)
       return;
     this.pendingSettings = { ...settings };
-    this.saveUnsynced();
-    this.schedule();
+    this.queued();
   }
 
   progress(songId: string, progress: Progress) {
@@ -224,8 +226,7 @@ export class CloudSync implements SyncHooks {
       return;
     this.pendingDeletes.delete(songId);
     this.pendingProgress.set(songId, { ...progress });
-    this.saveUnsynced();
-    this.schedule();
+    this.queued();
   }
 
   forgetProgress(songId: string) {
@@ -234,13 +235,26 @@ export class CloudSync implements SyncHooks {
     // land after the delete and bring the progress back.
     this.pendingProgress.delete(songId);
     this.pendingDeletes.add(songId);
-    this.saveUnsynced();
-    this.schedule();
+    this.queued();
   }
 
-  private saveUnsynced() {
+  /**
+   * Remember a queued change and schedule its upload. If browser storage
+   * cannot hold the marker, a reload before the upload lands would let the
+   * account's older copy win, so upload at once and say so.
+   */
+  private queued() {
+    if (this.saveUnsynced()) return this.schedule();
+    this.setError(STORAGE_FULL);
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    this.schedule(0);
+  }
+
+  /** Keep the unconfirmed changes in browser storage. False if it is full. */
+  private saveUnsynced(): boolean {
     const flight = this.inFlight;
-    write("unsynced", {
+    return write("unsynced", {
       settings: !!this.pendingSettings || !!flight?.settings,
       progress: [
         ...new Set([
