@@ -9,7 +9,7 @@ import {
   scoreTimeAtX,
   scoreViewport,
 } from "../src/notation";
-import { builtInSongs } from "../src/lessons";
+import { fixtureLibrary } from "./fixtures/library";
 import { tempoConverter, type Note, type Song } from "../src/song";
 import { createBeatClock } from "../src/timeline";
 
@@ -215,7 +215,7 @@ describe("written note values", () => {
   );
 
   it("keeps Ode to Joy's dotted quarter, eighth and held bass despite audio release gaps", () => {
-    const ode = builtInSongs().find((piece) => piece.title === "Ode to Joy")!;
+    const ode = fixtureLibrary().find((piece) => piece.title === "Ode to Joy")!;
     const score = buildScore(ode);
     const fourthBar = score.measures.get(3)!;
     const melody = fourthBar.filter((item) => item.note.track === 1);
@@ -233,7 +233,7 @@ describe("written note values", () => {
   });
 
   it("shows short staccato attacks as written quarter notes after the count-in", () => {
-    const rain = builtInSongs().find(
+    const rain = fixtureLibrary().find(
       (piece) => piece.title === "Dancing Raindrops",
     )!;
     const score = buildScore(rain);

@@ -8,7 +8,6 @@ import {
 import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
 import type { PedalSpan, Song, Hand } from "./song";
-import { classSongs } from "./lessons";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
 import {
   settings,
@@ -35,15 +34,13 @@ export class Studio {
   // Where the current loop pass began. Earlier presses in this scoring
   // session belong to the previous pass.
   private passEpoch = -Infinity;
-  /** George Bear’s Classes, in book order. */
-  songs = classSongs();
-  // Start on the saved song, if it is still in the library.
-  song =
-    this.songs.find((song) => song.id === this.savedSelection) ?? this.songs[0];
+  /** The shared song library, in library order. */
+  songs: Song[];
+  song: Song;
   audio = new ReferenceAudio();
   input = new MidiState();
-  transport = new Transport(this.song.duration);
-  practice = new Practice(this.song.notes);
+  transport: Transport;
+  practice: Practice;
   midi: MidiConnection;
   position = 0;
   notice = "";
@@ -71,9 +68,19 @@ export class Studio {
   };
   loopEnabled = true;
   loopStart = 0;
-  loopEnd = this.song.duration;
+  loopEnd: number;
   timer: ReturnType<typeof setInterval> | null = null;
-  constructor() {
+  /** `library` holds the shared songs (see src/library.ts). */
+  constructor(library: readonly Song[]) {
+    if (!library.length) throw new Error("The song library is empty.");
+    this.songs = [...library];
+    // Start on the saved song, if it is still in the library.
+    this.song =
+      this.songs.find((song) => song.id === this.savedSelection) ??
+      this.songs[0];
+    this.transport = new Transport(this.song.duration);
+    this.practice = new Practice(this.song.notes);
+    this.loopEnd = this.song.duration;
     this.audio.setSound({
       ambience: this.settings.ambience,
       voices: this.settings.pianoVoices,

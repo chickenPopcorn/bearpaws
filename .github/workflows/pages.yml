@@ -32,6 +32,9 @@ jobs:
       - run: npm test
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: npm run build
+        env:
+          # Public: where the song library bucket lives.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       - run: node scripts/check-built-fonts.mjs
       - name: Upload static site
         uses: actions/upload-pages-artifact@v4

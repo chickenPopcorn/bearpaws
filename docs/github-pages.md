@@ -40,10 +40,10 @@ describe these settings.
 
 Once the prepared app and deployment files are reviewed and committed, pushing
 them to **main** runs `.github/workflows/pages.yml`. The workflow installs locked
-dependencies, regenerates the MIDI downloads, runs the JavaScript and Python
-checks, builds `dist/`, validates font URLs and deploys the static artifact. No
-personal access token, Cloudflare API key or backend server is required. Later
-pushes to `main` update the site automatically.
+dependencies, runs the JavaScript and Python checks, builds `dist/`, validates
+font URLs and deploys the static artifact. No personal access token, Cloudflare
+API key or backend server is required. Later pushes to `main` update the site
+automatically.
 
 The workflow can also be started from **Actions → Deploy GitHub Pages → Run
 workflow**, selecting **main**. Other branches and pull requests do not deploy.
@@ -61,7 +61,6 @@ Before pushing:
 
 ```sh
 npm ci
-npm run midi:build
 npm test
 python3 -m unittest discover -s tests -p 'test_*.py'
 npm run build
@@ -70,17 +69,21 @@ npm run preview
 ```
 
 After deployment, open **https://piano.pollos.us/** in desktop Chrome or Edge and
-check that the logo, sheet-music fonts, piano samples and MIDI downloads load.
+check that the logo, sheet-music fonts, piano samples, library songs and MIDI
+downloads load.
 Try Listen, full screen and the song-navigation controls. Grant MIDI permission
 on this new origin and verify the physical piano, including chords and pedal.
 
-Imported songs, settings and progress remain local to each browser origin. Data
-saved on `localhost` or `chickenpopcorn.github.io` does not automatically move to
-`piano.pollos.us`; export any imported MIDI files you want to bring across.
+Settings and practice progress stay in each origin's browser storage. The app
+no longer imports MIDI files: songs that earlier versions imported stay in that
+origin's browser storage, unused, and are not available on `piano.pollos.us`.
+
+The build reads `VITE_SUPABASE_URL`, where the song library bucket lives, from
+the repository's Actions variables.
 
 The sample bank makes the static output roughly **755 MiB** (about 792 MB),
 within GitHub Pages’
 [1 GB published-site limit](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
 Samples load as needed rather than all on page load. Keep the sample credits and
-licenses with the site. The public deployment exposes bundled files, including
-the built-in music; browser-imported personal songs are not uploaded.
+licenses with the site. The public deployment exposes its bundled files. The
+library songs and their MIDI files are public in the `library` bucket.

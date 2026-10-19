@@ -15,12 +15,13 @@ Open the printed local URL, normally `http://localhost:5173`. Desktop Chrome or 
 
 ```sh
 npm test               # Deterministic engine, MIDI lifecycle, controller, storage, audio/Canvas checks
-python3 -m unittest discover -s tests -p 'test_*.py' # Offline importer and ZIP checks
+python3 -m unittest discover -s tests -p 'test_*.py' # Offline sample importer checks
 npm run test:watch     # Watch tests
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173
 npm run example        # Regenerate the original downloadable MIDI exercise
-npm run midi:build     # Regenerate the beginner MIDI collection (Python 3 for ZIP)
+npm run library:pull   # Download the shared song library into ./library
+npm run library:push   # Check ./library and upload it to the library bucket
 npm run format         # Format source, tests and documentation
 ```
 
@@ -37,9 +38,7 @@ section per class book of _Music for Little Mozarts_:
 - **Music Lesson Book 3**: no songs yet.
 
 Each song includes suggested finger numbers on the score, falling notes, active
-keys and Wait for me practice, plus starting hand positions. `src/books.ts`
-lists each book's songs; `georgeClassesOrder` in `src/classPieces.ts` sets
-Recital Book 3's order.
+keys and Wait for me practice, plus starting hand positions.
 
 Books start folded; click one to open it. Searching opens them all, and moving
 to a song in another book opens that one.
@@ -49,11 +48,39 @@ The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
 with barlines. General MIDI players may ignore these text events.
 
-The earlier arrangements (Ode to Joy, 12 familiar melodies, Jasmine Flower and
-An Jing) stay in the code and in `public/midi/`, with the starter MIDI pack ZIP,
-but the app no longer lists them or links the ZIP. Their melody references are
-recorded in `src/starterPieces.ts` and `src/popsPieces.ts`; An Jing's source
-MIDI is `src/assets/an-jing.mid`.
+### The song library
+
+The songs live in the public Supabase bucket `library`, not in this repository.
+The app loads them when it opens:
+
+- `index.json` lists the songs in order, with each one's title, collection
+  (`classes`, `songs` or `pops`) and file names. The app loads only `classes`,
+  George Bear’s Classes; the bucket also keeps the other two collections. A
+  `classes` song may name its `book`: `recital-3` (the default) or `lesson-3`.
+  Browsers check the index on every load; it is cached for 60 seconds.
+- `songs/<id>.<hash>.json` is each song in the app's format: notes, tracks,
+  tempo, suggested fingering and lesson text.
+- `songs/<id>.<hash>.mid` is each song's MIDI file, for its Download button.
+
+Each file is named after its content hash and cached for a year, so a repeat
+visit downloads only `index.json`; a changed song gets a new name.
+
+To change the library, run `npm run library:pull`, edit `./library` (ignored by
+git), then run `npm run library:push`. To add a song, put its MIDI file at
+`library/songs/<id>.mid` and add an entry to `library/index.json` with its `id`,
+`title`, `collection: "classes"`, an optional `book`, `song: "songs/<id>.json"`
+and `midi: "songs/<id>.mid"`; push converts the MIDI into the song file. Each
+song file records the hash of the MIDI file it was built from (`sourceMidi`),
+and push refuses a MIDI file that a song file was not built from. `./library`
+uses plain names; push adds the hashes. Push checks every song (and the 5 MiB
+file limit) before it uploads anything, uploads the index last, and removes a
+file only 24 hours after the index stops listing it, since a browser may still
+be loading it from an earlier index (`retired.json` in the bucket records when
+each file left). Uploading needs the project's secret key, in
+`SUPABASE_SECRET_KEY`, or a Supabase account token in `MUSIC_API_KEY` to look it
+up. The app itself only reads the bucket. A copy of three songs in
+`tests/fixtures/` serves the tests.
+
 The sheet-music timeline above the waterfall follows the current bar. Accepted
 notes fade to 50% opacity in practice modes; Listen marks the notes played by
 the reference audio. Disabled hands remain visible at half opacity. Written
@@ -113,11 +140,19 @@ voice follows the SFZ preset.
 
 Settings and per-song position, track assignments, passage, number of starts, and best matched-note proportion are stored in localStorage. Best proportion uses all eligible notes in the current passage, including upcoming notes. The app has no MIDI import. Songs imported by earlier versions stay in this browser's IndexedDB, untouched; the app no longer reads them. Storage failures show a message and allow session-only use. Browser storage is specific to the origin/browser/profile; clearing it removes your progress.
 
-No songs or MIDI input are uploaded. There is no backend, account, analytics, billing, cloud sync, Bluetooth integration, sheet-music recognition, or teacher dashboard.
+The songs come from the shared library bucket (see above), the same for everyone and read-only. No MIDI input is uploaded. There is no account, analytics, billing, cloud sync, Bluetooth integration, sheet-music recognition, or teacher dashboard.
+
+The app needs one public value, the Supabase project URL, to find the bucket. For local development, put it in `.env.local`, which git ignores:
+
+```sh
+VITE_SUPABASE_URL=https://ochjekqgxkojrilgsqud.supabase.co
+```
+
+Deployment reads it from the repository's GitHub Actions variables. The bucket's schema is in `supabase/migrations/`.
 
 The practice calendar at the top of the sidebar shows this month: a star on each day that met the daily goal, a dot on days with less, and a ring filling up for today, with the current streak. The goal is 5 minutes unless changed under **Edit** (5, 10, 15, 20 or 30), where the learner's name can also be set for the calendar's praise. Practice time counts only while a song plays in Wait for me or Rhythm and a key was pressed within the last 15 seconds; Listen, paused time and a Wait gate left waiting do not count. Days follow the device's local calendar. Playing time is kept in localStorage as sessions, one per page visit per day with seconds per song, for the last 92 days, today included. Each session has its own key, written only by the tab that plays it, so tabs on the same browser add up without overwriting each other.
 
-Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Parsed notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. MIDI files are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
+`npm run library:push` converts library MIDI files with the app's parser. Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Converted notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. MIDI files are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
 
 ## Architecture
 
@@ -128,6 +163,7 @@ Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, in
 - `src/controller.ts`: shared practice timeline, transport actions and local progress.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings and progress.
+- `src/library.ts`, `scripts/library.mjs`: the shared song library and its pull/push script.
 - `src/main.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.

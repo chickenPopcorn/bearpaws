@@ -25,8 +25,20 @@ import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
 import { bookForSong, songsInBook } from "./books";
 import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
+import { OpeningStudio } from "./OpeningStudio";
+import { LIBRARY_BUCKET, loadLibrary } from "./library";
 import "./style.css";
-const studio = new Studio();
+// Created once the song library has loaded; App only renders after that.
+let studio!: Studio;
+/** The public URL of a file in the song library bucket. */
+const libraryUrl = (path: string) =>
+  `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/${LIBRARY_BUCKET}/${path}`;
+/** Storage serves `?download=` as an attachment, which cross-origin links need. */
+const downloadUrl = (midi: string, id: string) => {
+  const url = new URL(midi);
+  url.searchParams.set("download", `${id}.mid`);
+  return url.toString();
+};
 const practiceDay = () => studio.practiceLog.today();
 const setLearnerName = (name: string) => studio.learnerName(name);
 const setDailyGoal = (minutes: number) => studio.dailyGoal(minutes);
@@ -441,7 +453,7 @@ function App() {
     selectedDevice = studio.midi.devices.find(
       (d) => d.id === studio.midi.selectedId,
     );
-  const book = bookForSong(studio.song.id);
+  const book = bookForSong(studio.song);
   const bookSongs = songsInBook(studio.songs, book.id);
   const songIndex = bookSongs.findIndex((song) => song.id === studio.song.id);
   const previousSong = bookSongs[songIndex - 1];
@@ -657,14 +669,16 @@ function App() {
             </div>
             <div className="song-tools">
               <span className="chip">{book.title}</span>
-              <a
-                className="song-midi-download"
-                href={`${import.meta.env.BASE_URL}midi/${studio.song.id}.mid`}
-                download
-                aria-label={`Download ${studio.song.title} MIDI`}
-              >
-                Download MIDI
-              </a>
+              {studio.song.library?.midi && (
+                <a
+                  className="song-midi-download"
+                  href={downloadUrl(studio.song.library.midi, studio.song.id)}
+                  download
+                  aria-label={`Download ${studio.song.title} MIDI`}
+                >
+                  Download MIDI
+                </a>
+              )}
             </div>
           </div>
           {studio.storageNotice && (
@@ -942,4 +956,27 @@ function App() {
 }
 const container = document.getElementById("root")!;
 const root = createRoot(container);
-root.render(<App />);
+/** After a refresh, src/reloadSnapshot.ts has put the page as it was left back. */
+const snapshotOnScreen = container.hasChildNodes();
+
+/** Load the song library, then open the studio. */
+async function start() {
+  // The page as it was left stays on screen while the library loads.
+  if (!snapshotOnScreen) root.render(<OpeningStudio error="" />);
+  if (!import.meta.env.VITE_SUPABASE_URL) {
+    root.render(
+      <OpeningStudio error="The song library is not set up for this site." />,
+    );
+    return;
+  }
+  try {
+    studio = new Studio(await loadLibrary(libraryUrl));
+  } catch {
+    root.render(
+      <OpeningStudio error="The songs could not be loaded. Check your connection and try again." />,
+    );
+    return;
+  }
+  root.render(<App />);
+}
+void start();

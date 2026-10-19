@@ -1,11 +1,6 @@
 import { memo, useEffect, useEffectEvent, useRef, useState } from "react";
-import {
-  books,
-  bookForSong,
-  CLASSES_TITLE,
-  songsInBook,
-  type BookId,
-} from "./books";
+import { books, bookForSong, CLASSES_TITLE, songsInBook } from "./books";
+import type { LibraryBook } from "./library";
 import type { Song } from "./song";
 
 const searchText = (text: string) =>
@@ -16,7 +11,7 @@ const songMatches = (song: Song, term: string) =>
   ).includes(term);
 const allBooks = (open: boolean) =>
   Object.fromEntries(books.map(({ id }) => [id, open])) as Record<
-    BookId,
+    LibraryBook,
     boolean
   >;
 
@@ -41,9 +36,9 @@ export const SongLibrary = memo(function SongLibrary({
     saved: savedSelection,
   });
   const revealSelection = useEffectEvent(() => {
-    const book = bookForSong(selected).id;
-    setExpanded((current) => ({ ...current, [book]: true }));
     const song = songs.find((song) => song.id === selected);
+    const book = bookForSong(song).id;
+    setExpanded((current) => ({ ...current, [book]: true }));
     setQuery((current) =>
       song && !songMatches(song, searchText(current.trim())) ? "" : current,
     );
