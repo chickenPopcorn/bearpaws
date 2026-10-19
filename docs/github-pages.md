@@ -74,9 +74,10 @@ samples, library songs and MIDI downloads load.
 Try Listen, full screen and the song-navigation controls. Grant MIDI permission
 on this new origin and verify the physical piano, including chords and pedal.
 
-Settings and practice progress stay in each origin's browser storage. The app
-no longer imports MIDI files: songs that earlier versions imported stay in that
-origin's browser storage, unused, and are not available on `piano.pollos.us`.
+Settings and practice progress sync to each user's Supabase account, so they
+follow a user to any origin. The app no longer imports MIDI files: songs that
+earlier versions imported stay in that origin's browser storage, unused, and
+are not available on `piano.pollos.us`.
 
 The build reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` from the
 repository's Actions variables. Supabase only returns signed-in users to origins

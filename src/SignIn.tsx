@@ -22,7 +22,7 @@ export function SignIn({
           height="56"
         />
         <h1>Paw Pal</h1>
-        <p>Sign in to open your practice studio.</p>
+        <p>Sign in to keep your practice progress on every device.</p>
         <button
           type="button"
           className="signin-google"

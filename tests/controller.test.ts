@@ -1579,6 +1579,40 @@ describe("teacher duet", () => {
   });
 });
 
+describe("account sync hooks", () => {
+  const hooks = () => ({
+    settings: vi.fn(),
+    progress: vi.fn(),
+  });
+  it("reports saved settings and progress to the account", () => {
+    const sync = hooks();
+    const studio = new Studio(fixtureLibrary(), sync);
+    active.push(studio);
+    studio.load(song([[60, 1]]));
+    expect(sync.settings).toHaveBeenLastCalledWith(
+      expect.objectContaining({ selected: "controller-fixture" }),
+    );
+    // Opening the song reports its save as the starting point.
+    expect(sync.progress).toHaveBeenLastCalledWith(
+      "controller-fixture",
+      expect.any(Object),
+      true,
+    );
+    // Saving with nothing changed neither restamps nor reports the record.
+    const calls = sync.progress.mock.calls.length;
+    const stamp = studio.progress.updated;
+    studio.save();
+    expect(sync.progress).toHaveBeenCalledTimes(calls);
+    expect(studio.progress.updated).toBe(stamp);
+    studio.seek(1);
+    expect(sync.progress).toHaveBeenLastCalledWith(
+      "controller-fixture",
+      expect.objectContaining({ position: 1, updated: expect.any(String) }),
+      false,
+    );
+  });
+});
+
 describe("practice time", () => {
   // A wrong key holds Wait mode at its first note, so playback keeps running.
   const held = () => song([[60, 1]]);
