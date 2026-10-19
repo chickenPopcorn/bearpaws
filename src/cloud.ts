@@ -211,8 +211,10 @@ export class CloudSync implements SyncHooks {
       this.syncedProgress.set(id, canon(data));
       store(`progress:${id}`, data);
     }
-    store("owner", this.userId);
+    // The queue goes first: once the owner is recorded, the next pull no
+    // longer adopts, and only the queue would keep what this one adopted.
     if (!this.savePending()) throw new BrowserStorageError();
+    store("owner", this.userId);
     if (this.pending) this.schedule(0);
   }
 

@@ -208,6 +208,26 @@ describe("loading the account", () => {
     ]);
   });
 
+  it("adopts again after a first pull that could not save its queue", async () => {
+    const b = backend();
+    write("progress:only-here", { best: 4 });
+    refusedKey = "cadence:pending";
+    await expect(new CloudSync(client(b), USER).pull()).rejects.toBeInstanceOf(
+      BrowserStorageError,
+    );
+    // Not yet the owner, so the retry still adopts this browser's progress.
+    expect(read("owner", null)).toBeNull();
+    refusedKey = "";
+    await new CloudSync(client(b), USER).pull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts).toEqual([
+      [
+        "progress",
+        [{ user_id: USER, song_id: "only-here", data: { best: 4 } }],
+      ],
+    ]);
+  });
+
   it("clears another account's data, its unsent changes included", async () => {
     const b = backend();
     write("owner", OTHER);
@@ -469,6 +489,8 @@ describe("signing out", () => {
   it("uploads what is waiting, signs this browser out, and clears its copy", async () => {
     const b = backend();
     write("owner", USER);
+    write("settings", { mode: "wait" });
+    write("practice:session-1", { seconds: 300 });
     const api = client(b);
     const sync = new CloudSync(api, USER);
     sync.progress("song", { best: 2 } as never);
@@ -480,6 +502,10 @@ describe("signing out", () => {
     expect(api.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
     expect(clearAccountData).toHaveBeenCalledOnce();
     expect(queue()).toBeNull();
+    expect(read("settings", null)).toBeNull();
+    expect(read("owner", null)).toBeNull();
+    // Practice time is this browser's, not the account's: the calendar keeps it.
+    expect(read("practice:session-1", null)).toEqual({ seconds: 300 });
   });
 
   it("asks before dropping practice that could not upload", async () => {

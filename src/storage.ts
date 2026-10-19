@@ -192,11 +192,20 @@ export function progress(id: string, duration: number): Progress {
  * browser, such as at sign-out.
  */
 export function clearAccountData() {
+  // Only what the account holds. Practice sessions belong to this browser
+  // (the account does not keep them), so the calendar keeps its history.
+  const account = (key: string) =>
+    ["settings", "owner", "pending"].includes(key) ||
+    key.startsWith("progress:");
   try {
     const keys = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith(storageKey(""))) keys.push(key);
+      if (
+        key?.startsWith(storageKey("")) &&
+        account(key.slice(storageKey("").length))
+      )
+        keys.push(key);
     }
     for (const key of keys) localStorage.removeItem(key);
   } catch {}
