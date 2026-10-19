@@ -289,7 +289,7 @@ function needsThreadResolution(summary, sha, checkpoint) {
   return (
     code?.commit_sha === sha &&
     code.status === "completed" &&
-    code.has_any_findings === true &&
+    (code.has_any_findings === true || code.has_any_findings === null) &&
     code.has_unresolved_findings === null &&
     checkpoint.rc > 0 &&
     security?.commit_sha === sha &&
@@ -386,6 +386,14 @@ async function latestCodexReceipt(github, repo, number, sha) {
   return latest;
 }
 
+/**
+ * How long after a Code Review completes GitHub's views can still be missing
+ * the review it published. Only after this may the absence of a review count
+ * as a clean run. Nothing triggers the gate again once it has passed, so a
+ * run that is only waiting for it sleeps until then and checks once more.
+ */
+const SILENT_REVIEW_SETTLE_MS = 10 * 60 * 1000;
+
 async function codexThreadResolution(
   github,
   repo,
@@ -393,6 +401,7 @@ async function codexThreadResolution(
   sha,
   started,
   completed,
+  findingsRecorded,
 ) {
   const latest = await latestCodexReceipt(github, repo, number, sha);
   // A dismissal changes GitHub's review decision, not the Codex task's
@@ -539,17 +548,37 @@ async function codexThreadResolution(
       throw new Error("Incomplete GitHub review-thread pagination.");
     seen.add(cursor);
   } while (true);
-  return unresolved
-    ? "failure"
-    : commentsComplete &&
-        expectedFindings.size > 0 &&
-        findings.size === expectedFindings.size &&
-        [...expectedFindings].every((id) => findings.has(id))
+  if (unresolved) return "failure";
+  // Some connector versions record nothing at all for a clean Code Review: no
+  // findings flag and no review on GitHub. A review it did publish can take a
+  // moment to appear in GitHub's views, so absence counts as clean only once
+  // that has had time to settle, measured from a known completion of this
+  // run, and every Codex thread is resolved. Any review on this commit since
+  // the run started, even one dated after the summary's completion, means
+  // the run was not silent.
+  if (!findingsRecorded && !currentReview) {
+    const publishedSinceStart =
+      latest && Date.parse(latest.submittedAt) > started;
+    if (publishedSinceStart || completed <= 0 || completed < started)
+      return "pending";
+    return Date.now() - completed >= SILENT_REVIEW_SETTLE_MS
       ? "success"
-      : "pending";
+      : "settling";
+  }
+  return commentsComplete &&
+    expectedFindings.size > 0 &&
+    findings.size === expectedFindings.size &&
+    [...expectedFindings].every((id) => findings.has(id))
+    ? "success"
+    : "pending";
 }
 
-export async function runCodexReviewGate({ github, context, core }) {
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function runCodexReviewGate(
+  { github, context, core, sleep = wait },
+  recheck = false,
+) {
   const number = pullRequestNumber(context);
   const repo = { owner: context.repo.owner, repo: context.repo.repo };
   const getPullRequest = () =>
@@ -623,8 +652,9 @@ export async function runCodexReviewGate({ github, context, core }) {
       pullRequest.head.sha === initialSha &&
       needsThreadResolution(summary, initialSha, checkpoint)
     ) {
-      // Some connector versions emit null after findings are resolved. Only
-      // that exact state may fall back to complete, trusted GitHub thread data.
+      // Some connector versions emit null after findings are resolved, or
+      // for a clean review. Only those states may fall back to complete,
+      // trusted GitHub thread data.
       threadResolution = await codexThreadResolution(
         github,
         repo,
@@ -632,6 +662,7 @@ export async function runCodexReviewGate({ github, context, core }) {
         initialSha,
         checkpoint.rc,
         reviewTime(summary, "code_review"),
+        summaryState(summary).code_review.has_any_findings === true,
       );
       ({ data: pullRequest } = await getPullRequest());
     }
@@ -664,6 +695,21 @@ export async function runCodexReviewGate({ github, context, core }) {
       },
       summary?.html_url,
     );
+  if (threadResolution === "settling" && !recheck) {
+    // A clean run that records nothing: wait until any review it published
+    // would show on GitHub, then verify everything again, once.
+    await publish(
+      {
+        state: "pending",
+        description: "Waiting for GitHub to show any Codex review first.",
+      },
+      summary?.html_url,
+    );
+    const settled =
+      reviewTime(summary, "code_review") + SILENT_REVIEW_SETTLE_MS;
+    await sleep(Math.max(settled - Date.now(), 0) + 1000);
+    return runCodexReviewGate({ github, context, core, sleep }, true);
+  }
   return publish(
     evaluateSummary(
       summary,
