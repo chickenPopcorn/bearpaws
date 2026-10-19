@@ -5,6 +5,8 @@ import { PIANO_REGIONS, selectPianoRegion } from "../src/piano";
 import { MidiState, Practice, Transport } from "../src/engine";
 import {
   draw,
+  DUET_ALPHA,
+  duetColor,
   KEYBOARD_HEIGHT,
   keyLayout,
   leftColor,
@@ -156,6 +158,84 @@ function drawingCanvas(width = 880) {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe("teacher duet in the waterfall", () => {
+  it("draws the duet yellow at quarter opacity behind both hands, widening the keys", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const student = note("student", 72, 1, 2);
+    const fixture = {
+      ...song([student]),
+      duet: { octaves: 1, notes: [note("teacher", 36, 1, 2, 2)] },
+    };
+    const selected = [student];
+    const { canvas, noteFills } = drawingCanvas();
+    // Duet off: the teacher part is not drawn, and the keys fit the student.
+    draw(
+      canvas,
+      fixture,
+      selected,
+      0,
+      new MidiState(),
+      new Practice(selected),
+      false,
+      false,
+      false,
+    );
+    expect(noteFills.map(({ color }) => color)).toEqual([rightColor]);
+    expect(range(fixture)).toEqual([48, 84]);
+    noteFills.length = 0;
+    draw(
+      canvas,
+      fixture,
+      selected,
+      0,
+      new MidiState(),
+      new Practice(selected),
+      false,
+      false,
+      false,
+      fixture.duet.notes,
+    );
+    expect(noteFills.map(({ color, alpha }) => ({ color, alpha }))).toEqual([
+      { color: duetColor, alpha: DUET_ALPHA },
+      { color: rightColor, alpha: 1 },
+    ]);
+    expect(DUET_ALPHA).toBe(0.25);
+    // C2 is now on the keyboard, so the teacher's bass is visible.
+    expect(range(fixture, true)).toEqual([36, 84]);
+  });
+
+  it("draws the duet from what is left of the shared budget, once per outline", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const students = Array.from({ length: MAX_VISIBLE_NOTES - 2 }, (_, i) =>
+      note(`s${i}`, 60 + (i % 12), 1 + i * 0.0005, 2),
+    );
+    const teacher = [
+      note("t0", 40, 1, 2, 2),
+      note("t0-again", 40, 1, 2, 2),
+      note("t1", 41, 1, 2, 2),
+      note("t2", 42, 1, 2, 2),
+    ];
+    const fixture = { ...song(students), duet: { octaves: 1, notes: teacher } };
+    const { canvas, noteFills } = drawingCanvas();
+    draw(
+      canvas,
+      fixture,
+      students,
+      0,
+      new MidiState(),
+      new Practice(students),
+      false,
+      false,
+      false,
+      teacher,
+    );
+    const duetFills = noteFills.filter(({ color }) => color === duetColor);
+    // Two shapes were left: the repeated outline counts once, and "t2" waits.
+    expect(duetFills).toHaveLength(2);
+    expect(noteFills).toHaveLength(MAX_VISIBLE_NOTES);
+  });
 });
 
 describe("review regressions", () => {

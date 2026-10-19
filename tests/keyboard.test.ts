@@ -73,3 +73,33 @@ describe("piano keyboard geometry and pointer input", () => {
     expect(pianoKeyAt(song, 1.01, height - 1, height)).toBeUndefined();
   });
 });
+
+describe("keyboard with the teacher duet", () => {
+  it("adds the duet's octaves to the keys only when asked", () => {
+    const duetSong: Song = {
+      ...song,
+      notes: [],
+      duet: {
+        octaves: 1,
+        notes: [
+          {
+            id: "bass",
+            pitch: 31,
+            start: 0,
+            end: 1,
+            soundEnd: 1,
+            velocity: 0.5,
+            track: 2,
+            channel: 2,
+          },
+        ],
+      },
+    };
+    expect(range(duetSong)).toEqual([48, 84]);
+    expect(range(duetSong, true)).toEqual([24, 84]);
+    const height = 400;
+    // The leftmost white key is C1 with the duet, C3 without.
+    expect(pianoKeyAt(duetSong, 0.001, height - 1, height)).toBe(48);
+    expect(pianoKeyAt(duetSong, 0.001, height - 1, height, true)).toBe(24);
+  });
+});

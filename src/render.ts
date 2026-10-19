@@ -3,7 +3,8 @@ import type { Group, MidiState, Practice } from "./engine";
 import { createMeterMap } from "./notation";
 import { createBeatClock } from "./timeline";
 const scoreFont = '"Libre Baskerville", Baskerville, Georgia, serif';
-const ranges = new WeakMap<Song, [number, number]>();
+const ranges = new WeakMap<Song, [number, number]>(),
+  duetRanges = new WeakMap<Song, [number, number]>();
 const beatTimelines = new WeakMap<
   Song,
   {
@@ -25,7 +26,10 @@ const MIN_NARROW_LABEL = 9;
 /** Smallest label size; a label that cannot fit at this size is left off. */
 const MIN_LABEL = 7;
 export const rightColor = "#a086e9",
-  leftColor = "#51b3a5";
+  leftColor = "#51b3a5",
+  /** The teacher duet, drawn faintly behind both hands. */
+  duetColor = "#f2c12e",
+  DUET_ALPHA = 0.25;
 /** Darker hand colours for text on white keys, which the fills fail (2.5-3:1). */
 const rightText = "#6a4bc6",
   leftText = "#22766a",
@@ -46,26 +50,38 @@ export function keyLayout(min: number, max: number) {
     };
   });
 }
-export function range(song: Song): [number, number] {
-  const cached = ranges.get(song);
+/** The keys to show: whole octaves around the notes, and the duet's with `duet`. */
+export function range(song: Song, duet = false): [number, number] {
+  const cache = duet && song.duet ? duetRanges : ranges;
+  const cached = cache.get(song);
   if (cached) return cached;
   let lo = 48,
     hi = 84;
-  for (const note of song.notes) {
-    lo = Math.min(lo, note.pitch);
-    hi = Math.max(hi, note.pitch);
-  }
+  for (const notes of [
+    song.notes,
+    cache === duetRanges ? song.duet!.notes : [],
+  ])
+    for (const note of notes) {
+      lo = Math.min(lo, note.pitch);
+      hi = Math.max(hi, note.pitch);
+    }
   const result: [number, number] = [
     Math.max(0, Math.floor(lo / 12) * 12),
     Math.min(127, Math.ceil(hi / 12) * 12),
   ];
-  ranges.set(song, result);
+  cache.set(song, result);
   return result;
 }
-export function pianoKeyAt(song: Song, x: number, y: number, height: number) {
+export function pianoKeyAt(
+  song: Song,
+  x: number,
+  y: number,
+  height: number,
+  duet = false,
+) {
   const top = height - KEYBOARD_HEIGHT;
   if (y < top || y > height || x < 0 || x > 1) return undefined;
-  const keys = keyLayout(...range(song));
+  const keys = keyLayout(...range(song, duet));
   return (
     keys.find(
       (key) =>
@@ -168,6 +184,8 @@ export function draw(
   names: boolean,
   waiting: boolean,
   listen: boolean,
+  /** The teacher duet while Duet is on; the keys widen to fit it. */
+  duet: readonly Note[] = [],
 ) {
   const rect = canvas.getBoundingClientRect(),
     dpr = window.devicePixelRatio || 1,
@@ -186,7 +204,7 @@ export function draw(
   const keyHeight = KEYBOARD_HEIGHT,
     fall = height - keyHeight,
     px = fall / 5,
-    [min, max] = range(song),
+    [min, max] = range(song, duet.length > 0),
     keys = keyLayout(min, max),
     geometry = new Map(keys.map((k) => [k.pitch, k]));
   c.fillStyle = "#eeedf5";
@@ -289,6 +307,17 @@ export function draw(
     const hand = hands.get(n.track);
     // Tracks assigned to Skip remain excluded; disabled practice hands provide context.
     if (hand === "left" || hand === "right") collect(n, false);
+  }
+  // The duet takes what is left of the same budget, one shape per outline.
+  const duetNotes: Note[] = [];
+  for (const n of duet) {
+    if (rendered.size >= MAX_VISIBLE_NOTES) break;
+    if (!geometry.has(n.pitch) || n.end < position || n.start > position + 5)
+      continue;
+    const shape = `duet:${n.pitch}:${n.start}:${n.end}`;
+    if (rendered.has(shape)) continue;
+    rendered.add(shape);
+    duetNotes.push(n);
   }
   c.save();
   c.beginPath();
@@ -406,6 +435,23 @@ export function draw(
     }
     c.globalAlpha = 1;
   };
+  // The duet goes behind both hands: it is heard, never played or scored.
+  c.fillStyle = duetColor;
+  c.globalAlpha = DUET_ALPHA;
+  for (const n of duetNotes) {
+    const k = geometry.get(n.pitch)!;
+    const h = Math.max(8, (n.end - n.start) * px);
+    c.beginPath();
+    c.roundRect(
+      k.x * width + 2,
+      fall - (n.start - position) * px - h,
+      Math.max(3, k.width * width - 4),
+      h,
+      4,
+    );
+    c.fill();
+  }
+  c.globalAlpha = 1;
   // Context goes behind the selected hand, including at shared-pitch onsets.
   for (const note of dimmedNotes) drawNote(note, false);
   for (const note of activeNotes) drawNote(note, true);
