@@ -95,8 +95,8 @@ export class Studio {
       ambience: this.settings.ambience,
       voices: this.settings.pianoVoices,
     });
-    this.practiceLog = new PracticeLog((session, saved) =>
-      this.sync?.practice(session, saved),
+    this.practiceLog = new PracticeLog((session) =>
+      this.sync?.practice(session),
     );
     this.midi = this.createMidi();
     this.load(this.song);
@@ -201,11 +201,10 @@ export class Studio {
     this.midi.dispose();
   }
   persist() {
-    const stored = write("settings", this.settings);
-    if (!stored)
+    if (!write("settings", this.settings))
       this.storageNotice =
         "Browser storage is full or blocked. Changes will last for this session.";
-    this.sync?.settings(this.settings, stored);
+    this.sync?.settings(this.settings);
   }
   /** `loaded`: this save is made as the song opens, before any practice. */
   save(loaded = false) {
@@ -222,19 +221,18 @@ export class Studio {
       loopEnabled: this.loopEnabled,
       loop: [this.loopStart, this.loopEnd],
     };
-    // Only a change gets a new stamp and is written: another tab picks the
-    // copy with the latest stamp to upload, so an idle tab re-saving what it
-    // loaded must not look newer than practice saved since.
+    // Only a change gets a new stamp and is written: the account keeps the
+    // position of the later save, so re-saving what was loaded must not look
+    // newer than practice saved since on another device.
     if (unstamped(next) === this.savedProgress) {
-      if (loaded) this.sync?.progress(this.song.id, this.progress, true, true);
+      if (loaded) this.sync?.progress(this.song.id, this.progress, true);
       return;
     }
     this.progress = { ...next, updated: new Date().toISOString() };
     this.savedProgress = unstamped(next);
-    const stored = write(`progress:${this.song.id}`, this.progress);
-    if (!stored)
+    if (!write(`progress:${this.song.id}`, this.progress))
       this.storageNotice = "Progress could not be saved in this browser.";
-    this.sync?.progress(this.song.id, this.progress, loaded, stored);
+    this.sync?.progress(this.song.id, this.progress, loaded);
   }
   load(song: Song) {
     this.cancelPlaybackPreparation();

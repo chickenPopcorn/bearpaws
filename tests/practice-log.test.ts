@@ -123,14 +123,13 @@ describe("practice log", () => {
     ]);
   });
 
-  it("tells the sync when browser storage refused a session", () => {
+  it("still reports a session browser storage refused, for upload", () => {
     const onCommit = vi.fn();
     const log = new PracticeLog(onCommit, clock);
     log.add(1, "ode");
     expect(log.commit()).toBe(true);
     expect(onCommit).toHaveBeenLastCalledWith(
       expect.objectContaining({ seconds: 1 }),
-      true,
     );
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => stored.get(key) ?? null,
@@ -143,7 +142,6 @@ describe("practice log", () => {
     expect(log.commit()).toBe(false);
     expect(onCommit).toHaveBeenLastCalledWith(
       expect.objectContaining({ seconds: 2 }),
-      false,
     );
   });
 

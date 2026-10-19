@@ -91,11 +91,7 @@ export class PracticeLog {
   revision = 0;
 
   constructor(
-    /** `saved` is false when browser storage refused the session. */
-    private onCommit: (
-      session: PracticeSession,
-      saved: boolean,
-    ) => void = () => {},
+    private onCommit: (session: PracticeSession) => void = () => {},
     private clock: () => Date = () => new Date(),
   ) {
     for (const session of storedSessions())
@@ -166,7 +162,7 @@ export class PracticeLog {
     for (const [id, s] of this.sessions)
       if (s.day < oldest) this.sessions.delete(id);
     const saved = write("practice", [...this.sessions.values()]);
-    this.onCommit(updated, saved);
+    this.onCommit(updated);
     return saved;
   }
 
