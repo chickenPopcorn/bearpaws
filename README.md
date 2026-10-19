@@ -48,6 +48,6 @@ piano**.
 - [The song library](docs/library.md): `npm run library:pull` and `npm run library:push`
 - [Accounts and data](docs/accounts.md): Google sign-in, sync and Supabase setup
 - [Development](docs/development.md): scripts, tests and architecture
-- [Deployment](docs/deploy.md) and [GitHub Pages setup](docs/github-pages.md)
+- [Deployment](docs/deploy.md), including the merge queue, and [GitHub Pages setup](docs/github-pages.md)
 - [Verification record](docs/verification.md)
 - [Original design brief](docs/cloud-handoff.md)

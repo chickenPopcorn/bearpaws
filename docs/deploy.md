@@ -17,6 +17,39 @@ The separate checks workflow still uploads `dist/` and `.openai/hosting.json` as
 the earlier Sites registration attempt returned `Project owner is not linked to
 an account`, with no deployed URL.
 
+## Merge queue for `main`
+
+The `project main` ruleset requires `test-and-build` (the checks workflow) and
+`Codex review gate` (a commit status from the Codex review gate workflow). Both
+also report on a merge queue's merge commits. The checks workflow runs on
+`merge_group`, and skips push runs on the queue's `gh-readonly-queue/*`
+branches, which would repeat it. A pull request joins the queue only after its
+own Codex review gate passed. The gate can change while the pull request waits,
+so `codex-merge-group.yml` reads the pull request's gate again when the queue
+builds its merge commit and copies that state there; anything but success drops
+it from the queue. A review requested after that read can still finish after
+the merge, so take a pull request out of the queue before asking for another
+review. That workflow runs on `merge_group` only. A job skipped on pull
+requests would leave a check run on the pull request that could stand in for
+the real gate.
+
+The queue is not enabled yet. Merge these workflows into `main` first, then a
+repository admin turns it on:
+
+1. Open **Settings → Rules → Rulesets → project main**.
+2. Turn on **Require merge queue**. Choose **Squash** as the merge method, as
+   the history uses, and keep **Only merge non-failing pull requests** on. The
+   other defaults work; the status check timeout (60 minutes) leaves room for
+   the `e2e` job's 20-minute limit.
+3. Under **Require status checks to pass**, keep `test-and-build` and
+   `Codex review gate`. Add `e2e`, from the E2E tests workflow
+   (`.github/workflows/e2e.yml`), with GitHub Actions as its source. Add it
+   only once that workflow is on `main`, or the queue waits for a check that
+   never runs. On pull requests the `e2e` job is skipped, which lets them into
+   the queue; the browser suite then runs on the queue's merge commit.
+4. Save the ruleset. Pull requests then show **Merge when ready**, which adds
+   them to the queue.
+
 ## Verification
 
 See [the verification record](verification.md) for checks run, limitations, and
