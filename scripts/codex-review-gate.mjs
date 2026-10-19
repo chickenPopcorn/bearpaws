@@ -389,7 +389,8 @@ async function latestCodexReceipt(github, repo, number, sha) {
 /**
  * How long after a Code Review completes GitHub's views can still be missing
  * the review it published. Only after this may the absence of a review count
- * as a clean run; re-run the gate (workflow_dispatch) once it has passed.
+ * as a clean run. Nothing triggers the gate again once it has passed, so a
+ * run that is only waiting for it sleeps until then and checks once more.
  */
 const SILENT_REVIEW_SETTLE_MS = 10 * 60 * 1000;
 
@@ -558,12 +559,11 @@ async function codexThreadResolution(
   if (!findingsRecorded && !currentReview) {
     const publishedSinceStart =
       latest && Date.parse(latest.submittedAt) > started;
-    return !publishedSinceStart &&
-      completed > 0 &&
-      completed >= started &&
-      Date.now() - completed >= SILENT_REVIEW_SETTLE_MS
+    if (publishedSinceStart || completed <= 0 || completed < started)
+      return "pending";
+    return Date.now() - completed >= SILENT_REVIEW_SETTLE_MS
       ? "success"
-      : "pending";
+      : "settling";
   }
   return commentsComplete &&
     expectedFindings.size > 0 &&
@@ -573,7 +573,12 @@ async function codexThreadResolution(
     : "pending";
 }
 
-export async function runCodexReviewGate({ github, context, core }) {
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function runCodexReviewGate(
+  { github, context, core, sleep = wait },
+  recheck = false,
+) {
   const number = pullRequestNumber(context);
   const repo = { owner: context.repo.owner, repo: context.repo.repo };
   const getPullRequest = () =>
@@ -690,6 +695,21 @@ export async function runCodexReviewGate({ github, context, core }) {
       },
       summary?.html_url,
     );
+  if (threadResolution === "settling" && !recheck) {
+    // A clean run that records nothing: wait until any review it published
+    // would show on GitHub, then verify everything again, once.
+    await publish(
+      {
+        state: "pending",
+        description: "Waiting for GitHub to show any Codex review first.",
+      },
+      summary?.html_url,
+    );
+    const settled =
+      reviewTime(summary, "code_review") + SILENT_REVIEW_SETTLE_MS;
+    await sleep(Math.max(settled - Date.now(), 0) + 1000);
+    return runCodexReviewGate({ github, context, core, sleep }, true);
+  }
   return publish(
     evaluateSummary(
       summary,

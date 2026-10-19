@@ -177,7 +177,8 @@ function setup(comments = [], events = [], statuses = []) {
   };
   const core = { info: vi.fn() };
   return {
-    run: () => runCodexReviewGate({ github, context, core }),
+    run: (options = {}) =>
+      runCodexReviewGate({ github, context, core, ...options }),
     context,
     github,
     get,
@@ -942,14 +943,54 @@ describe("Codex review merge gate", () => {
       await expect(run()).resolves.toMatchObject({ state: "success" });
     });
 
-    it("stays pending while a published review may not be visible yet", async () => {
+    it("waits out the settle time itself, then passes", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED - 60000);
+      const { run, reviewGraphql, threadGraphql, publish } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValue(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      const sleep = vi.fn(async (ms) => vi.setSystemTime(Date.now() + ms));
+      await expect(run({ sleep })).resolves.toMatchObject({
+        state: "success",
+      });
+      expect(sleep).toHaveBeenCalledExactlyOnceWith(61000);
+      expect(publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: "pending",
+          description: "Waiting for GitHub to show any Codex review first.",
+        }),
+      );
+    });
+
+    it("stays pending if a review appears while it waits", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(SETTLED - 1);
+      const { run, reviewGraphql, threadGraphql } =
+        setupFallback(silentState());
+      reviewGraphql.mockResolvedValueOnce(receiptPage([]));
+      threadGraphql.mockResolvedValue(threadPage([]));
+      // The published review shows up during the wait.
+      const sleep = vi.fn(async (ms) => vi.setSystemTime(Date.now() + ms));
+      await expect(run({ sleep })).resolves.toMatchObject({
+        state: "pending",
+      });
+      expect(sleep).toHaveBeenCalledOnce();
+    });
+
+    it("checks only once more after waiting", async () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(SETTLED - 1);
       const { run, reviewGraphql, threadGraphql } =
         setupFallback(silentState());
       reviewGraphql.mockResolvedValue(receiptPage([]));
       threadGraphql.mockResolvedValue(threadPage([]));
-      await expect(run()).resolves.toMatchObject({ state: "pending" });
+      // A clock that does not move: the recheck is still inside the window.
+      const sleep = vi.fn(async () => {});
+      await expect(run({ sleep })).resolves.toMatchObject({
+        state: "pending",
+      });
+      expect(sleep).toHaveBeenCalledOnce();
     });
 
     it("stays pending without a known completion time for the run", async () => {
