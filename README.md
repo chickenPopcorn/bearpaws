@@ -1,5 +1,9 @@
 # Paw Pal · MIDI piano practice
 
+[![Tests](https://github.com/chickenPopcorn/pawpal/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/chickenPopcorn/pawpal/actions/workflows/checks.yml)
+[![Code quality](https://github.com/chickenPopcorn/pawpal/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/chickenPopcorn/pawpal/actions/workflows/quality.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fpiano.pollos.us%2Fbadges%2Fcoverage.json)](https://github.com/chickenPopcorn/pawpal/actions/workflows/pages.yml)
+
 A browser piano practice studio: notes fall onto a keyboard, you play them on
 your USB piano, and the book's teacher duet plays along.
 
@@ -17,7 +21,7 @@ your USB piano, and the book's teacher duet plays along.
 
 ## Quick start
 
-Needs Node.js 22.12+ and npm. Use desktop Chrome or Edge for USB MIDI.
+Needs Node.js 22.13+ and npm. Use desktop Chrome or Edge for USB MIDI.
 
 ```sh
 npm ci
