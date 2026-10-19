@@ -57,6 +57,15 @@ describe("one studio tab at a time", () => {
     expect(await second.claim()).toBe(true);
   });
 
+  it("lets this tab in when the lock request itself fails", async () => {
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: () => Promise.reject(new DOMException("No", "SecurityError")),
+      },
+    });
+    expect(await new StudioClaim(vi.fn()).claim()).toBe(true);
+  });
+
   it("lets every tab in where Web Locks are missing", async () => {
     vi.stubGlobal("navigator", {});
     expect(await new StudioClaim(vi.fn()).claim()).toBe(true);

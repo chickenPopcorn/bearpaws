@@ -18,6 +18,12 @@ const RETRY_MS = 15000;
 const TIMEOUT_MS = 30000;
 const NO_RESPONSE = "The account service did not respond.";
 const RETRYING = "Changes could not be saved to your account. Retrying.";
+const FULL_ACCOUNT =
+  "This account has progress for 200 songs, its limit, so progress for new songs is not saved.";
+/** Postgres refused a row a check rejects, here the progress_quota trigger. */
+const CHECK_VIOLATION = "23514";
+/** Songs one account keeps progress for (see the progress_quota trigger). */
+const MAX_SONGS = 200;
 const STORAGE_FULL =
   "This browser's storage is full, so changes are uploading now. Free up site storage to keep them safe.";
 /** The Data API returns at most this many rows per request (Supabase's default). */
@@ -197,10 +203,13 @@ export class CloudSync implements SyncHooks {
       for (const row of found.data as typeof rows)
         remote.set(row.song_id, row.data);
     }
+    // Adoption fills only the room the account has left.
+    let room = MAX_SONGS - remote.size;
     for (const { id, progress } of missing)
       if (remote.has(id)) continue;
-      else if (adopting) this.queue.progress[id] = progress as Progress;
-      else
+      else if (adopting) {
+        if (room-- > 0) this.queue.progress[id] = progress as Progress;
+      } else
         try {
           // Not in the account, so not this account's.
           removeProgress(id);
@@ -309,12 +318,16 @@ export class CloudSync implements SyncHooks {
       // after the retry that replaces it.
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      let quotaReached = false;
       const sent = async (
-        request: PromiseLike<{ error: unknown }> | false | undefined,
+        request:
+          PromiseLike<{ error: { code?: string } | null }> | false | undefined,
       ) => {
         if (!request) return true;
         try {
-          return !(await request).error;
+          const { error } = await request;
+          if (error?.code === CHECK_VIOLATION) quotaReached = true;
+          return !error;
         } catch {
           return false;
         }
@@ -352,9 +365,17 @@ export class CloudSync implements SyncHooks {
           this.syncedProgress.set(id, canon(data));
           if (this.queue.progress[id] === data) delete this.queue.progress[id];
         }
+      // The account is full: one new song's refusal fails the whole upload,
+      // so drop the new songs and let saves of songs it has go through.
+      else if (quotaReached)
+        for (const [id] of progress)
+          if (!this.syncedProgress.has(id)) delete this.queue.progress[id];
       if (this.stopped) return;
       this.savePending();
-      if (settingsOk && progressOk) this.setError("");
+      if (quotaReached) {
+        this.setError(FULL_ACCOUNT);
+        if (this.pending) this.schedule(0);
+      } else if (settingsOk && progressOk) this.setError("");
       else {
         this.setError(RETRYING);
         this.schedule(RETRY_MS);

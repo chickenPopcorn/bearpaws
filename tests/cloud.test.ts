@@ -23,6 +23,8 @@ interface Backend {
   failWrites: boolean;
   /** Writes to reject, by label, such as "upsert settings". */
   failLabels: string[];
+  /** Songs the account has no room for, as the progress_quota trigger refuses. */
+  overQuota: string[];
   /** "abort": writes answer only when aborted. "manual": when release() runs. */
   hang: "no" | "abort" | "manual";
   release: () => void;
@@ -43,6 +45,7 @@ function backend(): Backend {
     calls: [],
     failWrites: false,
     failLabels: [],
+    overQuota: [],
     hang: "no",
     release: () => {},
     signOutError: null,
@@ -72,6 +75,15 @@ function client(b: Backend) {
             resolve(reply(null));
           };
         });
+      const rows = Array.isArray(upsert[1]) ? upsert[1] : [];
+      if (
+        rows.some((row: { song_id: string }) =>
+          b.overQuota.includes(row.song_id),
+        )
+      )
+        return Promise.resolve(
+          reply(null, { code: "23514", message: "limit reached" }),
+        );
       const fails = b.failWrites || b.failLabels.includes(label);
       if (!fails) b.upserts.push(upsert);
       return Promise.resolve(
@@ -432,6 +444,35 @@ describe("uploading changes", () => {
     sync.progress("new", { best: 3 } as never);
     await vi.advanceTimersByTimeAsync(2000);
     expect(b.calls.at(-1)).toBe("upsert progress");
+  });
+
+  it("drops new songs a full account refuses, and still saves the songs it has", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.progress = [{ song_id: "known", data: { best: 1 } }];
+    const sync = new CloudSync(client(b), USER);
+    await sync.pull();
+    b.overQuota = ["new"];
+    sync.progress("known", { best: 2 } as never);
+    sync.progress("new", { best: 1 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sync.error).toMatch(/200 songs/);
+    // The retry starts at once (a timer set during a tick runs 1 ms later).
+    await vi.advanceTimersByTimeAsync(1);
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "known", data: { best: 2 } },
+    ]);
+    expect(queue()).toBeNull();
+  });
+
+  it("adopts only as many songs as the account has room for", async () => {
+    const b = backend();
+    for (let i = 0; i < 205; i++)
+      write(`progress:song-${String(i).padStart(3, "0")}`, { best: 1 });
+    const sync = new CloudSync(client(b), USER);
+    sync.flush = async () => {};
+    await sync.pull();
+    expect(queued()).toHaveLength(200);
   });
 
   it("uploads at once and says so when storage cannot hold the queue", async () => {

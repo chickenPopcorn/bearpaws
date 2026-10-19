@@ -25,11 +25,13 @@ export class StudioClaim {
       typeof navigator === "undefined" ? undefined : navigator.locks;
     if (!locks || this.release) return Promise.resolve(true);
     return new Promise((resolve) => {
+      let answered = false;
       locks
         .request(
           LOCK,
           take ? { steal: true } : { ifAvailable: true },
           (lock) => {
+            answered = true;
             if (!lock) {
               resolve(false);
               return;
@@ -44,6 +46,12 @@ export class StudioClaim {
           },
         )
         .catch(() => {
+          // Refused before an answer, as where this page cannot use Web
+          // Locks: run the studio here, as browsers without them do.
+          if (!answered) {
+            resolve(true);
+            return;
+          }
           // Another tab took the lock: its request rejects this one's.
           if (!this.release) return;
           this.release = null;

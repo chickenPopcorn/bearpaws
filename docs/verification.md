@@ -5,7 +5,7 @@ release, key release noise, pedal noise and pseudo pedal resonance.
 
 ## Automated checks
 
-- `npm test`: 824 tests across 35 suites passed.
+- `npm test`: 827 tests across 35 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: the offline importer tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
