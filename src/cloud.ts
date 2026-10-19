@@ -89,7 +89,8 @@ interface Unsynced {
   settings?: string;
   /** Song id to the `updated` stamp of its unconfirmed progress. */
   progress: Record<string, string>;
-  deleted: string[];
+  /** Song id to when its progress was removed. A song is in one list only. */
+  deleted: Record<string, string>;
 }
 
 /** A short fingerprint of some text (FNV-1a). */
@@ -120,7 +121,11 @@ function readUnsynced(): Unsynced {
       : progress && typeof progress === "object"
         ? (progress as Record<string, string>)
         : {},
-    deleted: Array.isArray(stored.deleted) ? stored.deleted.map(String) : [],
+    deleted: Array.isArray(stored.deleted)
+      ? Object.fromEntries(stored.deleted.map((id) => [String(id), ""]))
+      : stored.deleted && typeof stored.deleted === "object"
+        ? (stored.deleted as Record<string, string>)
+        : {},
   };
 }
 
@@ -141,7 +146,8 @@ export interface SyncHooks {
 export class CloudSync implements SyncHooks {
   private pendingSettings: Settings | null = null;
   private pendingProgress = new Map<string, Progress>();
-  private pendingDeletes = new Set<string>();
+  /** Song id to when its progress was removed. */
+  private pendingDeletes = new Map<string, string>();
   /** What the upload in progress carries, until the account confirms it. */
   private inFlight: Unsynced | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -196,7 +202,7 @@ export class CloudSync implements SyncHooks {
     // Read now, not before the requests: another tab of this account may
     // have saved changes while they were under way.
     const unsynced: Unsynced = adopting
-      ? { progress: {}, deleted: [] }
+      ? { progress: {}, deleted: {} }
       : readUnsynced();
 
     // Settings: this browser's unconfirmed change wins, then the account's.
@@ -211,8 +217,11 @@ export class CloudSync implements SyncHooks {
     const remote = new Map(rows.map((row) => [row.song_id, row.data]));
     for (const [id, data] of remote) this.syncedProgress.set(id, canon(data));
     const changed = new Set(Object.keys(unsynced.progress));
-    for (const id of unsynced.deleted) {
-      this.pendingDeletes.add(id);
+    for (const [id, at] of Object.entries(unsynced.deleted)) {
+      // A marker from an earlier build can list a song both ways; the save
+      // came after the removal, or the progress would be gone.
+      if (id in unsynced.progress) continue;
+      this.pendingDeletes.set(id, at);
       remote.delete(id);
     }
     for (const { id, progress: local } of localProgress()) {
@@ -289,7 +298,7 @@ export class CloudSync implements SyncHooks {
     // Deletes join the upload queue, so an upload already under way cannot
     // land after the delete and bring the progress back.
     this.pendingProgress.delete(songId);
-    this.pendingDeletes.add(songId);
+    this.pendingDeletes.set(songId, new Date().toISOString());
     this.queued();
   }
 
@@ -319,7 +328,7 @@ export class CloudSync implements SyncHooks {
   }: { confirmed?: Unsynced; exact?: boolean } = {}): boolean {
     const flight = this.inFlight;
     const stored: Unsynced = exact
-      ? { progress: {}, deleted: [] }
+      ? { progress: {}, deleted: {} }
       : readUnsynced();
     const settings = this.pendingSettings
       ? settingsVersion(this.pendingSettings)
@@ -327,27 +336,37 @@ export class CloudSync implements SyncHooks {
         (stored.settings !== confirmed?.settings
           ? stored.settings
           : undefined));
+    // Of two saves of a song, or a save and a removal, the later one is the
+    // one to keep: a song is either saved or removed, never both.
     const progress: Record<string, string> = {};
+    const deleted: Record<string, string> = {};
     for (const [id, version] of Object.entries(stored.progress))
       if (confirmed?.progress[id] !== version) progress[id] = version;
-    // Of two saves of a song, the later one is the one to protect.
-    const keep = (id: string, version: string) => {
-      if (!(id in progress) || version > progress[id]) progress[id] = version;
+    for (const [id, at] of Object.entries(stored.deleted))
+      if (confirmed?.deleted[id] !== at) deleted[id] = at;
+    const keep = (
+      into: Record<string, string>,
+      id: string,
+      version: string,
+    ) => {
+      if (!(id in into) || version > into[id]) into[id] = version;
     };
     for (const [id, version] of Object.entries(flight?.progress ?? {}))
-      keep(id, version);
+      keep(progress, id, version);
+    for (const [id, at] of Object.entries(flight?.deleted ?? {}))
+      keep(deleted, id, at);
     for (const [id, data] of this.pendingProgress)
-      keep(id, progressVersion(data));
+      keep(progress, id, progressVersion(data));
+    for (const [id, at] of this.pendingDeletes) keep(deleted, id, at);
+    for (const id of Object.keys(deleted))
+      if (id in progress) {
+        if (deleted[id] > progress[id]) delete progress[id];
+        else delete deleted[id];
+      }
     return write("unsynced", {
       settings,
       progress,
-      deleted: [
-        ...new Set([
-          ...stored.deleted.filter((id) => !confirmed?.deleted.includes(id)),
-          ...this.pendingDeletes,
-          ...(flight?.deleted ?? []),
-        ]),
-      ],
+      deleted,
     } satisfies Unsynced);
   }
 
@@ -379,6 +398,7 @@ export class CloudSync implements SyncHooks {
     const settings = this.pendingSettings,
       progress = [...this.pendingProgress],
       deleted = [...this.pendingDeletes];
+    const deletedIds = deleted.map(([id]) => id);
     this.pendingSettings = null;
     this.pendingProgress.clear();
     this.pendingDeletes.clear();
@@ -387,7 +407,7 @@ export class CloudSync implements SyncHooks {
       progress: Object.fromEntries(
         progress.map(([id, data]) => [id, progressVersion(data)]),
       ),
-      deleted,
+      deleted: Object.fromEntries(deleted),
     };
     CloudSync.flushing = (async () => {
       // Aborting at the time limit settles the request, so it cannot land
@@ -428,11 +448,11 @@ export class CloudSync implements SyncHooks {
               .abortSignal(controller.signal),
         ),
         sent(
-          deleted.length > 0 &&
+          deletedIds.length > 0 &&
             this.client
               .from("progress")
               .delete()
-              .in("song_id", deleted)
+              .in("song_id", deletedIds)
               .abortSignal(controller.signal),
         ),
       ]);
@@ -447,9 +467,10 @@ export class CloudSync implements SyncHooks {
         if (progressOk) this.syncedProgress.set(id, canon(data));
         else if (!this.pendingProgress.has(id) && !this.pendingDeletes.has(id))
           this.pendingProgress.set(id, data);
-      for (const id of deleted)
+      for (const [id, at] of deleted)
         if (deletesOk) this.syncedProgress.delete(id);
-        else if (!this.pendingProgress.has(id)) this.pendingDeletes.add(id);
+        else if (!this.pendingProgress.has(id) && !this.pendingDeletes.has(id))
+          this.pendingDeletes.set(id, at);
       const ok = settingsOk && progressOk && deletesOk;
       if (this.stopped) return;
       this.saveUnsynced({
@@ -461,7 +482,7 @@ export class CloudSync implements SyncHooks {
                 progress.map(([id, data]) => [id, progressVersion(data)]),
               )
             : {},
-          deleted: deletesOk ? deleted : [],
+          deleted: deletesOk ? Object.fromEntries(deleted) : {},
         },
       });
       if (ok) this.setError("");
@@ -504,7 +525,7 @@ export class CloudSync implements SyncHooks {
       this.pending ||
       !!marker.settings ||
       Object.keys(marker.progress).length > 0 ||
-      marker.deleted.length > 0;
+      Object.keys(marker.deleted).length > 0;
     // What this browser held before its first successful pull is kept too,
     // for that sign-in to adopt.
     const owned = read<string | null>("owner", null) === this.userId;
