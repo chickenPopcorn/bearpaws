@@ -1,7 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MidiConnection, type MidiNavigator } from "../src/midi";
-
-afterEach(() => vi.useRealTimers());
 
 function input(id: string, name = id) {
   return {
@@ -431,7 +429,6 @@ describe("USB MIDI output selection", () => {
   });
 
   it("keeps the duet cursor when its input disconnects and its output remains", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     const piano = input("in");
     const { midi, access, change, send } = setup([piano]);
     const port = {
@@ -479,28 +476,23 @@ describe("USB MIDI output selection", () => {
         channel: 0,
       },
     ];
-    midi.duet.schedule(notes, 0, 1, false, 0);
-    vi.advanceTimersByTime(500);
-    midi.duet.schedule(notes, 0.5, 1, false, 0);
-    vi.advanceTimersByTime(700);
-    midi.duet.schedule(notes, 1.2, 1, false, 0);
+    midi.duet.schedule(notes, 0, 1, false);
+    midi.duet.schedule(notes, 0.5, 1, false);
+    midi.duet.schedule(notes, 1.2, 1, false);
     Object.defineProperty(piano, "state", { value: "disconnected" });
     change();
     expect(midi.duet.connected).toBe(true);
     expect(port.send).toHaveBeenLastCalledWith([0x84, 50, 0]);
     vi.mocked(port.send).mockClear();
-    vi.advanceTimersByTime(200);
-    midi.duet.schedule(notes, 1.4, 1, false, 0);
+    midi.duet.schedule(notes, 1.4, 1, false);
     expect(port.send).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1600);
-    midi.duet.schedule(notes, 3, 1, false, 0);
+    midi.duet.schedule(notes, 3, 1, false);
     expect(port.send).toHaveBeenCalledExactlyOnceWith([0x94, 52, 64]);
   });
 
-  it("expires teacher notes before transferring to a newly observed input channel", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+  it("strikes no teacher note again on a newly observed input channel", async () => {
     const piano = input("in");
-    const { midi, access, callbacks, send } = setup([piano]);
+    const { midi, access, send } = setup([piano]);
     const port = {
       id: "out",
       state: "connected",
@@ -526,10 +518,7 @@ describe("USB MIDI output selection", () => {
       },
     ];
     midi.duet.schedule(notes, 0, 1, false);
-    vi.advanceTimersByTime(1100);
-    Object.assign(callbacks, {
-      onBeforeChannelChange: () => midi.duet.schedule(notes, 1.1, 1, false),
-    });
+    midi.duet.schedule(notes, 1.1, 1, false);
     send(piano, [0x94, 67, 100]);
     expect(port.send).toHaveBeenLastCalledWith([0x80, 48, 0]);
     expect(

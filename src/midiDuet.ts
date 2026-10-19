@@ -5,19 +5,21 @@ export function closeOutput(port: MIDIOutput) {
   void port.close().catch(() => {});
 }
 
-/** Teacher-only output, on the student piano’s MIDI channel; never echoes or scores student input. */
+/**
+ * Teacher-only output, on the student piano’s MIDI channel; never echoes or
+ * scores student input.
+ *
+ * It follows the 20 ms practice clock: each tick strikes the teacher notes
+ * the clock is inside and releases the ones it has passed. Every teacher note
+ * in the library lasts longer than a tick even at the fastest speed, so the
+ * clock lands inside each one.
+ */
 export class MidiDuet {
   private port?: MIDIOutput;
-  private active = new Map<
-    string,
-    { note: Note; cycle: number; tick: number }
-  >();
-  private pending: { note: Note; cycle: number }[] = [];
-  private attacks = new Map<number, number>();
-  private tick = 0;
-  private finishing = false;
-  private started = new Set<string>();
-  private position: number | undefined;
+  /** The notes sounding now, by id. */
+  private active = new Map<string, Note>();
+  /** The notes struck this pass, so none is struck twice. */
+  private played = new Set<string>();
   private cycle = -1;
   private channel = 0;
   private outputGeneration = 0;
@@ -28,8 +30,7 @@ export class MidiDuet {
   }
   /**
    * Follow another input channel. Sounding teacher notes end on the old one:
-   * striking them again on the new one would add attacks the book never wrote,
-   * and some of them may already be over by now.
+   * striking them again on the new one would add attacks the book never wrote.
    */
   setChannel(channel: number) {
     if (
@@ -44,15 +45,15 @@ export class MidiDuet {
   }
   /** Silence and close the current output, then play on `port`, if any. */
   setOutput(port?: MIDIOutput) {
-    if (port === this.port) {
-      this.outputGeneration++;
-      return;
+    if (port !== this.port) {
+      this.stop();
+      const previous = this.port;
+      this.port = port;
+      if (previous) closeOutput(previous);
     }
-    this.stop();
-    const previous = this.port;
-    this.port = port;
+    // A new choice supersedes any loss report still pending (see send()),
+    // including one from releasing the old output just now.
     this.outputGeneration++;
-    if (previous) closeOutput(previous);
   }
   private send(data: number[]) {
     const port = this.port;
@@ -77,111 +78,68 @@ export class MidiDuet {
     this.send([0x80 | this.channel, pitch, 0]);
   }
   private sounding(pitch: number) {
-    return [...this.active.entries()].filter(
-      ([, voice]) => voice.note.pitch === pitch,
-    );
+    return [...this.active.values()].filter((note) => note.pitch === pitch);
   }
-  /** Silence current keys without replaying earlier attacks when Listen continues. */
+  /**
+   * Release every sounding note. Notes already played this pass stay played,
+   * so when an input reset lets Listen continue they are not struck again.
+   */
   silence() {
-    const pitches = new Set(
-      [...this.active.values()].map((voice) => voice.note.pitch),
-    );
+    const pitches = new Set([...this.active.values()].map((n) => n.pitch));
     this.active.clear();
     for (const pitch of pitches) this.noteOff(pitch);
   }
+  /** Release everything and start over, as for a pause, seek or new pass. */
   stop() {
     this.silence();
-    this.started.clear();
-    this.pending = [];
-    this.attacks.clear();
-    this.finishing = false;
-    this.position = undefined;
+    this.played.clear();
     this.cycle = -1;
   }
-  /** Drain a final crossed attack on subsequent practice ticks. */
-  finish() {
-    this.finishing = true;
-  }
-  pulse(tick = ++this.tick) {
-    this.tick = tick;
-    if (this.finishing) this.drain(Infinity, false, tick);
-  }
-  private drain(position: number, held: boolean, tick: number) {
-    for (const [key, voice] of this.active) {
-      const { note, cycle } = voice;
-      if (voice.tick >= tick) continue;
-      if (
-        cycle !== this.cycle ||
-        note.soundEnd < position - 1e-9 ||
-        (!held && note.soundEnd <= position)
-      ) {
-        this.active.delete(key);
-        if (!this.sounding(note.pitch).length) this.noteOff(note.pitch);
-      }
-    }
-    const remaining: typeof this.pending = [];
-    const groups = new Map<number, { cycle: number; start: number }>();
-    for (const entry of this.pending) {
-      if (!this.port) break;
-      const { note, cycle } = entry;
-      const group = groups.get(note.pitch);
-      const unison =
-        group?.cycle === cycle && Math.abs(group.start - note.start) < 1e-6;
-      if (!unison && this.attacks.get(note.pitch) === tick) {
-        remaining.push(entry);
-        continue;
-      }
-      if (!unison) {
-        const others = this.sounding(note.pitch);
-        if (others.length) {
-          for (const [key] of others) this.active.delete(key);
-          this.noteOff(note.pitch);
-        }
-        groups.set(note.pitch, { cycle, start: note.start });
-        this.attacks.set(note.pitch, tick);
-      }
-      this.active.set(`${cycle}:${note.id}`, { note, cycle, tick });
-      if (!unison)
-        this.send([
-          0x90 | this.channel,
-          note.pitch,
-          Math.max(1, Math.min(127, Math.round(note.velocity * 127))),
-        ]);
-    }
-    this.pending = this.port ? remaining : [];
-  }
-  /** Process crossed attacks on the practice clock, including across loop wraps. */
+  /**
+   * One practice tick at song `position`. `cycle` changes with each loop pass
+   * or seek; `held` is true while a Wait gate holds the music.
+   */
   schedule(
     notes: readonly Note[],
     position: number,
     cycle: number,
     held: boolean,
-    passStart = position,
-    tick = ++this.tick,
   ) {
-    this.tick = tick;
     if (!this.port) return;
     if (cycle !== this.cycle) {
-      // Keep old-pass attacks until each has had a tick to sound. Explicit
-      // pause/seek still calls stop and cancels them immediately.
-      this.started.clear();
+      this.stop();
       this.cycle = cycle;
-      this.position = passStart;
     }
-    const from = this.position ?? passStart;
-    const due = notes
-      .filter((n) => !this.started.has(n.id) && n.start <= position)
-      .sort((a, b) => a.start - b.start);
-    for (const note of due) {
-      this.started.add(note.id);
-      if (
-        note.soundEnd <= note.start ||
-        (note.start < from && note.soundEnd <= from)
-      )
+    // At a gate the teacher holds what is sounding until the student plays.
+    // Releases come before this tick's attacks, so a note always sounds for
+    // at least one tick.
+    if (!held)
+      for (const [id, note] of this.active) {
+        if (note.soundEnd > position) continue;
+        this.active.delete(id);
+        if (!this.sounding(note.pitch).length) this.noteOff(note.pitch);
+      }
+    for (const note of notes) {
+      if (!this.port) return;
+      if (this.played.has(note.id)) continue;
+      if (note.start > position || note.soundEnd <= position) continue;
+      this.played.add(note.id);
+      const others = this.sounding(note.pitch);
+      this.active.set(note.id, note);
+      // A unison shares the key already struck for it.
+      if (others.some((other) => Math.abs(other.start - note.start) < 1e-6))
         continue;
-      this.pending.push({ note, cycle });
+      // A new attack on a sounding pitch restarts it, as a pianist would, and
+      // the earlier note no longer owns the key.
+      if (others.length) {
+        for (const old of others) this.active.delete(old.id);
+        this.noteOff(note.pitch);
+      }
+      this.send([
+        0x90 | this.channel,
+        note.pitch,
+        Math.max(1, Math.min(127, Math.round(note.velocity * 127))),
+      ]);
     }
-    this.drain(position, held, tick);
-    this.position = position;
   }
 }

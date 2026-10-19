@@ -229,7 +229,10 @@ Disable any MIDI-thru/loopback routing that returns outgoing teacher notes as
 input. The app sends only teacher notes, not student echoes. A repeated note
 that overlaps the one before it is played again, as written. The app sends
 note-offs for its own sounding notes on pause, seek, loop restart, song/output
-changes, and closing the studio, and closes an output it stops using. Playback uses the 20 ms practice
-clock; hardware latency and piano sound depend on the device. Output selection
+changes, and closing the studio, and closes an output it stops using. Teacher
+notes go out on the 20 ms practice clock: each tick strikes the notes it lands
+inside and releases the ones it has passed. Every teacher note in the library
+lasts longer than a tick even at 140%, so none is skipped; hardware latency and
+piano sound depend on the device. Output selection
 is per session and requires an explicit choice. Test on the physical piano to
 confirm its channel settings, tone, timing, and note releases.
