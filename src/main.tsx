@@ -1064,7 +1064,9 @@ async function openStudio(userId: string, email: string) {
       sync.pull(),
     ]);
   } catch (error) {
-    if (currentUser !== userId) return;
+    // Replaced meanwhile, or another tab took the studio over: that state
+    // stays on screen.
+    if (currentUser !== userId || loading !== sync) return;
     // Still signed in: offer a retry, not another Google sign-in.
     setGate({
       status: "failed",
@@ -1075,7 +1077,7 @@ async function openStudio(userId: string, email: string) {
     });
     return;
   }
-  if (currentUser !== userId) return;
+  if (currentUser !== userId || loading !== sync) return;
   loading = null;
   cloud = sync;
   studio = new Studio(library, sync);

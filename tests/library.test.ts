@@ -222,6 +222,37 @@ describe("song library", () => {
       /pedals must be a list/,
     ],
     [
+      "a note released under the pedal that stops early",
+      (song: Song) => ({
+        ...song,
+        pedals: [
+          {
+            channel: song.notes[0].channel,
+            start: song.notes[0].start,
+            end: song.notes[0].end + 0.5,
+          },
+        ],
+        notes: [{ ...song.notes[0], soundEnd: song.notes[0].end }],
+      }),
+      /stops before the pedal/,
+    ],
+    [
+      "more than 256 tracks",
+      (song: Song) => ({
+        ...song,
+        tracks: [
+          ...song.tracks,
+          ...Array.from({ length: 256 }, (_, i) => ({
+            id: 1000 + i,
+            name: "",
+            hand: "off" as const,
+            count: 0,
+          })),
+        ],
+      }),
+      /more than 256 tracks/,
+    ],
+    [
       "a pedal after one left down at the end",
       (song: Song) => ({
         ...song,

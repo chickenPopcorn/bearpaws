@@ -117,6 +117,15 @@ function client(b: Backend) {
             ? reply(null, { message: "offline" })
             : reply(b[table][0] ?? null);
         },
+        in: async (_column: "song_id", ids: string[]) => {
+          b.calls.push(`read ${table}`);
+          await b.readGate;
+          return reply(
+            (b[table] as { song_id: string }[]).filter((row) =>
+              ids.includes(row.song_id),
+            ),
+          );
+        },
         order: ordered(table, () => b[table]),
         gte: (_column: "day", since: string) => ({
           order: ordered(table, () =>
@@ -272,6 +281,27 @@ describe("loading the account", () => {
     expect(
       [...stored.keys()].filter((key) => key.startsWith("cadence:progress:")),
     ).toHaveLength(2500);
+  });
+
+  it("checks a song added behind a long scan before dropping its copy", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.progress = Array.from({ length: 2500 }, (_, i) => ({
+      song_id: `song-${String(i).padStart(4, "0")}`,
+      data: { best: 1 },
+    }));
+    write("progress:song-0500a", { best: 3 });
+    const api = client(b);
+    const from = api.from;
+    let reads = 0;
+    api.from = ((table: "progress") => {
+      // Another device adds the song behind the scan.
+      if (table === "progress" && ++reads === 2)
+        b.progress.push({ song_id: "song-0500a", data: { best: 6 } });
+      return from(table);
+    }) as never;
+    await new CloudSync(api, USER).pull();
+    expect(read("progress:song-0500a", null)).toEqual({ best: 6 });
   });
 
   it("refuses to open when this browser cannot store the account's data", async () => {
@@ -486,7 +516,10 @@ describe("signing out", () => {
     // Still signed in, and still syncing.
     expect(api.auth.signOut).not.toHaveBeenCalled();
     expect(sync.pending).toBe(true);
+    const uploads = b.calls.length;
     await sync.signOut({ force: true });
+    // No second wait on an upload that just failed.
+    expect(b.calls).toHaveLength(uploads);
     expect(api.auth.signOut).toHaveBeenCalledOnce();
     expect(queue()).toBeNull();
   });

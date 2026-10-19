@@ -206,7 +206,25 @@ export class CloudSync implements SyncHooks {
     } else if (localSettings) this.queue.settings = localSettings;
 
     const remote = new Map(rows.map((row) => [row.song_id, row.data]));
-    for (const { id, progress } of localProgress())
+    const missing = localProgress().filter(({ id }) => !remote.has(id));
+    // A scan over several pages is no snapshot: a row another device added
+    // behind it meanwhile would look missing. Ask for those songs directly.
+    if (!adopting && missing.length && rows.length >= PAGE) {
+      const found = await timed(() =>
+        this.client
+          .from("progress")
+          .select("song_id, data")
+          .in(
+            "song_id",
+            missing.map(({ id }) => id),
+          ),
+      );
+      if (found.error) throw found.error;
+      if (this.stopped) throw new Error("This sign-in was replaced.");
+      for (const row of found.data as typeof rows)
+        remote.set(row.song_id, row.data);
+    }
+    for (const { id, progress } of missing)
       if (remote.has(id)) continue;
       else if (adopting) this.queue.progress[id] = progress as Progress;
       else
@@ -464,7 +482,8 @@ export class CloudSync implements SyncHooks {
    * Supabase cannot end the session.
    */
   async signOut({ force = false } = {}) {
-    await this.flush();
+    // A forced sign-out follows one that already tried to upload.
+    if (!force) await this.flush();
     if (this.pending && !force) throw new UnsentChangesError();
     // No time limit: the request cannot be cancelled, so a timeout could
     // report failure and then sign out later anyway. Only this browser signs
