@@ -1403,6 +1403,24 @@ describe("optional piano voices", () => {
     expect(faded[0]).toBeGreaterThan(older);
   });
 
+  it("plays optional voices only for the notes it is given, not the whole prepared passage", () => {
+    const { audio, transport, context } = withVoices();
+    context.currentTime = 1;
+    // Both keys come up now, but only note 1 may play: note 2 waits, as a
+    // duet note does at a Wait gate.
+    const released = [
+      { ...note(1, 60, 1), end: 1 },
+      { ...note(2, 64, 1), end: 1 },
+    ];
+    audio.setPlaybackNotes(released, []);
+    audio.schedule([released[0]], transport, true);
+    expect(audio.scheduled).toEqual(new Set(["1~keyNoise~0", "1~release~0"]));
+    audio.schedule(released, transport, true);
+    expect(audio.scheduled).toEqual(
+      new Set(["1~keyNoise~0", "1~release~0", "2~keyNoise~0", "2~release~0"]),
+    );
+  });
+
   it("never takes a note's voice for an optional voice", () => {
     const { audio, transport, context, nodes, gain } = withVoices();
     for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
