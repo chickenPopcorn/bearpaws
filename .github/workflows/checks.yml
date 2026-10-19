@@ -2,8 +2,10 @@ name: Practice engine checks
 on:
   push:
     # A merge queue's gh-readonly-queue/* branches also fire push; the
-    # merge_group run below already checks them.
+    # merge_group run below already checks them. A branch filter alone would
+    # also drop tag pushes, so tags are listed too.
     branches-ignore: ["gh-readonly-queue/**"]
+    tags: ["**"]
   pull_request:
   merge_group:
 jobs:
