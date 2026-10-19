@@ -107,13 +107,16 @@ describe("teacher MIDI output", () => {
     expect(send).toHaveBeenCalledTimes(4);
   });
 
-  it("plays a complete short note crossed between clock callbacks exactly once", () => {
+  it("plays a short note crossed between clock callbacks once, sounding until the next one", () => {
     const { duet, send } = setup();
     const notes = [note("short", 48, 0.005, 0.01)];
     duet.schedule(notes, 0, 1, false);
     duet.schedule(notes, 0.02, 1, false);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x80, 48, 0]]]);
+    // Not a zero-length note: the release waits for the next callback.
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
     duet.schedule(notes, 0.04, 1, false);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x80, 48, 0]]]);
+    duet.schedule(notes, 0.06, 1, false);
     expect(send).toHaveBeenCalledTimes(2);
   });
 
@@ -124,7 +127,9 @@ describe("teacher MIDI output", () => {
       note("short", 48, 1.005, 1.01),
     ];
     duet.schedule(notes, 1.02, 1, false, 1);
-    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x80, 48, 0]]]);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]]]);
+    duet.schedule(notes, 1.04, 1, false);
+    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
   });
 
   it("does not leave a zero-duration event sounding", () => {

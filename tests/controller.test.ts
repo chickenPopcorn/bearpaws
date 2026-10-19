@@ -435,6 +435,29 @@ describe("practice studio integration", () => {
     expect(studio.outputChanging).toBe(false);
   });
 
+  it("starts no run while an output choice is still opening", async () => {
+    const studio = create(duetSong());
+    studio.mode("listen");
+    let finish!: () => void;
+    vi.mocked(studio.midi.selectOutput).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const selecting = studio.duetOutput("piano");
+    // A run started now would prepare the duet for the laptop.
+    await studio.play();
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
+    finish();
+    await selecting;
+    // It was not playing before the choice, so the choice does not start it.
+    expect(studio.transport.playing).toBe(false);
+    await studio.play();
+    expect(studio.transport.playing).toBe(true);
+  });
+
   it("does not duplicate a virtual note released and re-pressed during sample loading", async () => {
     const studio = create(song([[60, 1]]));
     let finish!: () => void;

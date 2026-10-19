@@ -145,8 +145,11 @@ export class Studio {
       },
     });
   }
+  /**
+   * Route the duet to output `id`, or the laptop with "". Play waits until
+   * the choice settles (see play()), so no run starts on the old routing.
+   */
   async duetOutput(id: string) {
-    // Keep the original resume intent until this selection has finished.
     if (this.outputChanging) return;
     this.outputChanging = true;
     this.emit();
@@ -155,17 +158,17 @@ export class Studio {
     const generation = this.playGeneration;
     try {
       await this.midi.selectOutput(id);
-      if (
-        resume &&
-        !this.destroyed &&
-        generation === this.playGeneration &&
-        (!id || this.midi.duet.connected)
-      )
-        await this.play();
     } finally {
       this.outputChanging = false;
       this.emit();
     }
+    if (
+      resume &&
+      !this.destroyed &&
+      generation === this.playGeneration &&
+      (!id || this.midi.duet.connected)
+    )
+      await this.play();
   }
   get scoringNotes() {
     return this.notes.filter(
@@ -547,6 +550,8 @@ export class Studio {
     }
   }
   async play() {
+    // duetOutput() resumes playback itself once the output has settled.
+    if (this.outputChanging) return;
     this.cancelPlaybackPreparation();
     const generation = this.playGeneration;
     this.playbackPending = true;

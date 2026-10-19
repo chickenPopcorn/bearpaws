@@ -115,9 +115,9 @@ export class MidiDuet {
       if (note.soundEnd <= note.start) continue;
       // Seeking restores held notes, but does not replay already-finished notes.
       if (note.start < from && note.soundEnd <= from) continue;
+      // Its release waits for a later tick: a note crossed whole between two
+      // ticks still sounds for a tick, not as a zero-length on/off pair.
       events.push({ time: Math.max(from, note.start), on: true, note });
-      if (releases(note))
-        events.push({ time: Math.max(from, note.soundEnd), on: false, note });
     }
     events.sort((a, b) => a.time - b.time || Number(a.on) - Number(b.on));
     for (const { on, note } of events) {
