@@ -58,7 +58,7 @@ export class Studio {
   private lastKeyAt = -Infinity;
   /** The previous tick while practice time was being counted. */
   private lastPracticeTick: number | null = null;
-  /** Stops following other tabs' practice; see the constructor. */
+  /** Stops following other tabs' practice; see watchPractice(). */
   private unwatchPractice = () => {};
   progress: Progress = {
     position: 0,
@@ -79,11 +79,14 @@ export class Studio {
       voices: this.settings.pianoVoices,
     });
     this.midi = this.createMidi();
-    // Another tab's practice shows here too, without waiting for this one.
+    this.watchPractice();
+    this.load(this.song);
+  }
+  /** Another tab's practice shows here too, without waiting for this one. */
+  private watchPractice() {
     this.unwatchPractice = watchSessions(() => {
       if (this.practiceLog.refresh()) this.emit();
     });
-    this.load(this.song);
   }
   private createMidi() {
     return new MidiConnection({
@@ -169,6 +172,9 @@ export class Studio {
     if (this.timer !== null) return;
     if (this.destroyed) {
       this.midi = this.createMidi();
+      this.watchPractice();
+      // Take in what other tabs saved while this studio was closed.
+      this.practiceLog.refresh();
       this.destroyed = false;
     }
     void this.midi.autoConnect();

@@ -1441,7 +1441,7 @@ describe("practice time", () => {
     expect(today(studio)).toBe(7);
   });
 
-  it("shows practice another tab saves, and stops listening once destroyed", () => {
+  it("shows practice another tab saves, and listens again after a restart", () => {
     const studio = create(held());
     const emitted = vi.fn();
     studio.subscribe(emitted);
@@ -1457,6 +1457,21 @@ describe("practice time", () => {
     expect(emitted).toHaveBeenCalled();
     studio.destroy();
     expect(env.watchers.size).toBe(0);
+    // Saved while this studio was closed, then more after it reopens.
+    const other = (seconds: number) => ({
+      id: "other",
+      day: studio.practiceLog.today(),
+      startedAt: "x",
+      seconds,
+      songs: { ode: seconds },
+    });
+    env.values.set("practice:other", other(180));
+    studio.init();
+    expect(today(studio)).toBe(180);
+    expect(env.watchers.size).toBe(1);
+    env.values.set("practice:other", other(240));
+    for (const watcher of env.watchers) watcher();
+    expect(today(studio)).toBe(240);
   });
 
   it("needs a new key press after resuming playback", async () => {
