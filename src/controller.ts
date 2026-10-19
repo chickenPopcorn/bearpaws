@@ -604,29 +604,29 @@ export class Studio {
   private scheduleAudio() {
     const reference = this.referenceAudible ? this.notes : NO_NOTES,
       gate = this.waitGate,
+      duet =
+        gate === undefined
+          ? this.duetNotes
+          : this.duetNotes.filter((note) => note.start < gate - 0.001),
       // A Wait loop's next pass is scheduled ahead, before its gates come
-      // back: it may only start the notes before its first gate. Notes from
-      // there that have ended played in this pass already; one still
-      // sounding here, as after a seek, sounds on.
+      // back, so it starts only the duet notes before its first gate.
       first =
         this.settings.mode === "wait" && this.transport.loop
           ? this.practice.groups[0]?.start
           : undefined,
-      duet =
-        gate === undefined && first === undefined
-          ? this.duetNotes
-          : this.duetNotes.filter(
-              (note) =>
-                (gate === undefined || note.start < gate - 0.001) &&
-                (first === undefined ||
-                  note.start < first - 0.001 ||
-                  note.soundEnd > this.position),
-            );
+      next =
+        first === undefined
+          ? duet
+          : this.duetNotes.filter((note) => note.start < first - 0.001),
+      withReference = (part: readonly Note[]) =>
+        part.length ? [...reference, ...part] : reference,
+      notes = withReference(duet);
     this.audio.schedule(
-      duet.length ? [...reference, ...duet] : reference,
+      notes,
       this.transport,
-      reference.length > 0 || duet.length > 0,
+      notes.length > 0 || next.length > 0,
       this.pedals,
+      next === duet ? notes : withReference(next),
     );
   }
   receive(data: Uint8Array, timestamp: number) {

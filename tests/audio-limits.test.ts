@@ -593,6 +593,20 @@ describe("bounded reference audio", () => {
       expect(nodes).toHaveLength(7);
     });
 
+    it("starts the next pass from its own notes when given them", () => {
+      const { audio, transport, context, nodes, tick } = loopFixture();
+      tick(0);
+      context.currentTime = 0.9;
+      transport.update(0.9);
+      // As in a Wait loop, only note 2 may start the next pass; note 1,
+      // which would sound into it, waits.
+      audio.schedule(loopNotes, transport, true, undefined, [loopNotes[1]]);
+      expect(starts(nodes).slice(3)).toEqual([
+        expect.closeTo(0.95),
+        expect.closeTo(1),
+      ]);
+    });
+
     it("schedules the current pass afresh after a stall longer than a loop", () => {
       const { nodes, tick } = loopFixture();
       tick(0);

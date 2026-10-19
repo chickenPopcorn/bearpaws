@@ -776,11 +776,16 @@ export class ReferenceAudio {
     }
     return true;
   }
+  /**
+   * Schedule the notes that start within the lookahead. Near a loop's end,
+   * the next pass starts from `ahead`, which defaults to the same notes.
+   */
   schedule(
     notes: Note[],
     transport: Transport,
     enabled: boolean,
     pedals: readonly PedalSpan[] = NO_PEDALS,
+    ahead: Note[] = notes,
   ) {
     if (!enabled || !transport.playing || !this.context) return;
     const now = this.now(),
@@ -815,7 +820,7 @@ export class ReferenceAudio {
     if (loop && position + LOOKAHEAD_SECONDS * transport.speed >= loop[1]) {
       this.aheadStart = now + (loop[1] - position) / transport.speed;
       this.schedulePass(
-        notes,
+        ahead,
         pedals,
         transport,
         now,

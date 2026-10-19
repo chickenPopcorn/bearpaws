@@ -1430,10 +1430,14 @@ describe("practice studio integration", () => {
 describe("teacher duet", () => {
   const ids = (notes: readonly { id: string }[]) => notes.map((n) => n.id);
   /** The notes the last audio schedule() call was given, if it was enabled. */
-  const scheduled = (studio: Studio) => {
+  /**
+   * The notes the last audio schedule() call was given for this pass, or with
+   * `next` for a loop's next pass, if it was enabled.
+   */
+  const scheduled = (studio: Studio, next = false) => {
     const calls = vi.mocked(studio.audio.schedule).mock.calls;
-    const [notes, , enabled] = calls.at(-1)!;
-    return enabled ? ids(notes) : [];
+    const [notes, , enabled, , ahead] = calls.at(-1)!;
+    return enabled ? ids(next ? (ahead ?? notes) : notes) : [];
   };
 
   it("starts off, and moves the student part up the printed octaves when on", () => {
@@ -1562,11 +1566,14 @@ describe("teacher duet", () => {
     advance(studio, 1);
     midi(studio, [0x90, 76, 100]);
     expect(studio.practice.gate).toBeUndefined();
-    // Near the loop end only the next pass's notes before its first gate,
-    // and this pass's notes still to come, may be scheduled ahead.
-    expect(scheduled(studio)).toEqual(["duet-0", "duet-3"]);
-    advance(studio, 0.45);
-    expect(scheduled(studio)).toEqual(["duet-0"]);
+    // This pass plays on to its end, including the teacher's note sounding
+    // at the loop end, but the next pass may start only its notes before
+    // its first gate.
+    advance(studio, 0.2);
+    expect(scheduled(studio)).toEqual(["duet-0", "duet-1", "duet-2", "duet-3"]);
+    expect(scheduled(studio, true)).toEqual(["duet-0"]);
+    advance(studio, 0.25);
+    expect(scheduled(studio, true)).toEqual(["duet-0"]);
   });
 
   it("plays along in Listen and Rhythm, and only the duet with Rhythm's reference off", async () => {
