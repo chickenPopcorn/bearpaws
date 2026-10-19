@@ -106,19 +106,24 @@ export function validateSong(value: unknown, id: string): Song {
     !(
       Array.isArray(value.timeSignatures) &&
       value.timeSignatures.every(
+        // The score ignores any other meter (see createMeterMap).
         (t) =>
           isRecord(t) &&
           whole(t.tick) &&
+          (t.tick as number) >= 0 &&
           whole(t.numerator) &&
-          (t.numerator as number) > 0 &&
+          (t.numerator as number) >= 1 &&
+          (t.numerator as number) <= 255 &&
           whole(t.denominator) &&
-          (t.denominator as number) > 0,
+          (t.denominator as number) >= 1 &&
+          (t.denominator as number) <= 1024 &&
+          ((t.denominator as number) & ((t.denominator as number) - 1)) === 0,
       )
     )
   )
     fail(
       where,
-      "timeSignatures must be a list of { tick, numerator, denominator }",
+      "timeSignatures must be a list of { tick, numerator 1-255, denominator a power of two }",
     );
   for (const key of ["beatsPerBar", "leadInBeats"])
     if (value[key] !== undefined && !finite(value[key]))
@@ -223,7 +228,8 @@ export function validateSong(value: unknown, id: string): Song {
         ![1, 2, 3, 4, 5].includes(note.finger as number)) ||
       (note.fingerHand !== undefined &&
         !["left", "right"].includes(note.fingerHand as string)) ||
-      (note.notatedBeats !== undefined && !finite(note.notatedBeats)) ||
+      (note.notatedBeats !== undefined &&
+        (!finite(note.notatedBeats) || (note.notatedBeats as number) <= 0)) ||
       (note.staccato !== undefined && typeof note.staccato !== "boolean") ||
       // Every note sounds inside the song, in order: playback, scoring and
       // the score all assume it.
