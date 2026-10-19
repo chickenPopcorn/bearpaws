@@ -31,6 +31,8 @@ export class Studio {
   private playGeneration = 0;
   private playbackPending = false;
   outputChanging = false;
+  private midiDuetRouted = false;
+  private midiPassStart = 0;
   private audioPreparations = new Set<AbortController>();
   private virtualRequests = new Map<number, number>();
   private nextVirtualRequest = 0;
@@ -131,7 +133,11 @@ export class Studio {
         // Playback, or a start still loading, routed the duet to the lost
         // output and never prepared its laptop sound: stop, and let Play
         // start over on the laptop.
-        if (this.destroyed || !(this.transport.playing || this.playbackPending))
+        if (
+          this.destroyed ||
+          !this.midiDuetRouted ||
+          !(this.transport.playing || this.playbackPending)
+        )
           return;
         this.pause();
         this.notice = "Piano output disconnected. Press Play to continue.";
@@ -498,12 +504,14 @@ export class Studio {
       );
     this.transport.seek(position, this.audio.now());
     this.position = this.transport.at(this.audio.now());
+    this.midiPassStart = this.position;
     this.restartScoring();
     this.notice = "";
     this.save();
     this.emit();
   }
   pause() {
+    this.midiDuetRouted = false;
     this.cancelPlaybackPreparation();
     const now = this.audio.now();
     if (this.transport.playing) this.tick(now);
@@ -554,6 +562,8 @@ export class Studio {
     try {
       const p = this.position;
       const playbackNotes = this.playbackNotes;
+      this.midiDuetRouted =
+        this.midi.duet.connected && this.inPassage(this.duetNotes).length > 0;
       this.midi.duet.stop();
       this.audio.stop();
       await this.prepareAudio(playbackNotes, generation, this.pedals);
@@ -569,6 +579,7 @@ export class Studio {
         this.seek(this.loopStart);
       this.audio.setPlaybackNotes(playbackNotes, this.pedals);
       this.transport.play(this.audio.now());
+      this.midiPassStart = this.position;
       this.progress.attempts++;
       this.notice = "";
       this.save();
@@ -621,6 +632,15 @@ export class Studio {
     if (playing) {
       this.position = this.transport.update(now, this.waitGate);
       if (cycle !== this.transport.cycle) {
+        // Finish attacks crossed before the wrap, then begin the new pass.
+        this.midi.duet.schedule(
+          this.inPassage(this.duetNotes),
+          this.loopEnd,
+          cycle,
+          false,
+          this.midiPassStart,
+        );
+        this.midiPassStart = this.loopStart;
         this.passEpoch =
           now - (this.position - this.loopStart) / this.settings.speed;
         this.input.clear();
@@ -707,6 +727,7 @@ export class Studio {
       this.position,
       this.transport.cycle,
       this.transport.held,
+      this.midiPassStart,
     );
     const browserNotes = this.midi.duet.connected ? reference : notes;
     this.audio.schedule(

@@ -91,6 +91,48 @@ describe("teacher MIDI output", () => {
     duet.schedule(notes, 3, 1, false);
     expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
   });
+  it("does not retain an older tail after a shorter repeated attack ends", () => {
+    const { duet, send } = setup();
+    const notes = [note("old", 48, 0, 10), note("new", 48, 1, 2)];
+    duet.schedule(notes, 0, 1, false);
+    duet.schedule(notes, 1, 1, false);
+    duet.schedule(notes, 2, 1, false);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+    ]);
+    duet.schedule(notes, 3, 1, false);
+    expect(send).toHaveBeenCalledTimes(4);
+  });
+
+  it("plays a complete short note crossed between clock callbacks exactly once", () => {
+    const { duet, send } = setup();
+    const notes = [note("short", 48, 0.005, 0.01)];
+    duet.schedule(notes, 0, 1, false);
+    duet.schedule(notes, 0.02, 1, false);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x80, 48, 0]]]);
+    duet.schedule(notes, 0.04, 1, false);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it("catches short notes before the first tick but skips finished notes before a seek", () => {
+    const { duet, send } = setup();
+    const notes = [
+      note("old", 45, 0.005, 0.01),
+      note("short", 48, 1.005, 1.01),
+    ];
+    duet.schedule(notes, 1.02, 1, false, 1);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x80, 48, 0]]]);
+  });
+
+  it("does not leave a zero-duration event sounding", () => {
+    const { duet, send } = setup();
+    duet.schedule([note("zero", 48, 0, 0)], 0, 1, false);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("strikes a unison once, and releases it when its last note ends", () => {
     const { duet, send } = setup();
     const notes = [note("a", 48, 0, 2), note("b", 48, 0, 3)];

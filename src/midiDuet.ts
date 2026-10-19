@@ -9,6 +9,8 @@ export function closeOutput(port: MIDIOutput) {
 export class MidiDuet {
   private port?: MIDIOutput;
   private active = new Map<string, Note>();
+  private started = new Set<string>();
+  private position: number | undefined;
   private cycle = -1;
   private channel = 0;
   private outputGeneration = 0;
@@ -26,8 +28,19 @@ export class MidiDuet {
       channel === this.channel
     )
       return;
-    this.stop();
+    const sounding = [...this.active.values()];
+    for (const pitch of new Set(sounding.map((n) => n.pitch)))
+      this.noteOff(pitch);
     this.channel = channel;
+    for (const pitch of new Set(sounding.map((n) => n.pitch))) {
+      if (!this.port) break;
+      const note = sounding.find((n) => n.pitch === pitch)!;
+      this.send([
+        0x90 | this.channel,
+        pitch,
+        Math.max(1, Math.min(127, Math.round(note.velocity * 127))),
+      ]);
+    }
   }
   /** Silence and close the current output, then play on `port`, if any. */
   setOutput(port?: MIDIOutput) {
@@ -69,53 +82,68 @@ export class MidiDuet {
   stop() {
     const pitches = new Set([...this.active.values()].map((n) => n.pitch));
     this.active.clear();
+    this.started.clear();
+    this.position = undefined;
     this.cycle = -1;
     for (const pitch of pitches) this.noteOff(pitch);
   }
-  /** Called on the same 20 ms practice clock as the score, never ahead of a Wait gate. */
+  /** Process every attack crossed by the clock, including notes shorter than a tick. */
   schedule(
     notes: readonly Note[],
     position: number,
     cycle: number,
     held: boolean,
+    passStart = position,
   ) {
     if (!this.port) return;
     if (cycle !== this.cycle) {
       this.stop();
       this.cycle = cycle;
+      this.position = passStart;
     }
-    const wanted = new Map(
-      notes
-        .filter((n) => n.start <= position && n.soundEnd > position)
-        .map((n) => [n.id, n]),
-    );
-    // At a gate, keep the chord ringing until the student releases the gate.
-    if (held) for (const [id, n] of this.active) wanted.set(id, n);
-    for (const [id, n] of this.active) {
-      if (wanted.has(id)) continue;
-      this.active.delete(id);
-      // An overlapping note of the same pitch still owns the key.
-      if (!this.sounding(n.pitch).length) this.noteOff(n.pitch);
+    const from = this.position ?? passStart;
+    const events: { time: number; on: boolean; note: Note }[] = [];
+    const releases = (n: Note) =>
+      n.soundEnd < position - 1e-9 || (!held && n.soundEnd <= position);
+    for (const note of this.active.values()) {
+      if (releases(note))
+        events.push({ time: Math.max(from, note.soundEnd), on: false, note });
     }
-    for (const [id, n] of wanted) {
-      // A failed send has dropped the output.
+    for (const note of notes) {
+      if (this.started.has(note.id) || note.start > position) continue;
+      this.started.add(note.id);
+      if (note.soundEnd <= note.start) continue;
+      // Seeking restores held notes, but does not replay already-finished notes.
+      if (note.start < from && note.soundEnd <= from) continue;
+      events.push({ time: Math.max(from, note.start), on: true, note });
+      if (releases(note))
+        events.push({ time: Math.max(from, note.soundEnd), on: false, note });
+    }
+    events.sort((a, b) => a.time - b.time || Number(a.on) - Number(b.on));
+    for (const { on, note } of events) {
       if (!this.port) return;
-      if (this.active.has(id)) continue;
-      const others = this.sounding(n.pitch);
-      this.active.set(id, n);
-      // A unison in another voice shares the key already struck with it.
-      if (others.some((other) => Math.abs(other.start - n.start) < 1e-6))
+      if (!on) {
+        if (!this.active.delete(note.id)) continue;
+        if (!this.sounding(note.pitch).length) this.noteOff(note.pitch);
         continue;
-      // A new attack on a sounding pitch restarts it, as a pianist would.
-      if (others.length) {
-        this.noteOff(n.pitch);
-        if (!this.port) return;
       }
-      this.send([
-        0x90 | this.channel,
-        n.pitch,
-        Math.max(1, Math.min(127, Math.round(n.velocity * 127))),
-      ]);
+      const others = this.sounding(note.pitch);
+      const unison = others.some(
+        (other) => Math.abs(other.start - note.start) < 1e-6,
+      );
+      if (!unison && others.length) {
+        // Retriggering ended these voices: their old tails cannot own the new key.
+        for (const old of others) this.active.delete(old.id);
+        this.noteOff(note.pitch);
+      }
+      this.active.set(note.id, note);
+      if (!unison && this.port)
+        this.send([
+          0x90 | this.channel,
+          note.pitch,
+          Math.max(1, Math.min(127, Math.round(note.velocity * 127))),
+        ]);
     }
+    this.position = position;
   }
 }

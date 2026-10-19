@@ -394,6 +394,24 @@ describe("practice studio integration", () => {
     },
   );
 
+  it.each([false, true])(
+    "keeps browser playback going after losing an unused output (duet enabled: %s)",
+    async (enabled) => {
+      const studio = create(enabled ? song([[60, 1]]) : duetSong());
+      if (enabled) studio.duet();
+      studio.mode("listen");
+      Object.defineProperty(studio.midi.duet, "connected", {
+        value: true,
+        configurable: true,
+      });
+      await studio.play();
+      Object.defineProperty(studio.midi.duet, "connected", { value: false });
+      env.outputLosses.at(-1)!();
+      expect(studio.transport.playing).toBe(true);
+      expect(studio.notice).toBe("");
+    },
+  );
+
   it("keeps the original resume intent by serializing output choices", async () => {
     const studio = create(duetSong());
     studio.mode("listen");
@@ -1565,6 +1583,10 @@ describe("teacher duet", () => {
     const studio = create(duetSong());
     studio.mode("listen");
     studio.duet();
+    Object.defineProperty(studio.midi.duet, "connected", {
+      value: true,
+      configurable: true,
+    });
     let finish!: () => void;
     env.prepareWait = new Promise<void>((resolve) => {
       finish = resolve;
@@ -1572,6 +1594,7 @@ describe("teacher duet", () => {
     const starting = studio.play();
     await vi.waitFor(() => expect(studio.audio.prepare).toHaveBeenCalledOnce());
     const signal = vi.mocked(studio.audio.prepare).mock.calls[0][1]!;
+    Object.defineProperty(studio.midi.duet, "connected", { value: false });
     env.outputLosses.at(-1)!();
     expect(signal.aborted).toBe(true);
     expect(studio.notice).toMatch(/Piano output disconnected.*Press Play/);
