@@ -255,15 +255,17 @@ function json(route: Route, body: unknown) {
 /**
  * Tests run signed in to a new account by default; `test.use({ storageState:
  * { cookies: [], origins: [] } })` starts signed out instead. Each test fails
- * if the app made a Supabase request the fake does not know.
+ * if the app made a Supabase request the fake does not know. (Playwright's
+ * fixture callback is named `provide` here, since the React hook lint rule
+ * takes any call to `use` for React's hook.)
  */
 export const test = base.extend<{ supabase: FakeSupabase }>({
-  storageState: async ({ baseURL }, use) => use(signedIn(baseURL!)),
+  storageState: async ({ baseURL }, provide) => provide(signedIn(baseURL!)),
   supabase: [
-    async ({ context }, use) => {
+    async ({ context }, provide) => {
       const supabase = new FakeSupabase();
       await supabase.attach(context);
-      await use(supabase);
+      await provide(supabase);
       if (supabase.unexpected.length)
         throw new Error(
           `Unexpected Supabase requests: ${supabase.unexpected.join(", ")}`,

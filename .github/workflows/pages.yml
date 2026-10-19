@@ -28,7 +28,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
+      - run: npm run test:coverage
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: npm run build
         env:
@@ -37,6 +37,9 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - run: node scripts/check-built-fonts.mjs
+      # After the build, which empties dist/. The README coverage badge reads
+      # this file from the deployed site.
+      - run: node scripts/coverage-badge.mjs coverage/coverage-summary.json dist/badges/coverage.json
       - name: Upload static site
         uses: actions/upload-pages-artifact@v4
         with:

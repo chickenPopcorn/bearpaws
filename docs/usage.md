@@ -1,0 +1,126 @@
+# Practicing with Paw Pal
+
+[← Back to the README](../README.md)
+
+## The classes
+
+Paw Pal is for one learner: the library is **George Bear’s Classes**, one
+section per class book of _Music for Little Mozarts_:
+
+- **Music Recital Book 3**: all 21 personal-practice pieces in the book (pages
+  4–31), in C and Middle C positions. Dancing Raindrops keeps its supplied
+  chords and articulation. The other twenty are transcriptions that keep the
+  student parts' printed rests, chords, staccato, dynamics, repeats and finger
+  numbers, without lyrics. Each piece also has its printed teacher duet.
+- **Music Lesson Book 3**: all 42 pieces in the book (pages 5–47), in C and
+  Middle C positions, transcribed the same way, each with its printed teacher
+  duet.
+
+Each song includes suggested finger numbers on the score, falling notes, active
+keys and Wait for me practice, plus starting hand positions. The library
+bucket holds every song, its book and the order within each book; see
+[the song library](library.md).
+
+Books start folded; click one to open it. Searching opens them all, and moving
+to a song in another book opens that one.
+Search the classes by title or composer. **Download MIDI** saves the selected
+song as a standard MIDI file.
+The files have separate left/right tracks, one full silent count-in bar, tempo,
+and finger numbers as text events. The count-in keeps musical downbeats aligned
+with barlines. General MIDI players may ignore these text events.
+
+## Score, waterfall and shortcuts
+
+The sheet-music timeline above the waterfall follows the current bar. Accepted
+notes fade to 50% opacity in practice modes; Listen marks the notes as it plays
+them. Disabled hands remain visible at half opacity. Written
+rhythms and rests are preserved for the lessons; a song built from plain MIDI
+uses approximate note values derived from performed timing.
+Click a note or drag across the score to change playback position. The focused
+score also supports Shift+arrow for a bar and Home/End. Left/Right arrow keys
+select the previous/next song in the current book and start playback,
+as do the Previous/Next buttons in full screen. Mode,
+restart, playback, speed, time and full-screen controls share the row above the
+score.
+Full screen expands the score and waterfall and starts the selected practice
+mode. Enter opens full screen and starts playback; it also resumes a paused
+full-screen session. Space pauses or resumes in either view. These
+shortcuts stay inactive while editing a field. Escape returns to the page;
+playback controls remain available in either view. The finger guide always shows
+animated bear paws directly from the source, with no saved display preference.
+Reduced-motion settings disable their animation.
+On both hands, 1 means thumb and 5 means little finger. Changing a track to the
+opposite hand hides its original fingering; a song built from plain MIDI gets
+no guessed finger numbers.
+
+## Practicing a piece
+
+1. Choose a piece from George Bear’s Classes; use **Find a song** to filter them.
+2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. See [MIDI and USB pianos](midi.md) for reconnecting and choosing an input.
+3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen plays your part for you and works without a piano. In Wait for me and Rhythm the app never plays your part: you do. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along, in every mode (see [Duet](#duet)).
+4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
+
+## Modes
+
+What the app plays depends on the mode:
+
+| Mode        | Duet off                 | Duet on                               |
+| ----------- | ------------------------ | ------------------------------------- |
+| Listen      | your part (chosen hands) | your part and the teacher duet        |
+| Wait for me | nothing                  | the teacher duet, which waits for you |
+| Rhythm      | nothing                  | the teacher duet                      |
+
+The only difference between Wait for me and Rhythm is that Wait for me stops at
+each note until you play it, and Rhythm does not.
+
+**Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.
+
+**Rhythm** keeps moving and matches note onsets using MIDI event timestamps. Timing tolerance is configurable (±120, ±220 or ±350 ms of real time, independent of playback speed). Feedback identifies missed/wrong notes and early/late matched notes; click a missed note to loop a short passage around it. This MVP scores pitch and onset timing, not fingering or held-note duration.
+
+## Duet
+
+Turn on **Duet** beside the hands to hear the book's teacher part play along,
+in every mode. As the book asks, the student part then usually moves up one
+octave; some pieces move it up two octaves or down one, and a few keep it as
+written. The waterfall, keyboard shortcuts and finger guide follow it, and the
+score keeps the written notes under an 8va, 15ma or 8vb mark.
+
+The on-screen keyboard follows the student's part only, as it does with Duet
+off: whole octaves around your notes, at least C3 to C6, moving with the
+octave shift. The duet never widens it. The waterfall shows the duet in yellow
+at quarter opacity behind your notes, wherever it falls on the keys your part
+uses; the duet is never fingered or scored, and Wait for me holds it at each of
+your notes until you play them.
+
+## Limits
+
+Laptop audio coalesces duplicate pitches at the same onset and allows at most 64 active or scheduled voices, including previews. Extremely dense material can omit excess voices; MIDI input and scoring remain independent. The waterfall coalesces duplicate note shapes and draws at most 4,096 distinct visible rectangles per frame; the full note set still drives scoring. Recent feedback is limited to 256 entries and six missed-note replay anchors, with full-passage note counts, wrong-press totals and average timing retained separately.
+
+## Sound
+
+Your physical piano supplies live piano sound, and when it has a MIDI output it plays all of the app's sound too (see [Play the app's sound on a USB piano](midi.md#play-the-apps-sound-on-a-usb-piano)). Without a MIDI output, Listen, the duet and on-screen keys play on the laptop with Accurate-Salamander Grand Piano 6.2a: all sixteen recorded intensity layers of a Yamaha C5, in lossless 24-bit stereo FLAC. The player preserves the source preset’s per-key tuning, attack offsets and volume balance, with natural release tails. Only the recordings needed for the selected notes and velocities load before playback; decoded samples are reused within a 512 MiB cache. Very large selections may need one hand or a shorter loop. The player also includes the preset's optional recorded details: string harmonics when a key is released with the pedal up, key release noise, pedal noise, and pseudo pedal resonance for notes struck with the pedal down. These load only for the notes and pedal changes that trigger them. The complete bundled sample bank is about 753 MiB, but it is not downloaded in full on page load. No external audio service is contacted. Recording credits, adaptation details and the CC BY 3.0 license are in [the sample credits](../public/audio/accurate-salamander/CREDITS.md). Leaving the page hidden pauses playback to avoid invisible practice and background scheduling gaps.
+
+### Piano sound
+
+Open **Piano sound** in the settings row below the keyboard, beside Note names.
+It shapes the laptop's sound; a USB piano's MIDI output uses the piano's own.
+**Natural** is the only piano sound, with gentler compression and subtle stereo
+room ambience. Adjust **Room** while listening; its level is remembered in this
+browser, across songs.
+Changes do not restart notes or the practice timeline. Pause, seek and song changes
+clear the room tail as well as scheduled notes.
+
+Playback uses all sixteen recorded layers. The room is a small synthetic
+convolution ambience. Under **Recorded details**, turn the preset's optional
+release harmonics, key release noise, pedal noise and pedal resonance on or
+off; these are remembered in this browser. Turning one off stops it at once.
+Turning one on during playback restarts playback at the same place so that its
+recordings can load. These
+voices follow a song's sustain pedal (CC64); built-in lessons have
+no pedal, so they use only release harmonics and key noise. See the
+[adaptation notes](../public/audio/accurate-salamander/LICENSE.md) for how each
+voice follows the SFZ preset.
+
+## Practice calendar
+
+The practice calendar at the top of the sidebar shows this month under the learner's name ("George’s practice"): a star on each day that met the daily goal, a dot on days with less, and a ring filling up for today, with the current streak. Each week, Monday to Sunday, ends with a stamp that stays grey until all seven days have their star, counting days of a week that fall in the next or previous month. The goal is 5 minutes unless changed under **Edit** (5, 10, 15, 20 or 30), where the learner's name can also be changed; it starts as the first name on the signed-in Google account. Practice time counts only while a song plays in Wait for me or Rhythm and a key was pressed within the last 15 seconds; Listen, paused time and a Wait gate left waiting do not count. Days follow the device's local calendar. Playing time is kept in localStorage as sessions, one per page visit per day with seconds per song, for the last 92 days, today included. Each session has its own key, written only by the tab that plays it, so tabs on the same browser add up without overwriting each other.

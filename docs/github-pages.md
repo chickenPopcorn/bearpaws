@@ -1,5 +1,7 @@
 # GitHub Pages at piano.pollos.us
 
+[← Back to the README](../README.md)
+
 The deployment target is **https://piano.pollos.us/**, hosted by GitHub Pages
 from `chickenPopcorn/pawpal`. Cloudflare manages the DNS for `pollos.us`.
 These are prepared deployment changes; the site and DNS have not been published
