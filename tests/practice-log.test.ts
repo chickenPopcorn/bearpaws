@@ -6,6 +6,7 @@ import {
   localDay,
   storedSessions,
   streak,
+  watchSessions,
   type PracticeSession,
 } from "../src/practiceLog";
 
@@ -164,6 +165,38 @@ describe("practice log", () => {
       expect.objectContaining({ seconds: 2 }),
       false,
     );
+  });
+
+  it("takes in a session another tab saved while this one sits idle", () => {
+    const tabA = new PracticeLog(() => {}, clock);
+    const tabB = new PracticeLog(() => {}, clock);
+    tabA.add(300, "ode");
+    tabA.commit();
+    expect(tabB.totals().get("2026-10-18")).toBeUndefined();
+    const revision = tabB.revision;
+    expect(tabB.refresh()).toBe(true);
+    expect(tabB.totals().get("2026-10-18")).toBe(300);
+    expect(tabB.revision).toBe(revision + 1);
+    // Nothing new: no change, so views can skip work.
+    expect(tabB.refresh()).toBe(false);
+    expect(tabB.revision).toBe(revision + 1);
+  });
+
+  it("hears another tab save or remove a session, and nothing else", () => {
+    const events = new EventTarget();
+    vi.stubGlobal("window", events);
+    const onChange = vi.fn();
+    const stop = watchSessions(onChange);
+    const storage = (key: string | null) =>
+      events.dispatchEvent(Object.assign(new Event("storage"), { key }));
+    storage("cadence:practice:s1");
+    storage("cadence:progress:song");
+    // Storage cleared in another tab.
+    storage(null);
+    expect(onChange).toHaveBeenCalledTimes(2);
+    stop();
+    storage("cadence:practice:s2");
+    expect(onChange).toHaveBeenCalledTimes(2);
   });
 
   it("keeps other tabs' sessions when saving its own", () => {

@@ -18,7 +18,7 @@ import {
   LEARNER_NAME_MAX,
   type Progress,
 } from "./storage";
-import { IDLE_SECONDS, PracticeLog } from "./practiceLog";
+import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
 const NO_PEDALS: readonly PedalSpan[] = [];
 export class Studio {
@@ -58,6 +58,8 @@ export class Studio {
   private lastKeyAt = -Infinity;
   /** The previous tick while practice time was being counted. */
   private lastPracticeTick: number | null = null;
+  /** Stops following other tabs' practice; see the constructor. */
+  private unwatchPractice = () => {};
   progress: Progress = {
     position: 0,
     best: 0,
@@ -77,6 +79,10 @@ export class Studio {
       voices: this.settings.pianoVoices,
     });
     this.midi = this.createMidi();
+    // Another tab's practice shows here too, without waiting for this one.
+    this.unwatchPractice = watchSessions(() => {
+      if (this.practiceLog.refresh()) this.emit();
+    });
     this.load(this.song);
   }
   private createMidi() {
@@ -177,6 +183,7 @@ export class Studio {
     this.save();
     this.audio.stop();
     this.midi.dispose();
+    this.unwatchPractice();
   }
   persist() {
     if (!write("settings", this.settings))

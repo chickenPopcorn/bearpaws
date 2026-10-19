@@ -79,6 +79,19 @@ export function readAll(prefix: string): unknown[] {
   } catch {}
   return values;
 }
+/**
+ * Call `onChange` when another tab changes a stored value whose key starts
+ * with `prefix`, or clears storage. Returns a function that stops watching.
+ */
+export function watchStored(prefix: string, onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const listener = (event: StorageEvent) => {
+    if (event.key === null || event.key.startsWith(storageKey(prefix)))
+      onChange();
+  };
+  window.addEventListener("storage", listener);
+  return () => window.removeEventListener("storage", listener);
+}
 /** Returns false when browser storage is blocked. */
 export function remove(key: string) {
   try {

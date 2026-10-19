@@ -1,4 +1,4 @@
-import { readAll, remove, write } from "./storage";
+import { readAll, remove, watchStored, write } from "./storage";
 
 /** Without a key press for this long, nobody is playing, so time stops counting. */
 export const IDLE_SECONDS = 15;
@@ -52,6 +52,10 @@ const sessionKey = (id: string) => `practice:${id}`;
 /** The sessions saved on this browser, skipping any that are malformed. */
 export function storedSessions(): PracticeSession[] {
   return readAll(sessionKey("")).filter(isSession);
+}
+/** Call `onChange` when another tab saves or removes a session. */
+export function watchSessions(onChange: () => void) {
+  return watchStored(sessionKey(""), onChange);
 }
 
 /**
@@ -153,15 +157,7 @@ export class PracticeLog {
     };
     this.current = updated;
     const saved = write(sessionKey(updated.id), updated);
-    // Take other tabs' latest sessions. This tab's own copies are newest,
-    // even when storage refused one.
-    const sessions = new Map<string, PracticeSession>();
-    for (const s of storedSessions())
-      if (!this.own.has(s.id)) sessions.set(s.id, s);
-    for (const id of this.own) {
-      const s = this.sessions.get(id);
-      if (s) sessions.set(id, s);
-    }
+    const sessions = this.withOtherTabs();
     sessions.set(updated.id, updated);
     this.sessions = sessions;
     // Keep HISTORY_DAYS days, today included. Older sessions belong to no
@@ -174,6 +170,33 @@ export class PracticeLog {
       }
     this.onCommit(updated, saved);
     return saved;
+  }
+
+  /**
+   * Other tabs' latest sessions from storage, with this tab's own copies,
+   * which are newest even when storage refused one.
+   */
+  private withOtherTabs() {
+    const sessions = new Map<string, PracticeSession>();
+    for (const s of storedSessions())
+      if (!this.own.has(s.id)) sessions.set(s.id, s);
+    for (const id of this.own) {
+      const s = this.sessions.get(id);
+      if (s) sessions.set(id, s);
+    }
+    return sessions;
+  }
+
+  /**
+   * Take in sessions another tab saved, such as when it reaches the goal
+   * while this tab sits idle. Returns true if a day's total changed.
+   */
+  refresh(): boolean {
+    const before = JSON.stringify([...this.totals()]);
+    this.sessions = this.withOtherTabs();
+    if (JSON.stringify([...this.totals()]) === before) return false;
+    this.revision++;
+    return true;
   }
 
   /** Seconds practiced on each day, the session in progress included. */

@@ -9,6 +9,8 @@ const env = vi.hoisted(() => ({
   resets: [] as (() => void)[],
   unlockWait: null as Promise<void> | null,
   prepareWait: null as Promise<void> | null,
+  /** What each studio does when another tab changes stored practice. */
+  watchers: new Set<() => void>(),
 }));
 
 vi.mock("../src/audio", () => ({
@@ -82,6 +84,10 @@ vi.mock("../src/storage", () => ({
       .filter(([key]) => key.startsWith(prefix))
       .map(([, value]) => structuredClone(value)),
   remove: (key: string) => env.values.delete(key),
+  watchStored: (_prefix: string, onChange: () => void) => {
+    env.watchers.add(onChange);
+    return () => env.watchers.delete(onChange);
+  },
   progress: (id: string, _duration: number) =>
     structuredClone({
       position: 0,
@@ -137,6 +143,7 @@ function midi(studio: Studio, data: number[], delay = 0) {
 beforeEach(() => {
   env.now = 100;
   env.values.clear();
+  env.watchers.clear();
   env.resets = [];
   env.unlockWait = null;
   env.prepareWait = null;
@@ -1432,6 +1439,24 @@ describe("practice time", () => {
     midi(studio, [0x90, 74, 80], 8);
     for (let i = 0; i < 10; i++) advance(studio, 1);
     expect(today(studio)).toBe(7);
+  });
+
+  it("shows practice another tab saves, and stops listening once destroyed", () => {
+    const studio = create(held());
+    const emitted = vi.fn();
+    studio.subscribe(emitted);
+    env.values.set("practice:other", {
+      id: "other",
+      day: studio.practiceLog.today(),
+      startedAt: "x",
+      seconds: 120,
+      songs: { ode: 120 },
+    });
+    for (const watcher of env.watchers) watcher();
+    expect(today(studio)).toBe(120);
+    expect(emitted).toHaveBeenCalled();
+    studio.destroy();
+    expect(env.watchers.size).toBe(0);
   });
 
   it("needs a new key press after resuming playback", async () => {
