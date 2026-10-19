@@ -198,6 +198,11 @@ describe("song library", () => {
       /count is 0/,
     ],
     [
+      "a null pedal list",
+      (song: Song) => ({ ...song, pedals: null as never }),
+      /pedals must be a list/,
+    ],
+    [
       "a pedal that lifts before it presses",
       (song: Song) => ({
         ...song,

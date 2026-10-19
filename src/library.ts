@@ -232,7 +232,8 @@ export function validateSong(value: unknown, id: string): Song {
     )
   )
     fail(where, "source needs composer, description, url and credit");
-  const pedals = value.pedals ?? [];
+  // Only a missing list means no pedal; null is not a list.
+  const pedals = value.pedals === undefined ? [] : value.pedals;
   if (!Array.isArray(pedals) || !pedals.every((p) => pedalSpan(p, duration)))
     fail(
       where,
