@@ -622,8 +622,14 @@ export class Studio {
       this.midiRouted = routed && played.length > 0;
       this.midi.player.stop();
       this.audio.stop();
-      // Browser audio is not needed at all then, and may be unavailable.
+      // Browser audio is not needed for the music then, and may be
+      // unavailable. The metronome still clicks on the laptop, if it can.
       if (!routed) await this.prepareAudio(laptop, generation, this.pedals);
+      else if (this.clicking)
+        await this.audio.unlock().catch(() => {
+          // The music plays on the piano without the click.
+          this.audio.error = "";
+        });
       if (generation !== this.playGeneration) return;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
@@ -700,13 +706,7 @@ export class Studio {
   /** Sound the metronome's clicks up to `clock`, if it is on. */
   private clickTick(clock: ClickClock, now: number) {
     if (!this.clicking) return;
-    this.metronome.tick(
-      this.clicks,
-      clock,
-      now,
-      this.audio.context,
-      this.midi.player,
-    );
+    this.metronome.tick(this.clicks, clock, now, this.audio.context);
   }
   /** Count in, and once the count reaches the play position, play from there. */
   private countInTick(now: number) {

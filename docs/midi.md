@@ -17,19 +17,20 @@ Your physical piano supplies live piano sound. The app never echoes incoming USB
 In desktop Chrome or Edge, connect a piano that exposes a MIDI **output** as well
 as an input. When it connects, all of the app's sound goes to the piano instead
 of the laptop: Listen's playback of your part, the teacher duet, keys played on
-screen or with computer shortcuts, and the song's sustain pedal (CC64). The app
+screen or with computer shortcuts, and the song's sustain pedal (CC64). Only
+the metronome's click stays on the laptop (see below). The app
 picks the output named like the piano's input, or else the only output there
 is; nothing needs choosing. **Sound** in the header shows the choice. Choose
 **Laptop** there to return all sound to the browser for the rest of the visit,
 or another output. The laptop plays nothing while a MIDI output is in use, and
 loads no piano samples for the notes it sends. A piano with no MIDI output keeps
-the laptop's sound. Laptop mute does not mute MIDI output.
+the laptop's sound. Laptop mute does not mute MIDI output, but it mutes the
+metronome.
 
 Everything goes out on the same MIDI channel as the latest key played on the
-piano (channel 1 until the first keypress), except the metronome: its clicks
-go out as General MIDI percussion on channel 10, wood blocks 76 and 77. A
-piano without percussion sounds plays no click; choose **Laptop** under
-**Sound** to hear it on the laptop. The student's physical keys remain
+piano (channel 1 until the first keypress). The metronome's click is never
+sent: on a piano with one channel it would sound as a piano note and ring
+with the song's pedal, so it always plays on the laptop. The student's physical keys remain
 live on the piano and are never sent back to it. The teacher still waits at each
 **Wait for me** gate and resumes when the student plays the requested note. If
 the piano's output disconnects or cannot open, playback stops and **Sound** goes

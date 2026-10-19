@@ -1,5 +1,4 @@
 import type { Song } from "./song";
-import type { MidiPlayer } from "./midiPlayer";
 import { createMeterMap } from "./notation";
 import { createBeatClock } from "./timeline";
 
@@ -89,7 +88,7 @@ export interface ClickClock {
   start: number;
   loop: readonly [number, number] | null;
 }
-/** How far ahead of the clock the laptop's clicks are scheduled, in seconds at 1x. */
+/** How far ahead of the clock clicks are scheduled, in seconds at 1x. */
 const LOOKAHEAD_SECONDS = 0.12;
 /** A click that a late tick passed still sounds, up to this late. */
 const LATE_SECONDS = 0.05;
@@ -102,16 +101,15 @@ interface Scheduled {
   pass: Set<number>;
 }
 /**
- * The metronome's clicks: on the MIDI output if there is one, as GM
- * percussion, and otherwise on the laptop, apart from the piano's room.
+ * The metronome's clicks, always on the laptop, apart from the piano's room.
+ * A piano on one MIDI channel has no percussion to play them, and a click
+ * there would be held by the song's pedal like a note.
  */
 export class Metronome {
   /** Click times sounded or scheduled in this pass, and in the next loop pass. */
   private played = new Set<number>();
   private ahead = new Set<number>();
   private pass = -1;
-  /** This pass's last tick on a MIDI output, or undefined before its first. */
-  private last: number | undefined;
   private sources = new Set<Scheduled>();
   /** One practice tick: sound the clicks that `clock` has reached. */
   tick(
@@ -119,7 +117,6 @@ export class Metronome {
     clock: ClickClock,
     now: number,
     context: AudioContext | null,
-    midi: MidiPlayer,
   ) {
     if (clock.pass !== this.pass) {
       // A new loop pass keeps the clicks scheduled ahead for it. Seeks
@@ -127,20 +124,9 @@ export class Metronome {
       this.played = this.ahead;
       this.ahead = new Set();
       this.pass = clock.pass;
-      this.last = undefined;
     }
     const { position, speed, loop } = clock,
       earliest = Math.max(clock.start, position - LATE_SECONDS * speed);
-    if (midi.connected) {
-      // MIDI goes out on the practice clock, as the notes do.
-      for (const click of track.between(this.last ?? earliest, position + 1e-9))
-        if (!this.played.has(click.time)) {
-          this.played.add(click.time);
-          midi.click(click.accent);
-        }
-      this.last = position;
-      return;
-    }
     if (!context || context.state !== "running") return;
     const end = loop?.[1] ?? Infinity,
       to = position + LOOKAHEAD_SECONDS * speed;
@@ -211,7 +197,6 @@ export class Metronome {
     this.played = new Set();
     this.ahead = new Set();
     this.pass = -1;
-    this.last = undefined;
   }
   /** Stop a click, if it has not ended, and let go of its nodes. */
   private cancel(scheduled: Scheduled) {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Studio } from "../src/controller";
+import { Metronome } from "../src/metronome";
 import type { Mode } from "../src/engine";
 import type { Note, Song } from "../src/song";
 import { fixtureLibrary } from "./fixtures/library";
@@ -52,7 +53,6 @@ vi.mock("../src/midi", () => ({
       schedule: vi.fn(),
       keyDown: vi.fn(),
       keyUp: vi.fn(),
-      click: vi.fn(),
     };
     selectOutput = vi.fn(async () => {});
     selectedId = "";
@@ -2001,24 +2001,35 @@ describe("metronome", () => {
     expect(studio.transport.playing).toBe(true);
     expect(studio.position).toBeCloseTo(0.02);
   });
-  it("clicks the count-in and every beat on a MIDI output, accenting each bar", async () => {
+  it("clicks on the laptop while the piano plays the music", async () => {
+    const tick = vi.spyOn(Metronome.prototype, "tick");
     const studio = clicking(song([[60, 0.5]]), "listen");
     output(studio);
     await studio.play();
+    // Browser audio starts for the click alone: no piano samples load.
+    expect(studio.audio.unlock).toHaveBeenCalledOnce();
+    expect(studio.audio.prepare).not.toHaveBeenCalled();
     run(studio, 2.7);
-    expect(vi.mocked(studio.midi.player.click).mock.calls).toEqual([
-      [true],
-      [false],
-      [false],
-      [false],
-      [true],
-      [false],
-    ]);
+    expect(studio.transport.playing).toBe(true);
+    const positions = tick.mock.calls.map(([, clock]) => clock.position);
+    // The count-in, from a bar before the song, then the song.
+    expect(positions[0]).toBeCloseTo(-2.08);
+    expect(positions.at(-1)).toBeCloseTo(0.6);
     // Turned off, it stops; the music plays on.
     studio.click();
+    const calls = tick.mock.calls.length;
     run(studio, 1);
-    expect(studio.midi.player.click).toHaveBeenCalledTimes(6);
+    expect(tick).toHaveBeenCalledTimes(calls);
     expect(studio.transport.playing).toBe(true);
+  });
+  it("plays on the piano without the click when browser audio cannot start", async () => {
+    const studio = clicking(song([[60, 0.5]]), "listen");
+    output(studio);
+    vi.mocked(studio.audio.unlock).mockRejectedValue(new Error("No audio"));
+    await studio.play();
+    run(studio, 2.2);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.notice).toBe("");
   });
   it("cancels the count-in on pause, and counts again from a seek", async () => {
     const studio = clicking(song([[60, 0.5]]));

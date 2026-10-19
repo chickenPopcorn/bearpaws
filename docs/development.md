@@ -53,7 +53,7 @@ check; it can also be run by hand from the Actions tab.
 - `src/audio.ts`: Web Audio clock, timestamp conversion and cancellable laptop playback scheduling.
 - `src/midi.ts`: explicit Web MIDI permission/device selection, automatic output choice and connection lifecycle.
 - `src/midiPlayer.ts`: the app's sound on a MIDI output, on the 20 ms practice clock.
-- `src/metronome.ts`: the beat grid from the tempo map and time signatures, the count-in, and clicks on the laptop or a MIDI output.
+- `src/metronome.ts`: the beat grid from the tempo map and time signatures, the count-in, and its clicks on the laptop.
 - `src/controller.ts`: shared practice timeline, transport actions and local progress.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
 - `src/storage.ts`: validated settings and progress.

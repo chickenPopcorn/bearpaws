@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { createClickTrack, Metronome, type ClickClock } from "../src/metronome";
-import type { MidiPlayer } from "../src/midiPlayer";
 
 /** 4/4 at 120 BPM, with the library's one-beat lead-in before bar 1. */
 const timing = {
@@ -145,7 +144,6 @@ function audioContext() {
   };
   return { context: context as unknown as AudioContext, clicks };
 }
-const noMidi = { connected: false, click: vi.fn() } as unknown as MidiPlayer;
 const clock = (position: number, extra: Partial<ClickClock> = {}) => ({
   position,
   speed: 1,
@@ -160,13 +158,13 @@ describe("metronome scheduling", () => {
     const track = createClickTrack(timing),
       metronome = new Metronome(),
       { context, clicks } = audioContext();
-    metronome.tick(track, clock(0.4), 10, context, noMidi);
+    metronome.tick(track, clock(0.4), 10, context);
     expect(clicks.map(({ when }) => when)).toEqual([10.1]);
     // The accented beat is higher.
     expect(clicks[0].frequency).toBeGreaterThan(1500);
-    metronome.tick(track, clock(0.45), 10.05, context, noMidi);
+    metronome.tick(track, clock(0.45), 10.05, context);
     expect(clicks).toHaveLength(1);
-    metronome.tick(track, clock(0.9), 10.5, context, noMidi);
+    metronome.tick(track, clock(0.9), 10.5, context);
     expect(clicks.map(({ when }) => when)).toEqual([10.1, 10.6]);
     expect(clicks[1].frequency).toBeLessThan(1500);
   });
@@ -175,13 +173,7 @@ describe("metronome scheduling", () => {
       metronome = new Metronome(),
       { context, clicks } = audioContext(),
       loop = [0.5, 2.5] as const;
-    metronome.tick(
-      track,
-      clock(2.45, { loop, start: 0.5 }),
-      20,
-      context,
-      noMidi,
-    );
+    metronome.tick(track, clock(2.45, { loop, start: 0.5 }), 20, context);
     // The loop's first beat, as the next pass begins.
     expect(clicks.map(({ when }) => when)).toEqual([20.05]);
     metronome.tick(
@@ -189,7 +181,6 @@ describe("metronome scheduling", () => {
       clock(0.52, { loop, start: 0.5, pass: 2 }),
       20.07,
       context,
-      noMidi,
     );
     expect(clicks).toHaveLength(1);
   });
@@ -197,41 +188,43 @@ describe("metronome scheduling", () => {
     const track = createClickTrack(timing),
       metronome = new Metronome(),
       { context, clicks } = audioContext();
-    metronome.tick(track, clock(0.4), 10, context, noMidi);
+    metronome.tick(track, clock(0.4), 10, context);
     metronome.reschedule(10.02);
     expect(clicks[0].stopped).toBe(true);
     // At half speed the beat is twice as far away.
-    metronome.tick(track, clock(0.45, { speed: 0.5 }), 10.02, context, noMidi);
+    metronome.tick(track, clock(0.45, { speed: 0.5 }), 10.02, context);
     expect(clicks[1].when).toBeCloseTo(10.12);
     metronome.stop(10.03);
     expect(clicks[1].stopped).toBe(true);
     // A click that has started rings out.
-    metronome.tick(track, clock(0.45), 10.05, context, noMidi);
+    metronome.tick(track, clock(0.45), 10.05, context);
     metronome.stop(10.15);
     expect(clicks[2].stopped).toBe(false);
   });
-  it("sends clicks to a MIDI output on the practice clock", () => {
+  it("counts in before the song, and clicks a pass only from where it starts", () => {
     const track = createClickTrack(timing),
       metronome = new Metronome(),
-      midi = { connected: true, click: vi.fn() } as unknown as MidiPlayer;
-    // A count-in: song time from before 0, the clicks up to where it is.
-    const counting = { start: -1.5 };
-    metronome.tick(track, clock(-1.6, counting), 0, null, midi);
-    expect(midi.click).not.toHaveBeenCalled();
-    metronome.tick(track, clock(-1.49, counting), 0.11, null, midi);
-    metronome.tick(track, clock(-1.47, counting), 0.13, null, midi);
-    expect(vi.mocked(midi.click).mock.calls).toEqual([[true]]);
-    // A late tick sends every click it passed.
-    metronome.tick(track, clock(0.02, counting), 1.6, null, midi);
-    expect(vi.mocked(midi.click).mock.calls).toEqual([
-      [true],
-      [false],
-      [false],
-      [false],
-    ]);
-    // A new pass clicks where it starts, but not before.
-    metronome.tick(track, clock(0.52, { pass: 2, start: 0.5 }), 2, null, midi);
-    expect(vi.mocked(midi.click).mock.calls.at(-1)).toEqual([true]);
-    expect(midi.click).toHaveBeenCalledTimes(5);
+      { context, clicks } = audioContext();
+    // A count-in: song time from before 0, with its first click just ahead.
+    metronome.tick(track, clock(-1.6, { start: -1.5 }), 0, context);
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].when).toBeCloseTo(0.1);
+    expect(clicks[0].frequency).toBeGreaterThan(1500);
+    // A pass that starts just after a beat leaves that beat out.
+    metronome.tick(track, clock(0.53, { pass: 2, start: 0.51 }), 2, context);
+    expect(clicks).toHaveLength(1);
+    // One that starts on it clicks it at once, a tick late.
+    metronome.tick(track, clock(0.52, { pass: 3, start: 0.5 }), 3, context);
+    expect(clicks).toHaveLength(2);
+    expect(clicks[1].when).toBe(3);
+  });
+  it("stays silent until browser audio runs", () => {
+    const track = createClickTrack(timing),
+      metronome = new Metronome(),
+      { context, clicks } = audioContext();
+    (context as { state: string }).state = "suspended";
+    metronome.tick(track, clock(0.4), 10, context);
+    metronome.tick(track, clock(0.4), 10, null);
+    expect(clicks).toHaveLength(0);
   });
 });

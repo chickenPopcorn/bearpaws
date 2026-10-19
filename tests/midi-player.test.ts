@@ -378,15 +378,4 @@ describe("MIDI playback output", () => {
     player.keyUp(67);
     expect(send).toHaveBeenCalledTimes(4);
   });
-  it("sends metronome clicks as GM percussion on channel 10", () => {
-    const { player, send } = setup();
-    player.click(true);
-    player.click(false);
-    expect(send.mock.calls).toEqual([
-      [[0x99, 76, 110]],
-      [[0x89, 76, 0]],
-      [[0x99, 77, 80]],
-      [[0x89, 77, 0]],
-    ]);
-  });
 });

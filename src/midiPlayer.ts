@@ -129,16 +129,6 @@ export class MidiPlayer {
     if (this.keys.delete(pitch)) this.release(pitch);
   }
   /**
-   * A metronome click, as General MIDI percussion on channel 10: a high wood
-   * block on a bar's first beat and a low one on the others. Percussion
-   * needs no held key, so it is released at once.
-   */
-  click(accent: boolean) {
-    const note = accent ? 76 : 77;
-    this.send([0x99, note, accent ? 110 : 80]);
-    this.send([0x89, note, 0]);
-  }
-  /**
    * Release every sounding note and key, and lift the pedal. Notes already
    * played this pass stay played, so when an input reset lets Listen continue
    * they are not struck again.

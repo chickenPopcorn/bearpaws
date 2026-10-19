@@ -110,10 +110,10 @@ pass without one. In Rhythm, a note played early as the count ends scores as
 early, as it would during playback.
 
 Wait for me has no metronome: the music waits for you there, so there is no
-beat to keep. On the laptop the click is a short tone that leaves out the
-piano's room. On a USB piano with a MIDI output it goes out as General MIDI
-percussion on channel 10, a high wood block on each bar's first beat and a
-low one on the others (see [MIDI and USB pianos](midi.md#play-the-apps-sound-on-a-usb-piano)).
+beat to keep. The click is a short tone that leaves out the piano's room, and
+it always plays on the laptop, even when the music plays on a USB piano (see
+[MIDI and USB pianos](midi.md#play-the-apps-sound-on-a-usb-piano)). Keep the
+laptop's sound on to hear it.
 
 ## Limits
 
