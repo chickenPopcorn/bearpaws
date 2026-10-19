@@ -80,6 +80,16 @@ export class Transport {
     this.cycle++;
     this.record(now);
   }
+  /**
+   * Move on from `position` after a Wait gate, in the same pass: unlike
+   * seek(), sounding notes are not struck again.
+   */
+  resume(position: number, now: number) {
+    this.held = false;
+    this.position = Math.max(0, Math.min(this.duration, position));
+    this.anchor = now;
+    this.record(now);
+  }
   play(now: number) {
     if (this.position >= this.duration) this.seek(this.loop?.[0] || 0, now);
     this.anchor = now;

@@ -7,7 +7,7 @@ import {
 } from "./engine";
 import { ReferenceAudio } from "./audio";
 import { MidiConnection } from "./midi";
-import type { PedalSpan, Song, Hand } from "./song";
+import type { Note, PedalSpan, Song, Hand } from "./song";
 import { classSongs } from "./lessons";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
 import {
@@ -21,6 +21,7 @@ import {
 import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
 const NO_PEDALS: readonly PedalSpan[] = [];
+const NO_NOTES: Note[] = [];
 export class Studio {
   settings = settings();
   savedSelection = this.settings.selected;
@@ -40,6 +41,8 @@ export class Studio {
   // Start on the saved song, if it is still in the library.
   song =
     this.songs.find((song) => song.id === this.savedSelection) ?? this.songs[0];
+  /** The song as printed. With Duet on, `song` has its student part moved up. */
+  written = this.song;
   audio = new ReferenceAudio();
   input = new MidiState();
   transport = new Transport(this.song.duration);
@@ -119,13 +122,35 @@ export class Studio {
       (this.settings.mode === "rhythm" && this.settings.reference)
     );
   }
-  private get referenceNotes() {
-    if (!this.referenceAudible) return [];
-    return this.notes.filter(
+  /** Notes that sound within the passage: all of them without a loop. */
+  private inPassage(notes: readonly Note[]) {
+    return notes.filter(
       (note) =>
         !this.loopEnabled ||
         (note.start < this.loopEnd && note.soundEnd > this.loopStart),
     );
+  }
+  private get referenceNotes() {
+    if (!this.referenceAudible) return [];
+    return this.inPassage(this.notes);
+  }
+  /** The teacher part that plays along, with Duet on. */
+  get duetNotes(): readonly Note[] {
+    return (this.settings.duet && this.song.duet?.notes) || NO_NOTES;
+  }
+  /** How far Duet moves the student part, in semitones: negative is lower. */
+  get octaveShift() {
+    return this.settings.duet && this.written.duet
+      ? 12 * this.written.duet.octaves
+      : 0;
+  }
+  /** Everything playback sounds: the reference, when audible, and the duet. */
+  private get playbackNotes() {
+    return [...this.referenceNotes, ...this.inPassage(this.duetNotes)];
+  }
+  /** Whether playback sounds anything: the reference or the duet. */
+  private get audible() {
+    return this.referenceAudible || this.duetNotes.length > 0;
   }
   /** Wait mode holds the transport at the next chord. */
   private get waitGate() {
@@ -220,14 +245,15 @@ export class Studio {
     this.cancelPlaybackPreparation();
     if (this.transport.playing) this.pause();
     this.audio.stop();
-    this.song = { ...song, tracks: song.tracks.map((t) => ({ ...t })) };
+    this.written = { ...song, tracks: song.tracks.map((t) => ({ ...t })) };
     this.settings.selected = song.id;
     this.persist();
     this.progress = progress(song.id, song.duration);
-    for (const t of this.song.tracks) {
+    for (const t of this.written.tracks) {
       const hand = this.progress.assignments[t.id];
       if (["left", "right", "off"].includes(hand)) t.hand = hand as Hand;
     }
+    this.song = this.practiced();
     this.transport = new Transport(song.duration);
     this.transport.speed = this.settings.speed;
     this.position = Math.max(
@@ -265,15 +291,52 @@ export class Studio {
     this.settings[hand] = !this.settings[hand];
     this.rebuild();
   }
+  /** The teacher duet turns on and off; the student part moves with it. */
+  duet() {
+    this.pause();
+    this.settings.duet = !this.settings.duet;
+    this.song = this.practiced();
+    this.rebuild();
+  }
+  /**
+   * The written song, or with Duet on, the student part as the book has it
+   * played with the duet: an octave or two up or down, with its hand
+   * positions.
+   */
+  private practiced(): Song {
+    const written = this.written,
+      shift = this.octaveShift;
+    if (!shift) return written;
+    const raise = (text: string) =>
+      text.replace(
+        /\b([A-G])(\d)\b/g,
+        (_, name, octave) => `${name}${Number(octave) + shift / 12}`,
+      );
+    return {
+      ...written,
+      notes: written.notes.map((note) => ({
+        ...note,
+        pitch: note.pitch + shift,
+      })),
+      lesson: written.lesson && {
+        ...written.lesson,
+        handPositions: {
+          left: raise(written.lesson.handPositions.left),
+          right: raise(written.lesson.handPositions.right),
+        },
+      },
+    };
+  }
   assign(track: number, hand: Hand) {
     this.pause();
     // Replace rather than mutate, so views can memoize on the song's identity.
-    this.song = {
-      ...this.song,
-      tracks: this.song.tracks.map((t) =>
+    this.written = {
+      ...this.written,
+      tracks: this.written.tracks.map((t) =>
         t.id === track ? { ...t, hand } : t,
       ),
     };
+    this.song = this.practiced();
     this.rebuild();
   }
   speed(speed: number) {
@@ -332,7 +395,7 @@ export class Studio {
     // loading should not wait for those of one turned off. Play on from here
     // once the right ones load, as for the Rhythm reference.
     const resume =
-      this.referenceAudible &&
+      this.audible &&
       (this.playbackPending || (enabled && this.transport.playing));
     if (resume) this.pause();
     this.settings.pianoVoices = {
@@ -408,9 +471,9 @@ export class Studio {
     }
     try {
       const p = this.position;
-      const referenceNotes = this.referenceNotes;
+      const playbackNotes = this.playbackNotes;
       this.audio.stop();
-      await this.prepareAudio(referenceNotes, generation, this.pedals);
+      await this.prepareAudio(playbackNotes, generation, this.pedals);
       if (generation !== this.playGeneration) return;
       this.scoringEpoch = this.audio.now();
       this.transport.seek(p, this.audio.now());
@@ -421,7 +484,7 @@ export class Studio {
         (this.position < this.loopStart || this.position >= this.loopEnd)
       )
         this.seek(this.loopStart);
-      this.audio.setPlaybackNotes(referenceNotes, this.pedals);
+      this.audio.setPlaybackNotes(playbackNotes, this.pedals);
       this.transport.play(this.audio.now());
       this.progress.attempts++;
       this.notice = "";
@@ -503,12 +566,7 @@ export class Studio {
           this.settings.tolerance,
           this.settings.speed,
         );
-      this.audio.schedule(
-        this.notes,
-        this.transport,
-        this.referenceAudible,
-        this.pedals,
-      );
+      this.scheduleAudio();
       if (this.audio.error) this.notice = this.audio.error;
       const total = this.practice.notes.filter(
         (n) => n.start >= this.practice.from - 0.001,
@@ -531,6 +589,24 @@ export class Studio {
       }
       this.emit();
     }
+  }
+  /**
+   * Schedule what sounds next. In Wait mode the duet waits too: its notes
+   * from the next gate on sound once the student plays that gate.
+   */
+  private scheduleAudio() {
+    const reference = this.referenceAudible ? this.notes : NO_NOTES,
+      gate = this.waitGate,
+      duet =
+        gate === undefined
+          ? this.duetNotes
+          : this.duetNotes.filter((note) => note.start < gate - 0.001);
+    this.audio.schedule(
+      duet.length ? [...reference, ...duet] : reference,
+      this.transport,
+      reference.length > 0 || duet.length > 0,
+      this.pedals,
+    );
   }
   receive(data: Uint8Array, timestamp: number) {
     // System real-time messages (clock, active sensing) can arrive dozens of
@@ -580,8 +656,10 @@ export class Studio {
           this.input.down,
         );
         if (advanced) {
-          this.transport.seek(this.position, now);
+          this.transport.resume(this.position, now);
           this.notice = "";
+          // The duet's notes at this gate sound with the student's key.
+          this.scheduleAudio();
         }
       }
     }

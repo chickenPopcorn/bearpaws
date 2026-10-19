@@ -520,6 +520,19 @@ describe("clock-driven transport", () => {
     expect(t.at(92)).toBe(1);
   });
 
+  it("resumes from a Wait gate in the same pass, so sounding notes ring on", () => {
+    const t = new Transport(20);
+    t.play(100);
+    expect(t.update(103, 2)).toBe(2);
+    expect(t.held).toBe(true);
+    const cycle = t.cycle;
+    t.resume(2, 104);
+    expect(t.cycle).toBe(cycle);
+    expect(t.held).toBe(false);
+    expect(t.update(104.5, 5)).toBe(2.5);
+    expect(t.eventAt(104.25)).toEqual({ position: 2.25, speed: 1 });
+  });
+
   it("retains loop overshoot and gives the same loop position after dropped frames", () => {
     const t = new Transport(30);
     t.loop = [2, 5];

@@ -9,6 +9,7 @@ import {
   georgeClassesOrder,
 } from "../src/classPieces";
 import { books, bookForSong, songsInBook } from "../src/books";
+import { recitalDuets } from "../src/recitalDuets";
 import { parseSong, tempoConverter, type Song } from "../src/song";
 import { buildScore, scoreTimeAtX, scoreViewport } from "../src/notation";
 
@@ -17,10 +18,10 @@ describe("bundled beginner music", () => {
     const songs = builtInSongs();
     expect(songs.slice(0, 2).map((song) => [song.id, song.title])).toEqual([
       ["cadence-ode-to-joy-v1", "Ode to Joy"],
-      ["cadence-dancing-raindrops-v1", "Dancing Raindrops"],
+      ["pawpal-far-away-v1", "Far Away"],
     ]);
-    expect(songs).toHaveLength(27);
-    expect(songs.filter((song) => song.lesson)).toHaveLength(26);
+    expect(songs).toHaveLength(36);
+    expect(songs.filter((song) => song.lesson)).toHaveLength(35);
     expect(new Set(songs.map((song) => song.id)).size).toBe(songs.length);
     for (const title of [
       "Hot Cross Buns",
@@ -137,6 +138,15 @@ describe("bundled beginner music", () => {
       (song) => song.id === "bearpaws-jasmine-flower-v1",
     )!;
     expect(classSongs().map((song) => song.title)).toEqual([
+      "Far Away",
+      "Dancing Shoes",
+      "On My Grandpa's Knee",
+      "The Conductor",
+      "Tiptoeing",
+      "The Search",
+      "May I Dance?",
+      "A Special Tune",
+      "Mister Moon",
       "Dancing Raindrops",
       "Five O'Clock",
       "Tell Us, Please!",
@@ -442,28 +452,32 @@ function printedBars(song: Song, hand: "left" | "right") {
 }
 
 describe("George Bear’s Classes book pieces", () => {
-  it("lists the pieces in Recital Book 3 order, after Dancing Raindrops", () => {
-    // Pages 21–31 are printed in the photos; the five story pieces before
-    // page 21 follow their facing pages and the story.
-    const bookOrder = [
-      "pawpal-five-oclock-v1",
-      "pawpal-tell-us-please-v1",
-      "pawpal-sleep-tight-mozart-mouse-v1",
-      "pawpal-something-for-you-v1",
-      "pawpal-bridal-chorus-v1",
+  it("lists the pieces in Recital Book 3 page order", () => {
+    expect(georgeClassesOrder).toEqual([
+      "pawpal-far-away-v1", // page 4
+      "pawpal-dancing-shoes-v1", // page 5
+      "pawpal-on-my-grandpas-knee-v1", // page 6
+      "pawpal-the-conductor-v1", // page 7
+      "pawpal-tiptoeing-v1", // page 8
+      "pawpal-the-search-v1", // page 9
+      "pawpal-may-i-dance-v1", // page 10
+      "pawpal-a-special-tune-v1", // page 11
+      "pawpal-mister-moon-v1", // page 12
+      "cadence-dancing-raindrops-v1", // page 13
+      "pawpal-five-oclock-v1", // page 14
+      "pawpal-tell-us-please-v1", // page 15
+      "pawpal-sleep-tight-mozart-mouse-v1", // page 16
+      "pawpal-something-for-you-v1", // page 17
+      "pawpal-bridal-chorus-v1", // page 19
       "pawpal-mozart-mouses-special-music-v1", // page 21
       "pawpal-camptown-races-v1", // page 23
       "pawpal-hush-little-baby-v1", // page 25
       "pawpal-wheels-on-the-bus-v1", // page 27
       "pawpal-old-macdonald-v1", // page 29
       "pawpal-aura-lee-v1", // page 31
-    ];
-    expect(georgeClassesOrder).toEqual([
-      "cadence-dancing-raindrops-v1",
-      ...bookOrder,
     ]);
     const songs = builtInSongs();
-    expect(songs.map((song) => song.id).slice(1, 13)).toEqual(
+    expect(songs.map((song) => song.id).slice(1, 22)).toEqual(
       georgeClassesOrder,
     );
     expect(classSongs().map((song) => song.id)).toEqual(georgeClassesOrder);
@@ -481,12 +495,12 @@ describe("George Bear’s Classes book pieces", () => {
   });
 
   it("registers each piece once, with full bars and its printed hand position", () => {
-    expect(new Set(classPieces.map((piece) => piece.id)).size).toBe(11);
+    expect(new Set(classPieces.map((piece) => piece.id)).size).toBe(20);
     const songs = classSongs();
-    expect(songs.map((song) => song.id)).toEqual([
-      "cadence-dancing-raindrops-v1",
-      ...classPieces.map((piece) => piece.id),
-    ]);
+    expect(songs.map((song) => song.id)).toEqual(georgeClassesOrder);
+    expect(
+      georgeClassesOrder.filter((id) => id !== "cadence-dancing-raindrops-v1"),
+    ).toEqual(classPieces.map((piece) => piece.id));
     for (const piece of classPieces) {
       expect(piece.id).toMatch(/^pawpal-[a-z-]+-v1$/);
       for (const bar of piece.bars)
@@ -534,7 +548,54 @@ describe("George Bear’s Classes book pieces", () => {
       left: "r4 | r4 | B3 B3 A3 A3",
     };
     const blackbird = "G3 C4 B3 C4 | r1 A3 r2 | C4 B3 A3 B3 | C4:4";
+    /** A verse printed once with a repeat sign, played twice. */
+    const twice = (verse: { right: string; left: string }) => ({
+      right: `${verse.right} | ${verse.right}`,
+      left: `${verse.left} | ${verse.left}`,
+    });
     const expected: Record<string, { right: string; left: string }> = {
+      "pawpal-far-away-v1": twice({
+        right: "r1 D4 D4:2 | r4 | r2 D4 r1 | r4 | r1 D4 D4:2 | r4 | r4 | r4",
+        left: "B3 r3 | B3 A3 G3:2 | A3 B3 r1 B3 | A3:4 | B3 r3 | B3 A3 G3:2 | A3 B3 A3 G3 | G3:4",
+      }),
+      "pawpal-dancing-shoes-v1": twice({
+        right: "C4 D4 E4 | F4:3 | G4 F4 E4 | D4:3 | C4:3 | r3 | C4:3 | r3",
+        left: "r3 | r3 | r3 | r3 | r3 | C3:3 | r3 | C3:3",
+      }),
+      "pawpal-on-my-grandpas-knee-v1": {
+        right:
+          "r4 | r4 | r4 | r4 | E4:2 F4:2 | G4 G4 F4:2 | E4:2 D4:2 | C4 C4 C4:2",
+        left: "E3:2 D3:2 | E3 E3 D3:2 | E3:2 C3:2 | E3 E3 D3:2 | r4 | r4 | r4 | r4",
+      },
+      "pawpal-the-conductor-v1": {
+        right:
+          "G4. G4. F4. F4. | E4. D4. C4. r1 | D4. r1 E4. r1 | F4. E4. D4. r1 | r4 | r4 | r4 | r4",
+        left: "r4 | r4 | r4 | r4 | G3. G3. F3. F3. | E3. D3. C3. r1 | G3. r1 E3. r1 | C3. C3. C3. r1",
+      },
+      "pawpal-tiptoeing-v1": twice({
+        right:
+          "F4. F4. F4. | D4. D4. D4. | C4. D4. E4. | D4:3 | r3 | r3 | r3 | r3",
+        left: "r3 | r3 | r3 | r3 | G3. G3. G3. | B3. B3. B3. | G3. A3. B3. | C4:3",
+      }),
+      "pawpal-the-search-v1": {
+        right:
+          "C4. D4. E4:2 | D4. E4. E4:2 | E4. E4. F4. F4. | G4. F4. E4:2 | r4 | r4 | r4 | r4",
+        left: "r4 | r4 | r4 | r4 | G3. F3. F3:2 | F3. E3. E3:2 | E3. E3. D3. D3. | C3. C3. C3:2",
+      },
+      "pawpal-may-i-dance-v1": twice({
+        right: "D4:2 F4 | D4:3 | r3 | r3 | F4:2 D4 | r3 | C4:2 C4 | C4:3",
+        left: "r3 | r3 | B3:2 G3 | B3:3 | r3 | B3:2 G3 | r3 | r3",
+      }),
+      "pawpal-a-special-tune-v1": twice({
+        right:
+          "r4 | r4 | r4 | r4 | C4 D4 C4 D4 | E4 D4 C4 r1 | C4:2 D4:2 | C4:4",
+        left: "C4 B3 C4 B3 | C4 B3 A3 r1 | C4:2 B3:2 | A3:4 | r4 | r4 | r4 | r4",
+      }),
+      "pawpal-mister-moon-v1": {
+        right:
+          "r4 | r4 | r4 | r4 | C4:2 E4:2 | C4:2 E4:2 | G4 F4 E4 D4 | C4:3 r1",
+        left: "G3:2 E3:2 | G3:2 E3:2 | C3 D3 E3 F3 | G3:2 r2 | r4 | r4 | r4 | r4",
+      },
       "pawpal-five-oclock-v1": {
         right: "D4:3 | r3 | D4:3 | r3 | D4:3 | D4:3 | D4:3 | r3",
         left: "B3:3 | G3:3 | B3:3 | G3:3 | B3 A3 G3 | B3 A3 G3 | B3 A3 B3 | C4:3",
@@ -633,7 +694,9 @@ describe("George Bear’s Classes book pieces", () => {
         ].join(" | "),
       },
     };
-    const songs = classSongs().slice(1);
+    const songs = classSongs().filter(
+      (song) => song.id !== "cadence-dancing-raindrops-v1",
+    );
     expect(songs.map((song) => song.id)).toEqual(Object.keys(expected));
     for (const song of songs) {
       expect(printedBars(song, "right")).toBe(expected[song.id].right);
@@ -641,13 +704,68 @@ describe("George Bear’s Classes book pieces", () => {
     }
   });
 
+  it("gives every piece its teacher duet, one bar per student bar, apart from the student part", () => {
+    for (const song of classSongs()) {
+      const part = recitalDuets[song.id];
+      expect(part, song.id).toBeDefined();
+      expect(part.bars).toHaveLength(buildScore(song).measureCount);
+      // Each voice fills its bar: notes, rests and grace notes alone.
+      for (const voices of part.bars)
+        for (const voice of voices) {
+          const beats = voice
+            .split(" ")
+            .map((token) => token.split("/")[1])
+            .filter((length) => length && length !== "g")
+            .reduce((total, length) => total + parseFloat(length), 0);
+          expect(beats, `${song.id}: ${voice}`).toBeCloseTo(
+            song.beatsPerBar!,
+            3,
+          );
+        }
+      // Two duets are printed above the student part, which stays as written.
+      expect(song.duet!.octaves).toBe(
+        ["pawpal-five-oclock-v1", "pawpal-hush-little-baby-v1"].includes(
+          song.id,
+        )
+          ? 2
+          : ["pawpal-mister-moon-v1", "pawpal-something-for-you-v1"].includes(
+                song.id,
+              )
+            ? 0
+            : 1,
+      );
+      const studentIds = new Set(song.notes.map((note) => note.id));
+      expect(song.duet!.notes.length).toBeGreaterThan(0);
+      for (const note of song.duet!.notes) {
+        expect(studentIds.has(note.id)).toBe(false);
+        expect(note).toMatchObject({ track: 2, channel: 2 });
+        expect(note.finger).toBeUndefined();
+        expect(note.fingerHand).toBeUndefined();
+        expect(note.start).toBeGreaterThanOrEqual(0);
+        expect(note.end).toBeLessThan(song.duration);
+      }
+      expect(song.tracks.map((track) => track.id)).toEqual([0, 1]);
+    }
+    // Only the two pieces marked with swung eighths swing.
+    expect(
+      Object.keys(recitalDuets).filter((id) => recitalDuets[id].swing),
+    ).toEqual(["pawpal-the-search-v1", "pawpal-tell-us-please-v1"]);
+  });
+
   it("follows the printed meters, dynamics, repeat and articulation", () => {
     const songs = new Map(classSongs().map((song) => [song.id, song]));
-    for (const id of [
-      "pawpal-five-oclock-v1",
-      "pawpal-sleep-tight-mozart-mouse-v1",
-    ])
-      expect(songs.get(id)!.beatsPerBar).toBe(3);
+    for (const song of songs.values())
+      expect(song.beatsPerBar).toBe(
+        [
+          "pawpal-dancing-shoes-v1",
+          "pawpal-tiptoeing-v1",
+          "pawpal-may-i-dance-v1",
+          "pawpal-five-oclock-v1",
+          "pawpal-sleep-tight-mozart-mouse-v1",
+        ].includes(song.id)
+          ? 3
+          : 4,
+      );
 
     // The repeated lullaby verse is loud the first time and soft the second.
     const sleep = songs.get("pawpal-sleep-tight-mozart-mouse-v1")!;
@@ -673,14 +791,20 @@ describe("George Bear’s Classes book pieces", () => {
         note.start < (1 + 32) * mozartBeat - 1e-9 ? 0.6 : 0.75,
       );
 
-    // Only Tell Us, Please! has staccato dots, on every quarter note; they
-    // sound for under half a beat, and other notes keep a short release gap.
+    // These pieces have staccato dots on every quarter note; they sound for
+    // under half a beat, and other notes keep a short release gap.
+    const staccato = [
+      "pawpal-the-conductor-v1",
+      "pawpal-tiptoeing-v1",
+      "pawpal-the-search-v1",
+      "pawpal-tell-us-please-v1",
+    ];
     for (const song of songs.values()) {
       if (song.id === "cadence-dancing-raindrops-v1") continue;
       const beat = 60 / song.lesson!.bpm;
       for (const note of song.notes) {
         expect(note.staccato ?? false).toBe(
-          song.id === "pawpal-tell-us-please-v1" && note.notatedBeats === 1,
+          staccato.includes(song.id) && note.notatedBeats === 1,
         );
         expect(note.end - note.start).toBeCloseTo(
           note.staccato ? 0.45 * beat : note.notatedBeats! * beat - 0.055,

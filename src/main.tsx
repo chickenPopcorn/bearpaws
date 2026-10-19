@@ -160,10 +160,14 @@ const PracticeControls = memo(function PracticeControls({
   mode,
   left,
   right,
+  duet,
+  hasDuet,
 }: {
   mode: Mode;
   left: boolean;
   right: boolean;
+  duet: boolean;
+  hasDuet: boolean;
 }) {
   const tabs = useRef<HTMLDivElement>(null);
   const indicator = useActiveIndicator(tabs, mode);
@@ -210,6 +214,19 @@ const PracticeControls = memo(function PracticeControls({
             {hand === "left" ? "Left" : "Right"}
           </button>
         ))}
+        <button
+          aria-pressed={duet && hasDuet}
+          disabled={!hasDuet}
+          title={
+            hasDuet
+              ? "Teacher duet plays along. Your piano is never scored on it."
+              : "This song has no duet part"
+          }
+          onClick={() => studio.duet()}
+        >
+          <span className="swatch duet" />
+          Duet
+        </button>
       </div>
     </div>
   );
@@ -462,11 +479,13 @@ function App() {
       const pitch = shortcuts[e.key.toLowerCase()];
       if (pitch !== undefined) {
         e.preventDefault();
-        studio.virtual(pitch, true);
+        // With Duet on, the keys follow the student part up.
+        studio.virtual(pitch + studio.octaveShift, true);
       }
     };
     const up = (e: KeyboardEvent) => {
-      const pitch = shortcuts[e.key.toLowerCase()];
+      const key = shortcuts[e.key.toLowerCase()];
+      const pitch = key === undefined ? undefined : key + studio.octaveShift;
       if (pitch !== undefined && studio.input.down.has(pitch)) {
         studio.virtual(pitch, false);
       }
@@ -697,7 +716,13 @@ function App() {
                     </div>
                   </div>
                 )}
-                <PracticeControls mode={s.mode} left={s.left} right={s.right} />
+                <PracticeControls
+                  mode={s.mode}
+                  left={s.left}
+                  right={s.right}
+                  duet={s.duet}
+                  hasDuet={!!studio.song.duet}
+                />
                 <div
                   className="transport-buttons"
                   role="group"
@@ -819,6 +844,15 @@ function App() {
                   {stageNotice}
                 </div>
               )}
+              {studio.duetNotes.length > 0 && (
+                <p className="duet-note">
+                  <span className="swatch duet" /> Duet: the teacher part plays
+                  along.{" "}
+                  {studio.octaveShift
+                    ? `Play ${Math.abs(studio.octaveShift) > 12 ? "two octaves" : "one octave"} ${studio.octaveShift > 0 ? "higher" : "lower"}, as the book shows.`
+                    : "Play as written."}
+                </p>
+              )}
               {s.mode === "wait" && (
                 <p className="sr-only" aria-live="polite">
                   {describeWaitTarget(
@@ -830,7 +864,8 @@ function App() {
                 </p>
               )}
               <SheetTimeline
-                song={studio.song}
+                song={studio.written}
+                octaves={studio.octaveShift / 12}
                 position={studio.position}
                 mode={s.mode}
                 hit={p.hit}

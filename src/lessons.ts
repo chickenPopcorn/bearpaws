@@ -3,6 +3,8 @@ import { starterPieces, type StarterPiece } from "./starterPieces";
 import { popsPieces } from "./popsPieces";
 import { midiSongs } from "./midiPieces";
 import { classPieces, classSong, georgeClassesOrder } from "./classPieces";
+import { attachDuet } from "./duet";
+import { recitalDuets } from "./recitalDuets";
 
 const rightFingers: Record<number, Finger> = {
   60: 1,
@@ -224,8 +226,11 @@ function dancingRaindrops(): Song {
 }
 
 function classLesson(id: string): Song {
-  if (id === "cadence-dancing-raindrops-v1") return dancingRaindrops();
-  return classSong(classPieces.find((piece) => piece.id === id)!);
+  const song =
+    id === "cadence-dancing-raindrops-v1"
+      ? dancingRaindrops()
+      : classSong(classPieces.find((piece) => piece.id === id)!);
+  return attachDuet(song, recitalDuets[id]);
 }
 
 /** Fresh objects keep track assignments and library edits local to each caller. */

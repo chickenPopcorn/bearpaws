@@ -12,6 +12,8 @@ export interface Settings {
   speed: number;
   left: boolean;
   right: boolean;
+  /** The teacher duet plays along, for songs that have one. */
+  duet: boolean;
   tolerance: number;
   reference: boolean;
   names: boolean;
@@ -38,6 +40,7 @@ export const defaults: Settings = {
   speed: 1,
   left: true,
   right: true,
+  duet: false,
   tolerance: 0.22,
   reference: true,
   names: true,
@@ -130,6 +133,7 @@ export function settings(): Settings {
       : 0.22,
     left: !!s.left,
     right: !!s.right,
+    duet: !!s.duet,
     reference: !!s.reference,
     names: !!s.names,
     selected: typeof s.selected === "string" ? s.selected : defaults.selected,
