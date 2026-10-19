@@ -430,7 +430,7 @@ describe("USB MIDI output selection", () => {
 
   it("keeps the duet cursor when its input disconnects and its output remains", async () => {
     const piano = input("in");
-    const { midi, access, change } = setup([piano]);
+    const { midi, access, change, send } = setup([piano]);
     const port = {
       id: "out",
       state: "connected",
@@ -443,6 +443,7 @@ describe("USB MIDI output selection", () => {
     });
     await midi.connect();
     await midi.selectOutput("out");
+    send(piano, [0x94, 67, 100]);
     const notes = [
       {
         id: "a",
@@ -480,12 +481,12 @@ describe("USB MIDI output selection", () => {
     Object.defineProperty(piano, "state", { value: "disconnected" });
     change();
     expect(midi.duet.connected).toBe(true);
-    expect(port.send).toHaveBeenLastCalledWith([0x80, 50, 0]);
+    expect(port.send).toHaveBeenLastCalledWith([0x84, 50, 0]);
     vi.mocked(port.send).mockClear();
     midi.duet.schedule(notes, 1.4, 1, false, 0);
     expect(port.send).not.toHaveBeenCalled();
     midi.duet.schedule(notes, 3, 1, false, 0);
-    expect(port.send).toHaveBeenCalledExactlyOnceWith([0x90, 52, 64]);
+    expect(port.send).toHaveBeenCalledExactlyOnceWith([0x94, 52, 64]);
   });
 
   it("follows the physical piano note channel but ignores note-offs and system messages", async () => {
