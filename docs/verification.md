@@ -5,7 +5,7 @@ release, key release noise, pedal noise and pseudo pedal resonance.
 
 ## Automated checks
 
-- `npm test`: 819 tests across 34 suites passed.
+- `npm test`: 809 tests across 34 suites passed.
 - `python3 -m unittest discover -s tests -p 'test_*.py'`: 10 offline importer and ZIP tests passed.
 - `npm run build`: TypeScript validation and the Vite production build passed.
 - `node scripts/check-built-fonts.mjs`: all three built fonts resolve under a nested deployment path.
@@ -24,7 +24,7 @@ seeking geometry and label bounds; hand-guide preferences; fullscreen fallback,
 Escape, focus restoration, tab trapping and audio-before-fullscreen ordering.
 Imported 3/4, 6/8 and changing meters are verified through parsing, score layout,
 displayed signatures, keyboard seeking and the waterfall beat grid.
-The library checks cover collection search and selection, native keyboard
+The library checks cover book sections, search and selection, native keyboard
 activation, score-slider shortcuts, loop preference persistence, all 26 MIDI
 exports and catalog entries, and exact ZIP contents with CRC verification.
 ZIP bytes remain identical when source timestamps, permissions or file creation

@@ -26,45 +26,42 @@ npm run format         # Format source, tests and documentation
 
 ## Practice
 
-The library includes **26 beginner arrangements**, keeping **Ode to Joy** and
-**Dancing Raindrops** and adding familiar melodies such as Mary Had a Little Lamb,
-Twinkle, Twinkle, Little Star, London Bridge, Frère Jacques, and Jingle Bells.
-Each includes suggested finger numbers on the score, falling notes, active keys
-and Wait for me practice, plus starting hand positions. The simplest pieces stay
-in C position; melodies with position changes explain the moves. Short themes
-and the Jingle Bells chorus are labelled as such. New arrangements use one held
-bass note per bar; Dancing Raindrops retains its supplied chords and articulation.
-George Bear’s Classes adds eleven more personal-practice transcriptions from
-your piano book, in C and Middle C positions. They keep the student parts'
-printed rests, chords, staccato, dynamics, repeat and finger numbers, without
-lyrics or teacher duet parts.
-Mama Bear’s Pops includes **好一朵茉莉花 (Jasmine Flower)** as an eight-bar chorus
-in C major, with suggested finger numbers and a simple left-hand accompaniment.
-It also includes **安静 · 周杰伦 (Silence / An Jing)** as a complete piano MIDI
-from [Shaivan’s Online Sequencer upload](https://onlinesequencer.net/1677315).
-Its original notes and timing are preserved, with suggested hands split at middle
-C and no added finger numbers. The source MIDI is kept in `src/assets/an-jing.mid`
-and is available through the song’s individual download, outside the starter pack.
+Paw Pal is for one learner: the library is **George Bear’s Classes**, one
+section per class book of _Music for Little Mozarts_:
 
-Library collections start folded; click one to open it. Searching opens them
-all, and moving to a song in another collection opens that one.
-Search the library by title or composer. **Download starter MIDI pack** saves the
-26 standard MIDI files as a ZIP; **Download MIDI** saves the selected arrangement.
+- **Music Recital Book 3**: twelve personal-practice pieces from the book, in
+  C and Middle C positions. Dancing Raindrops keeps its supplied chords and
+  articulation. The other eleven are transcriptions that keep the student
+  parts' printed rests, chords, staccato, dynamics, repeat and finger numbers,
+  without lyrics or teacher duet parts.
+- **Music Lesson Book 3**: no songs yet.
+
+Each song includes suggested finger numbers on the score, falling notes, active
+keys and Wait for me practice, plus starting hand positions. `src/books.ts`
+lists each book's songs; `georgeClassesOrder` in `src/classPieces.ts` sets
+Recital Book 3's order.
+
+Books start folded; click one to open it. Searching opens them all, and moving
+to a song in another book opens that one.
+Search the classes by title or composer. **Download MIDI** saves the selected
+song as a standard MIDI file.
 The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
-with barlines. The ZIP also includes a fingering manifest with `countInBeats`.
-General MIDI players may ignore these text events; the built-in lessons retain their fingering,
-but reimporting a MIDI treats it as an ordinary import without lesson metadata.
-The generated collection lives in `public/midi/`; melody references are recorded
-in `src/starterPieces.ts` and `src/popsPieces.ts`.
+with barlines. General MIDI players may ignore these text events.
+
+The earlier arrangements (Ode to Joy, 12 familiar melodies, Jasmine Flower and
+An Jing) stay in the code and in `public/midi/`, with the starter MIDI pack ZIP,
+but the app no longer lists them or links the ZIP. Their melody references are
+recorded in `src/starterPieces.ts` and `src/popsPieces.ts`; An Jing's source
+MIDI is `src/assets/an-jing.mid`.
 The sheet-music timeline above the waterfall follows the current bar. Accepted
 notes fade to 50% opacity in practice modes; Listen marks the notes played by
 the reference audio. Disabled hands remain visible at half opacity. Written
-rhythms and rests are preserved for the built-in pieces; imported MIDI uses
-approximate note values derived from performed timing.
+rhythms and rests are preserved for the lessons; a song built from plain MIDI
+uses approximate note values derived from performed timing.
 Click a note or drag across the score to change playback position. The focused
 score also supports Shift+arrow for a bar and Home/End. Left/Right arrow keys
-select the previous/next song in the current collection and start playback,
+select the previous/next song in the current book and start playback,
 as do the Previous/Next buttons in full screen. Mode,
 restart, playback, speed, time and full-screen controls share the row above the
 score.
@@ -76,14 +73,13 @@ playback controls remain available in either view. The finger guide always shows
 animated bear paws directly from the source, with no saved display preference.
 Reduced-motion settings disable their animation.
 On both hands, 1 means thumb and 5 means little finger. Changing a track to the
-opposite hand hides its original fingering; imported MIDI is not assigned
-guessed finger numbers.
+opposite hand hides its original fingering; a song built from plain MIDI gets
+no guessed finger numbers.
 
-1. Choose a beginner piece from the library; use **Find a song** to filter it.
+1. Choose a piece from George Bear’s Classes; use **Find a song** to filter them.
 2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. On later visits, saved browser permission automatically connects the first available MIDI input. When more than one input is available, a menu beside it chooses one. If the chosen input is unplugged, clicking Connect your piano picks any available input. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
-3. Import `.mid` / `.midi` files. Assign each note-bearing track to **Left**, **Right**, or **Skip** under _Make it yours_. Multiple-track imports start unassigned. A single-track import starts assigned to Right; a single track cannot be split by pitch in this MVP.
-4. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Import and Listen work without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
-5. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
+3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen works without a piano. Computer shortcuts and clickable on-screen keys also provide practice input.
+4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
 **Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.
 
@@ -108,20 +104,20 @@ release harmonics, key release noise, pedal noise and pedal resonance on or
 off; these are remembered in this browser. Turning one off stops it at once.
 Turning one on during playback restarts playback at the same place so that its
 recordings can load. These
-voices follow the imported MIDI's sustain pedal (CC64); built-in lessons have
+voices follow a song's sustain pedal (CC64); built-in lessons have
 no pedal, so they use only release harmonics and key noise. See the
 [adaptation notes](public/audio/accurate-salamander/LICENSE.md) for how each
 voice follows the SFZ preset.
 
 ## Local data and file support
 
-Settings and per-song position, track assignments, passage, number of starts, and best matched-note proportion are stored in localStorage. Best proportion uses all eligible notes in the current passage, including upcoming notes. Imported normalized songs are stored in IndexedDB, keyed by a SHA-256 hash of their contents. Removing a local song removes its stored song/progress. Storage failures show a message and allow session-only use. Browser storage is specific to the origin/browser/profile; clearing it removes your library and progress.
+Settings and per-song position, track assignments, passage, number of starts, and best matched-note proportion are stored in localStorage. Best proportion uses all eligible notes in the current passage, including upcoming notes. The app has no MIDI import. Songs imported by earlier versions stay in this browser's IndexedDB, untouched; the app no longer reads them. Storage failures show a message and allow session-only use. Browser storage is specific to the origin/browser/profile; clearing it removes your progress.
 
 No songs or MIDI input are uploaded. There is no backend, account, analytics, billing, cloud sync, Bluetooth integration, sheet-music recognition, or teacher dashboard.
 
 The practice calendar at the top of the sidebar shows this month: a star on each day that met the daily goal, a dot on days with less, and a ring filling up for today, with the current streak. The goal is 5 minutes unless changed under **Edit** (5, 10, 15, 20 or 30), where the learner's name can also be set for the calendar's praise. Practice time counts only while a song plays in Wait for me or Rhythm and a key was pressed within the last 15 seconds; Listen, paused time and a Wait gate left waiting do not count. Days follow the device's local calendar. Playing time is kept in localStorage as sessions, one per page visit per day with seconds per song, for the last 92 days; tabs on the same browser add up without overwriting each other.
 
-Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Imported notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. Imports are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
+Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, including tempo changes across tracks, FIFO pairing of overlapping notes, velocity-zero releases, and channel-wide CC64 sustain. Parsed notes keep physical release and sound end separately. Format 2 and SMPTE division produce actionable unsupported-file errors. MIDI files are limited to 10 MB, 256 declared tracks (including empty tracks), 50,000 positive-velocity note attacks, and 500,000 MIDI events. A bounded byte scanner checks both event budgets before the full MIDI parser allocates event objects. Missing note-offs are closed at the track boundary with a warning. Track names do not establish hand assignment; normalized display names are limited to 160 characters. Reference sound does not reproduce General MIDI instruments, effects, or drum kits.
 
 ## Architecture
 
@@ -131,7 +127,7 @@ Standard MIDI formats **0 and 1** with ticks-per-beat division are supported, in
 - `src/midi.ts`: explicit Web MIDI permission/device selection and connection lifecycle.
 - `src/controller.ts`: shared practice timeline, transport actions and local progress.
 - `src/render.ts`: Canvas waterfall and keyboard using the same pitch geometry.
-- `src/storage.ts`: validated settings/progress and IndexedDB song library.
+- `src/storage.ts`: validated settings and progress.
 - `src/main.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.

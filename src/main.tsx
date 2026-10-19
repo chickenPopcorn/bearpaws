@@ -1,6 +1,5 @@
 import React, {
   memo,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -24,8 +23,7 @@ import { LoopBoundInput } from "./LoopBoundInput";
 import { describeWaitTarget } from "./waitTarget";
 import { usePianoFullscreen } from "./usePianoFullscreen";
 import { usePracticeShortcuts } from "./usePracticeShortcuts";
-import { isBuiltInSong } from "./lessons";
-import { collectionForSong, songsInCollection } from "./collections";
+import { bookForSong, songsInBook } from "./books";
 import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
 import "./style.css";
 const studio = new Studio();
@@ -300,11 +298,6 @@ const PassagePanel = memo(function PassagePanel({
           {w}
         </p>
       ))}
-      {!isBuiltInSong(song.id) && (
-        <button className="text-button" onClick={() => void studio.remove()}>
-          Remove this local song
-        </button>
-      )}
     </section>
   );
 });
@@ -437,8 +430,6 @@ function App() {
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [connectTried, setConnectTried] = useState(false),
     [busy, setBusy] = useState(false);
-  const file = useRef<HTMLInputElement>(null);
-  const openImport = useCallback(() => file.current?.click(), []);
   const fullscreen = usePianoFullscreen(() => {
     if (!studio.transport.playing && !busy) void startPlayback();
   });
@@ -450,15 +441,13 @@ function App() {
     selectedDevice = studio.midi.devices.find(
       (d) => d.id === studio.midi.selectedId,
     );
-  const collection = collectionForSong(studio.song.id);
-  const collectionSongs = songsInCollection(studio.songs, collection.id);
-  const songIndex = collectionSongs.findIndex(
-    (song) => song.id === studio.song.id,
-  );
-  const previousSong = collectionSongs[songIndex - 1];
-  const nextSong = collectionSongs[songIndex + 1];
+  const book = bookForSong(studio.song.id);
+  const bookSongs = songsInBook(studio.songs, book.id);
+  const songIndex = bookSongs.findIndex((song) => song.id === studio.song.id);
+  const previousSong = bookSongs[songIndex - 1];
+  const nextSong = bookSongs[songIndex + 1];
   useEffect(() => {
-    void studio.init();
+    studio.init();
     const down = (e: KeyboardEvent) => {
       if (
         (e.target as HTMLElement).closest(
@@ -627,21 +616,9 @@ function App() {
             selected={studio.song.id}
             savedSelection={studio.savedSelection}
             onSelect={selectSong}
-            onImport={openImport}
-          />
-          <input
-            ref={file}
-            className="sr-only"
-            type="file"
-            accept=".mid,.midi,audio/midi,audio/x-midi"
-            aria-label="Import MIDI file"
-            onChange={(e) => {
-              if (e.target.files?.[0]) void studio.import(e.target.files[0]);
-              e.target.value = "";
-            }}
           />
           <p className="privacy">
-            Your songs stay here.
+            Progress stays on this browser.
             <br />
             No uploads. No account.
           </p>
@@ -674,22 +651,20 @@ function App() {
                 ) : studio.song.lesson ? (
                   `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
                 ) : (
-                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events · Local MIDI`
+                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events`
                 )}
               </p>
             </div>
             <div className="song-tools">
-              <span className="chip">Saved on this browser</span>
-              {isBuiltInSong(studio.song.id) && (
-                <a
-                  className="song-midi-download"
-                  href={`${import.meta.env.BASE_URL}midi/${studio.song.id}.mid`}
-                  download
-                  aria-label={`Download ${studio.song.title} MIDI`}
-                >
-                  Download MIDI
-                </a>
-              )}
+              <span className="chip">{book.title}</span>
+              <a
+                className="song-midi-download"
+                href={`${import.meta.env.BASE_URL}midi/${studio.song.id}.mid`}
+                download
+                aria-label={`Download ${studio.song.title} MIDI`}
+              >
+                Download MIDI
+              </a>
             </div>
           </div>
           {studio.storageNotice && (
@@ -717,9 +692,8 @@ function App() {
                     <strong className="fullscreen-song-title">
                       <SongTitle title={studio.song.title} />
                     </strong>
-                    <div className="fullscreen-collection">
-                      {collection.title} · {songIndex + 1} of{" "}
-                      {collectionSongs.length}
+                    <div className="fullscreen-book">
+                      {book.title} · {songIndex + 1} of {bookSongs.length}
                     </div>
                   </div>
                 )}
@@ -809,7 +783,7 @@ function App() {
                   <div
                     className="song-navigation"
                     role="group"
-                    aria-label="Collection navigation"
+                    aria-label="Book navigation"
                   >
                     <button
                       aria-label="Previous song"
@@ -817,7 +791,7 @@ function App() {
                       title={
                         previousSong
                           ? `Previous: ${previousSong.title} (Left arrow)`
-                          : "First song in this collection"
+                          : "First song in this book"
                       }
                       disabled={!previousSong || busy}
                       onClick={() => void navigateSong(previousSong)}
@@ -830,7 +804,7 @@ function App() {
                       title={
                         nextSong
                           ? `Next: ${nextSong.title} (Right arrow)`
-                          : "Last song in this collection"
+                          : "Last song in this book"
                       }
                       disabled={!nextSong || busy}
                       onClick={() => void navigateSong(nextSong)}
@@ -968,14 +942,4 @@ function App() {
 }
 const container = document.getElementById("root")!;
 const root = createRoot(container);
-const render = () => root.render(<App />);
-// A saved import loads from browser storage. While the page as it was left is
-// on screen, wait briefly for it, so the first render does not show another
-// song. With nothing on screen, rendering now beats a blank wait.
-if (isBuiltInSong(studio.savedSelection) || !container.hasChildNodes())
-  render();
-else
-  void Promise.race([
-    studio.init(),
-    new Promise((resolve) => setTimeout(resolve, 1000)),
-  ]).then(render);
+root.render(<App />);
