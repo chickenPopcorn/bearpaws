@@ -110,6 +110,21 @@ describe("teacher MIDI output", () => {
     expect(next.close).toHaveBeenCalledOnce();
     expect(duet.connected).toBe(false);
   });
+  it("ignores a deferred failure once a healthy replacement is selected", async () => {
+    const { duet, send, failed } = setup();
+    duet.schedule([note("a", 48, 0, 2)], 0, 1, false);
+    send.mockImplementation(() => {
+      throw new Error("Disconnected");
+    });
+    const replacement = output();
+    duet.setOutput(replacement);
+    await Promise.resolve();
+    expect(failed).not.toHaveBeenCalled();
+    expect(duet.connected).toBe(true);
+    duet.schedule([note("b", 52, 0, 2)], 0, 1, false);
+    expect(replacement.send).toHaveBeenLastCalledWith([0x90, 52, 64]);
+  });
+
   it("drops and closes an unplugged output, and reports it after the tick", async () => {
     const { duet, send, failed, port } = setup();
     send.mockImplementation(() => {

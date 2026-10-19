@@ -394,6 +394,29 @@ describe("practice studio integration", () => {
     },
   );
 
+  it("keeps the original resume intent by serializing output choices", async () => {
+    const studio = create(duetSong());
+    studio.mode("listen");
+    await studio.play();
+    let finish!: () => void;
+    vi.mocked(studio.midi.selectOutput).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    Object.defineProperty(studio.midi.duet, "connected", { value: true });
+    const selecting = studio.duetOutput("first");
+    expect(studio.outputChanging).toBe(true);
+    expect(studio.transport.playing).toBe(false);
+    await studio.duetOutput("second");
+    expect(studio.midi.selectOutput).toHaveBeenCalledExactlyOnceWith("first");
+    finish();
+    await selecting;
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.outputChanging).toBe(false);
+  });
+
   it("does not duplicate a virtual note released and re-pressed during sample loading", async () => {
     const studio = create(song([[60, 1]]));
     let finish!: () => void;

@@ -30,6 +30,7 @@ export class Studio {
   savedSelection = this.settings.selected;
   private playGeneration = 0;
   private playbackPending = false;
+  outputChanging = false;
   private audioPreparations = new Set<AbortController>();
   private virtualRequests = new Map<number, number>();
   private nextVirtualRequest = 0;
@@ -139,17 +140,26 @@ export class Studio {
     });
   }
   async duetOutput(id: string) {
+    // Keep the original resume intent until this selection has finished.
+    if (this.outputChanging) return;
+    this.outputChanging = true;
+    this.emit();
     const resume = this.transport.playing || this.playbackPending;
     this.pause();
     const generation = this.playGeneration;
-    await this.midi.selectOutput(id);
-    if (
-      resume &&
-      !this.destroyed &&
-      generation === this.playGeneration &&
-      (!id || this.midi.duet.connected)
-    )
-      await this.play();
+    try {
+      await this.midi.selectOutput(id);
+      if (
+        resume &&
+        !this.destroyed &&
+        generation === this.playGeneration &&
+        (!id || this.midi.duet.connected)
+      )
+        await this.play();
+    } finally {
+      this.outputChanging = false;
+      this.emit();
+    }
   }
   get scoringNotes() {
     return this.notes.filter(

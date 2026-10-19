@@ -406,6 +406,28 @@ describe("USB MIDI output selection", () => {
     expect(midi.duet.connected).toBe(false);
     expect(port.close).toHaveBeenCalledTimes(3);
   });
+  it("reports loss of an active output when reacquiring MIDI access", async () => {
+    const { midi, access, callbacks } = setup([input("in")]);
+    const port = {
+      id: "out",
+      state: "connected",
+      open: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn(),
+    } as unknown as MIDIOutput;
+    Object.defineProperty(access, "outputs", {
+      value: new Map([[port.id, port]]),
+    });
+    await midi.connect();
+    await midi.selectOutput("out");
+    expect(callbacks.onOutputLost).not.toHaveBeenCalled();
+    await midi.connect();
+    expect(callbacks.onOutputLost).toHaveBeenCalledOnce();
+    expect(midi.duet.connected).toBe(false);
+    expect(midi.selectedOutputId).toBe("");
+    expect(port.close).toHaveBeenCalledOnce();
+  });
+
   it("follows the physical piano note channel but ignores note-offs and system messages", async () => {
     const piano = input("in");
     const { midi, access, send } = setup([piano]);

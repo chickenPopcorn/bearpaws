@@ -11,6 +11,7 @@ export class MidiDuet {
   private active = new Map<string, Note>();
   private cycle = -1;
   private channel = 0;
+  private outputGeneration = 0;
   /** `lost` hears that the output stopped accepting notes. */
   constructor(private lost: () => void = () => {}) {}
   get connected() {
@@ -30,14 +31,19 @@ export class MidiDuet {
   }
   /** Silence and close the current output, then play on `port`, if any. */
   setOutput(port?: MIDIOutput) {
-    if (port === this.port) return;
+    if (port === this.port) {
+      this.outputGeneration++;
+      return;
+    }
     this.stop();
     const previous = this.port;
     this.port = port;
+    this.outputGeneration++;
     if (previous) closeOutput(previous);
   }
   private send(data: number[]) {
     const port = this.port;
+    const generation = this.outputGeneration;
     if (!port) return;
     try {
       port.send(data);
@@ -49,7 +55,9 @@ export class MidiDuet {
       this.cycle = -1;
       closeOutput(port);
       // Report after the tick that is still scheduling.
-      queueMicrotask(this.lost);
+      queueMicrotask(() => {
+        if (this.outputGeneration === generation) this.lost();
+      });
     }
   }
   private noteOff(pitch: number) {

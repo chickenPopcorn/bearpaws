@@ -127,7 +127,7 @@ export class MidiConnection {
     try {
       const access = await this.source!.requestMIDIAccess({ sysex: false });
       if (this.disposed) return;
-      this.releaseAccess();
+      this.releaseAccess(true);
       this.detach();
       this.access = access;
       this.failedInput = undefined;
@@ -144,7 +144,7 @@ export class MidiConnection {
       this.refresh();
     } catch (error) {
       if (this.disposed) return;
-      this.releaseAccess();
+      this.releaseAccess(true);
       this.detach();
       this.devices = [];
       const name =
@@ -310,7 +310,8 @@ export class MidiConnection {
     if (input || forceReset) this.callbacks.onReset();
   }
 
-  private releaseAccess(): void {
+  private releaseAccess(notifyOutputLoss = false): void {
+    const hadOutput = !!this.selectedOutputId || this.duet.connected;
     this.outputGeneration++;
     this.duet.setOutput();
     this.selectedOutputId = "";
@@ -318,6 +319,7 @@ export class MidiConnection {
     this.outputMessage = "";
     if (this.access) this.access.onstatechange = null;
     this.access = undefined;
+    if (notifyOutputLoss && hadOutput) this.callbacks.onOutputLost();
   }
 
   dispose(): void {

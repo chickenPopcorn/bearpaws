@@ -641,6 +641,7 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
             Duet sound
             <select
               aria-label="Duet sound"
+              disabled={studio.outputChanging}
               value={studio.midi.selectedOutputId}
               onChange={(e) => void studio.duetOutput(e.target.value)}
             >
@@ -1198,12 +1199,16 @@ async function endSession(sync: CloudSync) {
   claim.give();
 }
 
+function leaveLocalStudio() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("local");
+  window.location.assign(url);
+}
+
 async function signOut() {
   if (localDevelopment) {
     studio.destroy();
-    const url = new URL(window.location.href);
-    url.searchParams.delete("local");
-    window.location.assign(url);
+    leaveLocalStudio();
     return;
   }
   if (!cloud) return;
@@ -1322,7 +1327,9 @@ function Root() {
     return (
       <OpeningStudio
         error={current.error}
-        onSignOut={() => void leaveFailedSignIn()}
+        onSignOut={
+          localDevelopment ? leaveLocalStudio : () => void leaveFailedSignIn()
+        }
       />
     );
   return (
