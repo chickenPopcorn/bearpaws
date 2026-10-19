@@ -20,11 +20,12 @@ it("persists actual settings and song progress under independent browser keys", 
     selected: "imported",
   });
   write("progress:imported", {
-    position: 3,
+    beat: 3,
     best: 75,
     attempts: 2,
     assignments: { 0: "left" },
-    loop: [1, 4],
+    loopBeats: [1, 4],
+    version: "v1",
   });
   expect(settings()).toMatchObject({
     mode: "rhythm",
@@ -32,42 +33,109 @@ it("persists actual settings and song progress under independent browser keys", 
     tolerance: 0.35,
     selected: "imported",
   });
-  expect(progress("imported", 5)).toMatchObject({
-    position: 3,
+  expect(progress("imported", "v1", 10)).toMatchObject({
+    beat: 3,
     best: 75,
     attempts: 2,
     assignments: { 0: "left" },
-    loop: [1, 4],
+    loopBeats: [1, 4],
+    version: "v1",
   });
-  expect(progress("other", 5).position).toBe(0);
+  expect(progress("other", "v1", 10)).toMatchObject({
+    beat: 0,
+    loopBeats: null,
+    version: "v1",
+  });
 });
 it("removes one song's progress under the same key it was saved with", () => {
-  write("progress:gone", { position: 3 });
-  write("progress:kept", { position: 2 });
+  write("progress:gone", { beat: 3, version: "v1" });
+  write("progress:kept", { beat: 2, version: "v1" });
   expect(remove("progress:gone")).toBe(true);
-  expect(progress("gone", 5).position).toBe(0);
-  expect(progress("kept", 5).position).toBe(2);
+  expect(progress("gone", "v1", 10).beat).toBe(0);
+  expect(progress("kept", "v1", 10).beat).toBe(2);
 });
 it("recovers corrupt or invalid storage shapes without crashing", () => {
   values.set("cadence:settings", "{bad");
   values.set(
     "cadence:progress:broken",
     JSON.stringify({
-      position: "oops",
+      beat: "oops",
       assignments: null,
       best: 700,
-      loop: [4, 1],
+      loopBeats: [4, 1],
+      version: "v1",
     }),
   );
   expect(settings().mode).toBe("wait");
-  expect(progress("broken", 5)).toMatchObject({
-    position: 0,
+  expect(progress("broken", "v1", 10)).toMatchObject({
+    beat: 0,
     assignments: {},
     best: 100,
-    loop: null,
+    loopBeats: null,
   });
+  for (const loopBeats of [
+    [-1, 4],
+    [10, null],
+    [2, "end"],
+    [2],
+    [null, 4],
+    "1-4",
+  ]) {
+    write("progress:broken", { loopBeats, version: "v1" });
+    expect(progress("broken", "v1", 10).loopBeats).toBeNull();
+  }
   values.set("cadence:progress:broken", "null");
-  expect(progress("broken", 5).position).toBe(0);
+  expect(progress("broken", "v1", 10)).toMatchObject({
+    beat: 0,
+    loopBeats: null,
+    version: "v1",
+  });
+});
+it("starts the position and passage over when saved in seconds or for other notes", () => {
+  const kept = {
+    best: 80,
+    attempts: 6,
+    assignments: { 0: "left", 1: "off" },
+    loopEnabled: false,
+  };
+  // Saved before versions, in seconds.
+  write("progress:legacy", { ...kept, position: 3, loop: [1, 4] });
+  expect(progress("legacy", "v2", 10)).toEqual({
+    ...kept,
+    beat: 0,
+    updated: "",
+    loopBeats: null,
+    version: "v2",
+  });
+  // Saved for the song's earlier notes.
+  write("progress:changed", {
+    ...kept,
+    beat: 6,
+    loopBeats: [2, 8],
+    version: "v1",
+  });
+  expect(progress("changed", "v2", 10)).toMatchObject({
+    ...kept,
+    beat: 0,
+    loopBeats: null,
+    version: "v2",
+  });
+  expect(progress("changed", "v1", 10)).toMatchObject({
+    ...kept,
+    beat: 6,
+    loopBeats: [2, 8],
+    version: "v1",
+  });
+});
+it("keeps a passage that runs past the song's end, ending it there", () => {
+  write("progress:long", { beat: 12, loopBeats: [2, 12], version: "v1" });
+  expect(progress("long", "v1", 10)).toMatchObject({
+    beat: 10,
+    loopBeats: [2, 10],
+  });
+  // A passage to the end runs to wherever the end is.
+  write("progress:long", { loopBeats: [2, null], version: "v1" });
+  expect(progress("long", "v1", 10).loopBeats).toEqual([2, null]);
 });
 it("keeps the learner's name and a daily goal from the choices", () => {
   expect(settings()).toMatchObject({ learnerName: "", dailyGoalMinutes: 5 });
@@ -137,20 +205,28 @@ it("keeps optional piano voices on unless one was turned off", () => {
     resonance: false,
   });
 });
-it.each([undefined, { loop: null }, { loop: [1, 4] }])(
-  "defaults new and legacy progress to looping on: %j",
-  (saved) => {
-    if (saved) write("progress:loop-default", saved);
-    const restored = progress("loop-default", 5);
-    expect(restored.loopEnabled).toBe(true);
-    expect(restored.loop).toEqual(saved?.loop ?? null);
-  },
-);
+it.each([
+  undefined,
+  { loop: [1, 4] },
+  { loopBeats: null, version: "v1" },
+  { loopBeats: [1, 4], version: "v1" },
+])("defaults new and legacy progress to looping on: %j", (saved) => {
+  if (saved) write("progress:loop-default", saved);
+  const restored = progress("loop-default", "v1", 10);
+  expect(restored.loopEnabled).toBe(true);
+  expect(restored.loopBeats).toEqual(
+    saved && "loopBeats" in saved ? saved.loopBeats : null,
+  );
+});
 it("preserves an explicit loop preference separately from its custom range", () => {
-  write("progress:loop-off", { loopEnabled: false, loop: [1, 4] });
-  expect(progress("loop-off", 5)).toMatchObject({
+  write("progress:loop-off", {
     loopEnabled: false,
-    loop: [1, 4],
+    loopBeats: [1, 4],
+    version: "v1",
+  });
+  expect(progress("loop-off", "v1", 10)).toMatchObject({
+    loopEnabled: false,
+    loopBeats: [1, 4],
   });
 });
 it("snaps saved speeds onto the slider's 20% steps within its range", () => {
@@ -176,5 +252,5 @@ it("reports quota or denied storage instead of throwing", () => {
   });
   expect(write("settings", {})).toBe(false);
   expect(settings().speed).toBe(1);
-  expect(progress("blocked", 5).position).toBe(0);
+  expect(progress("blocked", "v1", 10).beat).toBe(0);
 });

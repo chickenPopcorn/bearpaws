@@ -7,7 +7,14 @@ import {
 } from "./engine";
 import { PianoAudio } from "./audio";
 import { MidiConnection } from "./midi";
-import type { Note, PedalSpan, Song, Hand } from "./song";
+import {
+  songVersion,
+  type Note,
+  type PedalSpan,
+  type Song,
+  type Hand,
+} from "./song";
+import { createBeatClock } from "./timeline";
 import { normalizePianoSound, type PianoVoice } from "./pianoSound";
 import {
   settings,
@@ -25,6 +32,11 @@ const KEY_VELOCITY = 0.6;
 /** A progress record's content, leaving out when it was saved. */
 const unstamped = ({ updated: _updated, ...rest }: Progress) =>
   JSON.stringify(rest);
+/**
+ * Beats as progress saves them. Loading turns them into seconds; rounding
+ * turns those back into the same beats, so an untouched song saves unchanged.
+ */
+const savedBeat = (beat: number) => Math.round(beat * 1e6) / 1e6;
 const NO_PEDALS: readonly PedalSpan[] = [];
 const NO_NOTES: Note[] = [];
 export class Studio {
@@ -70,14 +82,17 @@ export class Studio {
   /** Stops following other tabs' practice; see watchPractice(). */
   private unwatchPractice = () => {};
   progress: Progress = {
-    position: 0,
+    beat: 0,
     best: 0,
     attempts: 0,
     updated: "",
     assignments: {},
     loopEnabled: true,
-    loop: null,
+    loopBeats: null,
+    version: "",
   };
+  /** The song's tempo map. Progress is saved in beats, which keep their bars. */
+  private clock: ReturnType<typeof createBeatClock>;
   loopEnabled = true;
   loopStart = 0;
   loopEnd: number;
@@ -100,6 +115,7 @@ export class Studio {
     this.transport = new Transport(this.song.duration);
     this.practice = new Practice(this.song.notes);
     this.loopEnd = this.song.duration;
+    this.clock = createBeatClock(this.song.ppq, this.song.tempos);
     this.audio.setSound({
       ambience: this.settings.ambience,
       voices: this.settings.pianoVoices,
@@ -301,12 +317,18 @@ export class Studio {
       this.storageNotice = "Practice time could not be saved in this browser.";
     const next: Progress = {
       ...this.progress,
-      position: this.position,
+      beat: savedBeat(this.clock.at(this.position)),
       assignments: Object.fromEntries(
         this.song.tracks.map((t) => [t.id, t.hand]),
       ),
       loopEnabled: this.loopEnabled,
-      loop: [this.loopStart, this.loopEnd],
+      // A passage to the end stays at the end, wherever a tempo change puts it.
+      loopBeats: [
+        savedBeat(this.clock.at(this.loopStart)),
+        this.loopEnd >= this.song.duration
+          ? null
+          : savedBeat(this.clock.at(this.loopEnd)),
+      ],
     };
     // Only a change gets a new stamp and is written: the account keeps the
     // position of the later save, so re-saving what was loaded must not look
@@ -329,7 +351,15 @@ export class Studio {
     this.written = { ...song, tracks: song.tracks.map((t) => ({ ...t })) };
     this.settings.selected = song.id;
     this.persist();
-    this.progress = progress(song.id, song.duration);
+    this.clock = createBeatClock(song.ppq, song.tempos);
+    // The version of the notes as written: Duet only moves them for practice.
+    // The length is rounded as saves are, so a position saved at the very
+    // end loads unchanged.
+    this.progress = progress(
+      song.id,
+      songVersion(song),
+      savedBeat(this.clock.at(song.duration)),
+    );
     this.savedProgress = this.progress.updated ? unstamped(this.progress) : "";
     for (const t of this.written.tracks) {
       const hand = this.progress.assignments[t.id];
@@ -338,13 +368,13 @@ export class Studio {
     this.song = this.practiced();
     this.transport = new Transport(song.duration);
     this.transport.speed = this.settings.speed;
-    this.position = Math.max(
-      0,
-      Math.min(song.duration, this.progress.position || 0),
-    );
+    const seconds = (beat: number) =>
+        Math.max(0, Math.min(song.duration, this.clock.time(beat))),
+      loop = this.progress.loopBeats;
+    this.position = seconds(this.progress.beat);
     this.transport.seek(this.position, this.audio.now());
-    this.loopStart = this.progress.loop?.[0] ?? 0;
-    this.loopEnd = this.progress.loop?.[1] ?? song.duration;
+    this.loopStart = loop ? seconds(loop[0]) : 0;
+    this.loopEnd = loop && loop[1] !== null ? seconds(loop[1]) : song.duration;
     this.loopEnabled = this.progress.loopEnabled;
     this.syncLoop();
     this.refreshSelection();

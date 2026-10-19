@@ -108,17 +108,24 @@ vi.mock("../src/storage", () => ({
     env.watchers.add(onChange);
     return () => env.watchers.delete(onChange);
   },
-  progress: (id: string, _duration: number) =>
-    structuredClone({
-      position: 0,
+  progress: (id: string, version: string, _beats: number) => {
+    const saved = (env.values.get(`progress:${id}`) ?? {}) as {
+      version?: string;
+    };
+    return structuredClone({
+      beat: 0,
       best: 0,
       attempts: 0,
       updated: "",
       assignments: {},
-      loop: null,
       loopEnabled: true,
-      ...((env.values.get(`progress:${id}`) as object) ?? {}),
-    }),
+      loopBeats: null,
+      ...saved,
+      // Saved for other notes: the position and passage start over.
+      ...(saved.version === version ? {} : { beat: 0, loopBeats: null }),
+      version,
+    });
+  },
 }));
 
 function song(pitches: [number, number][], id = "controller-fixture"): Song {
@@ -1456,6 +1463,75 @@ describe("practice studio integration", () => {
     expect(restored.song.tracks[0].hand).toBe("left");
     expect(restored.transport.loop).toEqual([0.5, 2.5]);
   });
+
+  /** `fixture` at 60 BPM, `duration` seconds long: the same notes on the same beats. */
+  const slower = (fixture: Song, duration: number): Song => ({
+    ...fixture,
+    duration,
+    tempos: [{ tick: 0, microseconds: 1_000_000 }],
+    notes: fixture.notes.map((note) => ({
+      ...note,
+      start: note.start * 2,
+      end: note.end * 2,
+      soundEnd: note.soundEnd * 2,
+    })),
+  });
+  const reopen = (fixture: Song) => {
+    const restored = new Studio(fixtureLibrary());
+    active.push(restored);
+    restored.load(fixture);
+    return restored;
+  };
+  const twoNotes = () =>
+    song([
+      [60, 1],
+      [64, 2],
+    ]);
+
+  it("keeps a saved position and passage on their beats when the tempo changes", () => {
+    const fixture = twoNotes();
+    const studio = create(fixture);
+    studio.bounds(0.5, 2.5);
+    studio.seek(1.5);
+    const key = `progress:${fixture.id}`,
+      updated = "2026-01-01T00:00:00.000Z";
+    env.values.set(key, { ...(env.values.get(key) as object), updated });
+    // Every beat now lasts twice as long.
+    const restored = reopen(slower(fixture, 8));
+    expect(restored.position).toBe(3);
+    expect([restored.loopStart, restored.loopEnd]).toEqual([1, 5]);
+    expect(restored.transport.loop).toEqual([1, 5]);
+    // The same beats: opening it saves nothing new.
+    expect(restored.progress.updated).toBe(updated);
+  });
+
+  it("keeps a passage to the song's end at its end when the tempo changes", () => {
+    const fixture = twoNotes();
+    const studio = create(fixture);
+    // At 60 BPM the song lasts 9 beats rather than 8.
+    expect(reopen(slower(fixture, 9)).transport.loop).toEqual([0, 9]);
+    studio.bounds(1, fixture.duration);
+    expect(reopen(slower(fixture, 9)).transport.loop).toEqual([2, 9]);
+  });
+
+  it("starts the position and passage over when the song's notes change", () => {
+    const studio = create(twoNotes());
+    studio.assign(0, "left");
+    studio.bounds(0.5, 2.5);
+    studio.loop(false);
+    studio.seek(1.5);
+    const restored = reopen(
+      song([
+        [60, 1],
+        [65, 2],
+      ]),
+    );
+    expect(restored.position).toBe(0);
+    expect([restored.loopStart, restored.loopEnd]).toEqual([0, 4]);
+    // The rest of the song's progress stays.
+    expect(restored.loopEnabled).toBe(false);
+    expect(restored.song.tracks[0].hand).toBe("left");
+  });
 });
 
 describe("sound through a MIDI output", () => {
@@ -1771,7 +1847,8 @@ describe("account sync hooks", () => {
     studio.seek(1);
     expect(sync.progress).toHaveBeenLastCalledWith(
       "controller-fixture",
-      expect.objectContaining({ position: 1, updated: expect.any(String) }),
+      // One second in at 120 BPM.
+      expect.objectContaining({ beat: 2, updated: expect.any(String) }),
       false,
     );
   });

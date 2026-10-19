@@ -31,13 +31,20 @@ export interface Settings {
   dailyGoalMinutes: number;
 }
 export interface Progress {
-  position: number;
+  /** Where practice stands, in quarter-note beats. */
+  beat: number;
   best: number;
   attempts: number;
   updated: string;
   assignments: Record<number, string>;
   loopEnabled: boolean;
-  loop: [number, number] | null;
+  /**
+   * The passage, in quarter-note beats. A null end runs to the song's end,
+   * wherever a tempo change puts it.
+   */
+  loopBeats: [number, number | null] | null;
+  /** The song version (see songVersion()) that `beat` and `loopBeats` count. */
+  version: string;
 }
 export const defaults: Settings = {
   mode: "wait",
@@ -166,14 +173,22 @@ export function settings(): Settings {
       : defaults.dailyGoalMinutes,
   };
 }
-export function progress(id: string, duration: number): Progress {
+/**
+ * A song's saved progress, for `version` of the song (see songVersion()),
+ * which is `beats` quarter-note beats long.
+ */
+export function progress(id: string, version: string, beats: number): Progress {
   const raw = read<Partial<Progress>>(`progress:${id}`, {}),
     p = raw && typeof raw === "object" ? raw : {};
-  const loop = p.loop;
+  // Beats of other notes, or seconds from before versions were saved, would
+  // put the position and passage on the wrong bars: they start over.
+  const current = p.version === version,
+    loop = current ? p.loopBeats : null;
   return {
-    position: Number.isFinite(p.position)
-      ? Math.max(0, Math.min(duration, p.position!))
-      : 0,
+    beat:
+      current && Number.isFinite(p.beat)
+        ? Math.max(0, Math.min(beats, p.beat!))
+        : 0,
     best: Number.isFinite(p.best) ? Math.max(0, Math.min(100, p.best!)) : 0,
     attempts: Number.isFinite(p.attempts)
       ? Math.max(0, Math.floor(p.attempts!))
@@ -182,15 +197,16 @@ export function progress(id: string, duration: number): Progress {
     assignments:
       p.assignments && typeof p.assignments === "object" ? p.assignments : {},
     loopEnabled: typeof p.loopEnabled === "boolean" ? p.loopEnabled : true,
-    loop:
+    loopBeats:
       Array.isArray(loop) &&
       loop.length === 2 &&
-      loop.every(Number.isFinite) &&
+      Number.isFinite(loop[0]) &&
       loop[0] >= 0 &&
-      loop[1] <= duration &&
-      loop[1] > loop[0] + 0.1
-        ? loop
+      loop[0] < beats &&
+      (loop[1] === null || (Number.isFinite(loop[1]) && loop[1] > loop[0]))
+        ? [loop[0], loop[1] === null ? null : Math.min(beats, loop[1])]
         : null,
+    version,
   };
 }
 /**
