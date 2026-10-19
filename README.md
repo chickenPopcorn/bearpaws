@@ -17,6 +17,7 @@ Open the printed local URL, normally `http://localhost:5173`. Desktop Chrome or 
 npm test               # Deterministic engine, MIDI lifecycle, controller, storage, audio/Canvas checks
 python3 -m unittest discover -s tests -p 'test_*.py' # Offline sample importer checks
 npm run test:watch     # Watch tests
+npm run test:e2e       # Browser tests of the production build (see below)
 npm run build          # TypeScript validation and static production build in dist/
 npm run preview        # Serve the production build, normally localhost:4173
 npm run example        # Regenerate the original downloadable MIDI exercise
@@ -203,6 +204,21 @@ Once audio is unlocked, AudioContext time is the musical clock; MIDI event times
 ## Verification and deployment
 
 See [docs/verification.md](docs/verification.md) for checks run, limitations, and the local hardware acceptance procedure.
+
+### Browser tests
+
+`npm run test:e2e` builds the app into `e2e/.dist`, serves it on port 4174
+and drives it in Chromium with Playwright: Google sign-in and sign-out, the
+library and search, settings from and to the account, Listen and Wait for me
+practice, a library that fails to load, and the one studio tab. The first run
+needs the browser: `npx playwright install chromium`. The build talks to a
+fake Supabase project that `e2e/fake-supabase.ts` answers inside the browser,
+with the three fixture songs as the library, so the tests need no account or
+network.
+
+The **E2E tests** workflow runs them in the merge queue only, on the merged
+result. Pull requests show the check as skipped, so it can be a required
+check; it can also be run by hand from the Actions tab.
 
 The production output is the static `dist/` directory. GitHub Pages deployment is
 prepared for **https://piano.pollos.us/**: the Pages workflow validates and deploys

@@ -11,3 +11,8 @@ work/
 __pycache__/
 # Working copy of the Supabase song library (npm run library:pull)
 /library/
+
+# Playwright e2e build and results
+/e2e/.dist/
+/playwright-report/
+/test-results/

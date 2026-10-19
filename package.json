@@ -8,8 +8,9 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "preview": "vite preview --host 0.0.0.0",
-    "format": "prettier --write src tests scripts *.json *.ts index.html README.md docs/verification.md",
+    "format": "prettier --write src tests e2e scripts *.json *.ts index.html README.md docs/verification.md",
     "example": "node scripts/create-example.mjs",
     "library:pull": "node scripts/library.mjs pull",
     "library:push": "node scripts/library.mjs push"
@@ -21,6 +22,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "happy-dom": "^21.0.3",
