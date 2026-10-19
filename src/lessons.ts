@@ -3,8 +3,10 @@ import { starterPieces, type StarterPiece } from "./starterPieces";
 import { popsPieces } from "./popsPieces";
 import { midiSongs } from "./midiPieces";
 import { classPieces, classSong, georgeClassesOrder } from "./classPieces";
+import { lessonBookOrder, lessonPieces } from "./lessonPieces";
 import { attachDuet } from "./duet";
 import { recitalDuets } from "./recitalDuets";
+import { lessonDuets } from "./lessonDuets";
 
 const rightFingers: Record<number, Finger> = {
   60: 1,
@@ -225,19 +227,24 @@ function dancingRaindrops(): Song {
   };
 }
 
+const bookPieces = [...classPieces, ...lessonPieces];
+
 function classLesson(id: string): Song {
   const song =
     id === "cadence-dancing-raindrops-v1"
       ? dancingRaindrops()
-      : classSong(classPieces.find((piece) => piece.id === id)!);
-  return attachDuet(song, recitalDuets[id]);
+      : classSong(bookPieces.find((piece) => piece.id === id)!);
+  return attachDuet(song, recitalDuets[id] ?? lessonDuets[id]);
 }
+
+/** Recital Book 3, then Lesson Book 3, each in page order. */
+const classOrder = [...georgeClassesOrder, ...lessonBookOrder];
 
 /** Fresh objects keep track assignments and library edits local to each caller. */
 export function builtInSongs(): Song[] {
   return [
     makeLesson(odeToJoy),
-    ...georgeClassesOrder.map(classLesson),
+    ...classOrder.map(classLesson),
     ...starterPieces.map(makeLesson),
     ...popsPieces.map(makeLesson),
     ...midiSongs(),
@@ -246,5 +253,5 @@ export function builtInSongs(): Song[] {
 
 /** The studio's library: George Bear’s Classes, in book order. */
 export function classSongs(): Song[] {
-  return georgeClassesOrder.map(classLesson);
+  return classOrder.map(classLesson);
 }

@@ -51,10 +51,14 @@ export function parsePitch(text: string) {
   );
 }
 
-/** Where a written beat sounds: swung off-beat eighths fall on the triplet. */
+/**
+ * Where a written beat sounds: swung off-beat eighths fall on the triplet.
+ * Written triplets are on it already and stay where they are.
+ */
 const swung = (beat: number) => {
   const whole = Math.floor(beat + 1e-9),
     part = beat - whole;
+  if (Math.abs(part * 3 - Math.round(part * 3)) < 1e-3) return beat;
   return (
     whole + (part <= 0.5 ? (part * 4) / 3 : 2 / 3 + ((part - 0.5) * 2) / 3)
   );

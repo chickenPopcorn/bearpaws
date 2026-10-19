@@ -13,7 +13,7 @@ export type ClassStep = readonly [
   beats: number,
   articulation?: "staccato",
 ];
-type Dynamic = "p" | "mf" | "f";
+type Dynamic = "p" | "mp" | "mf" | "f";
 export type ClassBar = {
   left?: readonly ClassStep[];
   right?: readonly ClassStep[];
@@ -84,7 +84,12 @@ export const classPositions: Record<
   },
 };
 
-const velocities: Record<Dynamic, number> = { p: 0.45, mf: 0.6, f: 0.75 };
+const velocities: Record<Dynamic, number> = {
+  p: 0.45,
+  mp: 0.52,
+  mf: 0.6,
+  f: 0.75,
+};
 const credit = "From your piano book";
 
 const staccato = "staccato";

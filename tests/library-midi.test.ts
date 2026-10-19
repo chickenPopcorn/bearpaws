@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseMidi } from "midi-file";
 import { builtInSongs } from "../src/lessons";
 import { classPieces } from "../src/classPieces";
+import { lessonPieces } from "../src/lessonPieces";
 import { buildScore } from "../src/notation";
 import { parseSong, type Song } from "../src/song";
 
@@ -169,7 +170,7 @@ describe("downloadable beginner MIDI collection", () => {
     const catalog = JSON.parse(
       readFileSync("public/midi/catalog.json", "utf8"),
     ) as { id: string; beatsPerBar: number; countInBeats: number }[];
-    for (const piece of classPieces) {
+    for (const piece of [...classPieces, ...lessonPieces]) {
       const midi = parseMidi(
         new Uint8Array(readFileSync(`public/midi/${piece.id}.mid`)),
       );

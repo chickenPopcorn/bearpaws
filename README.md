@@ -35,12 +35,16 @@ section per class book of _Music for Little Mozarts_:
   student parts' printed rests, chords, staccato, dynamics, repeats and finger
   numbers, without lyrics. Each piece also has its printed teacher duet, in
   `src/recitalDuets.ts`.
-- **Music Lesson Book 3**: no songs yet.
+- **Music Lesson Book 3**: all 42 pieces in the book (pages 5–47), in C and
+  Middle C positions, transcribed the same way, with the student parts in
+  `src/lessonPieces.ts` and their printed teacher duets in
+  `src/lessonDuets.ts`.
 
 Each song includes suggested finger numbers on the score, falling notes, active
 keys and Wait for me practice, plus starting hand positions. `src/books.ts`
 lists each book's songs; `georgeClassesOrder` in `src/classPieces.ts` sets
-Recital Book 3's order.
+Recital Book 3's order, and `lessonBookOrder` in `src/lessonPieces.ts` sets
+Lesson Book 3's.
 
 Books start folded; click one to open it. Searching opens them all, and moving
 to a song in another book opens that one.
@@ -79,7 +83,7 @@ no guessed finger numbers.
 
 1. Choose a piece from George Bear’s Classes; use **Find a song** to filter them.
 2. Click **Connect your piano** in the header to grant MIDI permission the first time; it changes to **Piano connected**. On later visits, saved browser permission automatically connects the first available MIDI input. When more than one input is available, a menu beside it chooses one. If the chosen input is unplugged, clicking Connect your piano picks any available input. Plugging the selected device back in rebinds it; reconnecting does not resume practice automatically. Browsers without MIDI permission queries keep the Connect button.
-3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen works without a piano. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along. As the book asks, the student part then moves up one octave (two for Five O'Clock and Hush, Little Baby): the waterfall, keyboard shortcuts and finger guide follow it, and the score keeps the written notes under an 8va (15ma) mark. The duet is only heard: it is never drawn, fingered or scored, and Wait for me holds it at each of your notes until you play them.
+3. Choose **Listen**, **Wait for me**, or **Rhythm**, enable one or both hands, and press Play. Listen works without a piano. Computer shortcuts and clickable on-screen keys also provide practice input. Turn on **Duet** beside the hands to hear the book's teacher part play along. As the book asks, the student part then usually moves up one octave; some pieces move it up two octaves or down one, and a few keep it as written. The waterfall, keyboard shortcuts and finger guide follow it, and the score keeps the written notes under an 8va, 15ma or 8vb mark. The duet is only heard: it is never drawn, fingered or scored, and Wait for me holds it at each of your notes until you play them.
 4. Slow down (20–140%, in 20% steps), seek or restart, and set passage boundaries in song seconds using A/B or the numeric fields. Looping is on by default and repeats the full song or selected passage. Turn it off with the loop button; that choice and the passage bounds are remembered for each song.
 
 **Listen** uses browser reference sound. **Wait for me** accepts correct notes up to the selected timing tolerance early and holds the shared timeline at each remaining note/chord until every chord pitch has been pressed and is physically held. Accepting an early note does not jump the timeline forward. Repeated notes need a release and fresh press; a sustain pedal cannot satisfy a physical chord. The keys to play are highlighted on the keyboard and the score, and announced to screen readers.
