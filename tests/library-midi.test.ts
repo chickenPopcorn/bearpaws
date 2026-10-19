@@ -26,8 +26,7 @@ describe("downloadable beginner MIDI collection", () => {
       const midi = parseMidi(new Uint8Array(file));
       expect(midi.header.format).toBe(1);
       expect(midi.header.ticksPerBeat).toBe(song.ppq);
-      // Recital and Lesson Book 3 pieces add the teacher duet as a third track.
-      expect(midi.tracks).toHaveLength(song.duet ? 3 : 2);
+      expect(midi.tracks).toHaveLength(2);
       midi.tracks.forEach((track, index) => {
         let tick = 0;
         const attacks: {
@@ -55,10 +54,7 @@ describe("downloadable beginner MIDI collection", () => {
             });
           if (event.type === "text") fingers.push({ tick, text: event.text });
         }
-        const duet = index === 2;
-        const expected = duet
-          ? song.duet!.notes
-          : song.notes.filter((note) => note.track === index);
+        const expected = song.notes.filter((note) => note.track === index);
         const sort = <T extends { pitch: number; tick: number }>(items: T[]) =>
           items.sort((a, b) => a.tick - b.tick || a.pitch - b.pitch);
         expect(sort(attacks)).toEqual(
@@ -81,31 +77,10 @@ describe("downloadable beginner MIDI collection", () => {
           ),
         );
         expect(fingers).toEqual(
-          duet
-            ? [
-                {
-                  tick: 0,
-                  text: `Paw Pal teacher duet: the student plays ${
-                    {
-                      [-1]: "one octave lower",
-                      0: "as written",
-                      1: "one octave higher",
-                      2: "two octaves higher",
-                    }[song.duet!.octaves]
-                  } with this part`,
-                },
-              ]
-            : expected.map((note) => ({
-                tick: exportedTick(song, note.start),
-                text: `Paw Pal fingering: ${note.fingerHand} ${note.finger}; MIDI pitch ${note.pitch}`,
-              })),
-        );
-        expect(track.find((event) => event.type === "trackName")).toMatchObject(
-          {
-            text: `${duet ? "duet" : song.tracks[index].hand}: ${
-              /[^\u0000-\u00ff]/.test(song.title) ? "piano" : song.title
-            }`,
-          },
+          expected.map((note) => ({
+            tick: exportedTick(song, note.start),
+            text: `Paw Pal fingering: ${note.fingerHand} ${note.finger}; MIDI pitch ${note.pitch}`,
+          })),
         );
         expect(track.filter((event) => event.type === "setTempo")).toEqual([
           {
@@ -143,12 +118,6 @@ describe("downloadable beginner MIDI collection", () => {
         `download-${song.id}`,
       );
       expect(imported.warnings).toEqual([]);
-      // The teacher duet comes back as a third track; compare the student's.
-      // Some Lesson Book 3 pieces are for one hand, leaving the other empty.
-      expect(imported.tracks.filter((track) => track.count)).toHaveLength(
-        song.tracks.filter((track) => track.count).length + (song.duet ? 1 : 0),
-      );
-      imported.notes = imported.notes.filter((note) => note.track < 2);
       const original = buildScore(song);
       const downloaded = buildScore(imported);
       expect(downloaded.measures.has(0)).toBe(false);
@@ -193,22 +162,8 @@ describe("downloadable beginner MIDI collection", () => {
           hand: note.fingerHand,
           beats: note.notatedBeats,
         })),
-        ...(song.duet && {
-          duet: {
-            octaves: song.duet.octaves,
-            notes: song.duet.notes.map((note) => ({
-              pitch: note.pitch,
-              startTick: exportedTick(song, note.start),
-              endTick: exportedTick(song, note.end),
-            })),
-          },
-        }),
       })),
     );
-    // Every Recital and Lesson Book 3 download carries its teacher duet.
-    expect(
-      catalog.filter((entry: { duet?: unknown }) => entry.duet),
-    ).toHaveLength(21 + 42);
   });
 
   it("downloads each George Bear’s Classes piece in its printed meter after one silent bar", () => {
@@ -227,10 +182,10 @@ describe("downloadable beginner MIDI collection", () => {
         beatsPerBar: piece.beatsPerBar,
         countInBeats: piece.beatsPerBar,
       });
-      // The student's first printed bar starts after the silent bar; The
-      // Wheels on the Bus opens with a half rest before its first note.
+      // The first printed bar starts after the silent bar; The Wheels on the
+      // Bus opens with a half rest before its first note.
       const firstAttack = Math.min(
-        ...midi.tracks.slice(0, 2).map((track) => {
+        ...midi.tracks.map((track) => {
           let tick = 0;
           for (const event of track) {
             tick += event.deltaTime;
@@ -257,8 +212,7 @@ describe("downloadable beginner MIDI collection", () => {
           "import base64,json,sys,zipfile\nwith zipfile.ZipFile(sys.argv[1]) as z:\n print(json.dumps({'badEntry':z.testzip(),'entries':[{'name':i.filename,'content':base64.b64encode(z.read(i)).decode('ascii')} for i in z.infolist()]}))",
           "public/midi/cadence-starter-library.zip",
         ],
-        // The catalog lists every duet note, so the archive outgrows 1 MB.
-        { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+        { encoding: "utf8" },
       ),
     ) as {
       badEntry: string | null;
