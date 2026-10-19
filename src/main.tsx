@@ -1001,14 +1001,16 @@ let loading: CloudSync | null = null;
 let currentEmail = "";
 /** This tab's claim on the studio, which only one tab runs at a time. */
 const claim = new StudioClaim(() => {
-  // Another tab took the studio over. The final save joins the upload queue
-  // in browser storage, which that tab sends.
+  // Another tab took the studio over. The final save joins the upload queue,
+  // which is sent from here before syncing stops: browser storage may have
+  // had no room for it, and then the other tab could not send it.
   loading?.stop();
   loading = null;
   if (cloud) {
-    studio.destroy();
-    cloud.stop();
+    const sync = cloud;
     cloud = null;
+    studio.destroy();
+    void sync.flush().finally(() => sync.stop());
   }
   if (currentUser) setGate({ status: "elsewhere" });
 });
@@ -1032,11 +1034,21 @@ async function openSession(userId: string, email: string) {
     return;
   }
   currentEmail = email;
-  if (!(await claim.claim())) {
-    if (currentUser === userId) setGate({ status: "elsewhere" });
+  const claimed = await claim.claim();
+  if (currentUser !== userId) {
+    // A newer auth event moved on while the claim was pending. A lock that
+    // arrived anyway goes to the session now current, or back to other tabs.
+    if (claimed && claim.held && !cloud && !loading)
+      if (!currentUser) claim.give();
+      else if (gate.status === "elsewhere")
+        await openStudio(currentUser, currentEmail);
     return;
   }
-  if (currentUser === userId) await openStudio(userId, email);
+  if (!claimed) {
+    setGate({ status: "elsewhere" });
+    return;
+  }
+  await openStudio(userId, email);
 }
 
 /** Take the studio over from another tab. */

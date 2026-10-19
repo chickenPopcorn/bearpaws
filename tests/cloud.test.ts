@@ -465,6 +465,25 @@ describe("uploading changes", () => {
     expect(queue()).toBeNull();
   });
 
+  it("keeps a known song's waiting save when a full account refuses it at sign-in", async () => {
+    const b = backend();
+    write("owner", USER);
+    write("pending", {
+      owner: USER,
+      progress: { known: { best: 9 }, new: { best: 1 } },
+    });
+    b.progress = [{ song_id: "known", data: { best: 2 } }];
+    b.overQuota = ["new"];
+    const sync = new CloudSync(client(b), USER);
+    await sync.pull();
+    // The account says which songs it has, so only the new one is dropped.
+    expect(b.upserts[0]).toEqual([
+      "progress",
+      [{ user_id: USER, song_id: "known", data: { best: 9 } }],
+    ]);
+    expect(queue()).toBeNull();
+  });
+
   it("adopts only as many songs as the account has room for", async () => {
     const b = backend();
     for (let i = 0; i < 205; i++)

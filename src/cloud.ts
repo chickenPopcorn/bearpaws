@@ -168,6 +168,8 @@ export class CloudSync implements SyncHooks {
     const adopting = !owner;
     if (this.pending) {
       await this.flush();
+      // A full account drops the new songs and leaves the rest to try again.
+      if (this.pending && this.error === FULL_ACCOUNT) await this.flush();
       if (this.pending) throw new Error(RETRYING);
     }
     const [settings, rows] = await Promise.all([
@@ -366,10 +368,22 @@ export class CloudSync implements SyncHooks {
           if (this.queue.progress[id] === data) delete this.queue.progress[id];
         }
       // The account is full: one new song's refusal fails the whole upload,
-      // so drop the new songs and let saves of songs it has go through.
-      else if (quotaReached)
-        for (const [id] of progress)
-          if (!this.syncedProgress.has(id)) delete this.queue.progress[id];
+      // so drop the new songs and let saves of songs it has go through. Ask
+      // the account which songs it has: before pull() reads it, this browser
+      // does not know.
+      else if (quotaReached) {
+        const ids = progress.map(([id]) => id);
+        const existing = await timed(() =>
+          this.client.from("progress").select("song_id").in("song_id", ids),
+        ).catch(() => null);
+        if (existing && !existing.error) {
+          const have = new Set(
+            (existing.data as { song_id: string }[]).map((row) => row.song_id),
+          );
+          for (const id of ids)
+            if (!have.has(id)) delete this.queue.progress[id];
+        } else quotaReached = false;
+      }
       if (this.stopped) return;
       this.savePending();
       if (quotaReached) {
