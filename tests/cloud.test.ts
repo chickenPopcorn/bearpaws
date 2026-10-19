@@ -190,8 +190,13 @@ const marker = () => {
   for (const [key, value] of stored) {
     if (!key.startsWith("cadence:unsynced:")) continue;
     const entry = JSON.parse(value) as { owner?: string; version: string };
-    if (entry.owner) gathered.owners.add(entry.owner);
-    const name = key.slice("cadence:unsynced:".length);
+    let name = key.slice("cadence:unsynced:".length);
+    // Keys name their account first, except an earlier build's.
+    const [first, ...rest] = name.split(":");
+    if (!["settings", "progress", "deleted", "practice"].includes(first)) {
+      gathered.owners.add(first);
+      name = rest.join(":");
+    } else if (entry.owner) gathered.owners.add(entry.owner);
     if (name === "settings") gathered.settings = entry.version;
     else if (name.startsWith("progress:"))
       gathered.progress[name.slice("progress:".length)] = entry.version;
@@ -461,6 +466,38 @@ describe("account sync", () => {
     afterGet = null;
     expect(marker().progress).toEqual({ a: "u", b: "v" });
     sync.stop();
+  });
+
+  it("names each marker entry for its account", () => {
+    const OTHER = "22222222-2222-2222-2222-222222222222";
+    const sync = new CloudSync(client(backend()), USER);
+    sync.progress("song", { best: 1, updated: "b" } as never);
+    // A tab of another account, mid-switch, marks the same song.
+    write(`unsynced:${OTHER}:progress:song`, { owner: OTHER, version: "a" });
+    expect(stored.has(`cadence:unsynced:${USER}:progress:song`)).toBe(true);
+    expect(stored.has(`cadence:unsynced:${OTHER}:progress:song`)).toBe(true);
+    sync.stop();
+  });
+
+  it("sends a return to the account's copy made while an upload is under way", async () => {
+    const b = backend();
+    write("owner", USER);
+    b.progress = [{ song_id: "song", data: { best: 1 } }];
+    const sync = new CloudSync(client(b), USER);
+    await sync.pull();
+    b.hang = "manual";
+    sync.progress("song", { best: 2 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.calls).toEqual(["upsert progress"]);
+    // Back to what the account had, before that upload lands.
+    sync.progress("song", { best: 1 } as never);
+    b.hang = "no";
+    b.release();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "song", data: { best: 1 } },
+    ]);
+    expect(unsynced().progress).toEqual([]);
   });
 
   it("keeps another tab's unconfirmed changes in the shared marker", async () => {
@@ -784,7 +821,7 @@ describe("account sync", () => {
     sync.practice(session, true);
     // Another tab saves a longer copy of the session before the upload.
     write("practice", [{ ...session, seconds: 50, songs: { ode: 50 } }]);
-    write("unsynced:practice:s1", { owner: USER, version: "000050" });
+    write(`unsynced:${USER}:practice:s1`, { owner: USER, version: "000050" });
     await vi.advanceTimersByTimeAsync(2000);
     expect(b.upserts).toEqual([
       [
@@ -933,6 +970,10 @@ describe("account sync", () => {
     sync.practice(session, true);
     sync.practice({ ...session, seconds: 120, songs: { ode: 120 } }, true);
     expect(unsynced().practice).toEqual(["s1"]);
+    // Under its own key, named for the account.
+    expect(
+      JSON.parse(stored.get(`cadence:unsynced:${USER}:practice:s1`)!),
+    ).toEqual({ owner: USER, version: "000120" });
     await vi.advanceTimersByTimeAsync(2000);
     // Re-sending a session's running total replaces it, never adds to it.
     expect(b.upserts).toEqual([
@@ -1351,7 +1392,7 @@ describe("account sync", () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect(marker().practice).toEqual({ s1: "000030" });
     // Another tab saves a longer copy of the session while this upload runs.
-    write("unsynced:practice:s1", { owner: USER, version: "000045" });
+    write(`unsynced:${USER}:practice:s1`, { owner: USER, version: "000045" });
     b.release();
     await vi.advanceTimersByTimeAsync(0);
     // This upload confirmed only its own, shorter copy.

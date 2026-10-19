@@ -147,16 +147,32 @@ const unversioned = (ids: unknown[]) =>
   Object.fromEntries(ids.map((id) => [String(id), ""]));
 
 /**
- * Each marker entry is stored under its own key (unsynced:settings,
- * unsynced:progress:<song id>, unsynced:deleted:<song id>), so tabs saving
- * different songs never overwrite each other's entries.
+ * Each marker entry is stored under its own key, named for its account and
+ * what it marks (unsynced:<user id>:settings, unsynced:<user id>:progress:<song
+ * id>, unsynced:<user id>:deleted:<song id>). Tabs saving different songs, or
+ * tabs of two accounts during a switch, never overwrite each other's entries.
  */
 const MARKER = "unsynced:";
 interface MarkerEntry {
-  /** The account it belongs to; entries from earlier builds name none. */
+  /** The account it belongs to; entries from earlier builds may name none. */
   owner?: string;
   version: string;
 }
+/** A stored entry: its storage key, account and what it marks. */
+interface StoredEntry {
+  key: string;
+  owner?: string;
+  /**
+   * "settings", "progress:<song id>", "deleted:<song id>" or
+   * "practice:<session id>".
+   */
+  kind: string;
+  version: string;
+}
+const KINDS = ["settings", "progress", "deleted", "practice"];
+/** The storage key of an entry; one without an account is an earlier build's. */
+const entryKey = (owner: string | undefined, kind: string) =>
+  owner ? `${MARKER}${owner}:${kind}` : MARKER + kind;
 
 /** The single marker earlier builds kept, as a marker. */
 function legacyMarker(stored: Record<string, unknown>): Unsynced {
@@ -189,8 +205,8 @@ function legacyMarker(stored: Record<string, unknown>): Unsynced {
 
 /** Store `marker`'s entries for `owner`. False if storage refused one. */
 function putMarker(marker: Unsynced, owner: string | undefined): boolean {
-  const put = (key: string, version: string) =>
-    write(MARKER + key, { owner, version } satisfies MarkerEntry);
+  const put = (kind: string, version: string) =>
+    write(entryKey(owner, kind), { owner, version } satisfies MarkerEntry);
   let ok = marker.settings === undefined || put("settings", marker.settings);
   for (const [id, version] of Object.entries(marker.progress))
     ok = put(`progress:${id}`, version) && ok;
@@ -202,8 +218,8 @@ function putMarker(marker: Unsynced, owner: string | undefined): boolean {
   return ok;
 }
 
-/** Every marker entry, by its key after "unsynced:". */
-function markerEntries(): Map<string, MarkerEntry> {
+/** Every stored marker entry. */
+function markerEntries(): StoredEntry[] {
   // An earlier build's single marker moves into entries first.
   const legacy = read<Record<string, unknown> | null>("unsynced", null);
   if (legacy) {
@@ -213,11 +229,20 @@ function markerEntries(): Map<string, MarkerEntry> {
         remove("unsynced");
       } catch {}
   }
-  const entries = new Map<string, MarkerEntry>();
+  const entries: StoredEntry[] = [];
   for (const key of storedKeys(MARKER)) {
     const entry = read<MarkerEntry | null>(key, null);
-    if (entry && typeof entry.version === "string")
-      entries.set(key.slice(MARKER.length), entry);
+    if (!entry || typeof entry.version !== "string") continue;
+    const rest = key.slice(MARKER.length);
+    const [first, ...more] = rest.split(":");
+    // Keys without an account come from an earlier build.
+    const owned = !KINDS.includes(first);
+    entries.push({
+      key,
+      owner: owned ? first : entry.owner,
+      kind: owned ? more.join(":") : rest,
+      version: entry.version,
+    });
   }
   return entries;
 }
@@ -225,15 +250,22 @@ function markerEntries(): Map<string, MarkerEntry> {
 /** The marker entries of `owner`, with any that name no account. */
 function readUnsynced(owner: string): Unsynced {
   const marker: Unsynced = { owner, progress: {}, deleted: {}, practice: {} };
-  for (const [key, entry] of markerEntries()) {
+  const later = (a: string | undefined, b: string) =>
+    a !== undefined && a > b ? a : b;
+  for (const entry of markerEntries()) {
     if (entry.owner && entry.owner !== owner) continue;
-    if (key === "settings") marker.settings = entry.version;
-    else if (key.startsWith("progress:"))
-      marker.progress[key.slice("progress:".length)] = entry.version;
-    else if (key.startsWith("deleted:"))
-      marker.deleted[key.slice("deleted:".length)] = entry.version;
-    else if (key.startsWith("practice:"))
-      marker.practice[key.slice("practice:".length)] = entry.version;
+    const { kind, version } = entry;
+    if (kind === "settings") marker.settings = version;
+    else if (kind.startsWith("progress:")) {
+      const id = kind.slice("progress:".length);
+      marker.progress[id] = later(marker.progress[id], version);
+    } else if (kind.startsWith("deleted:")) {
+      const id = kind.slice("deleted:".length);
+      marker.deleted[id] = later(marker.deleted[id], version);
+    } else if (kind.startsWith("practice:")) {
+      const id = kind.slice("practice:".length);
+      marker.practice[id] = later(marker.practice[id], version);
+    }
   }
   return marker;
 }
@@ -241,15 +273,22 @@ function readUnsynced(owner: string): Unsynced {
 /** The accounts that marker entries name. */
 function markerOwners(): Set<string> {
   const owners = new Set<string>();
-  for (const entry of markerEntries().values())
-    if (entry.owner) owners.add(entry.owner);
+  for (const entry of markerEntries()) if (entry.owner) owners.add(entry.owner);
   return owners;
 }
 
-/** Remove `owner`'s marker entries. */
-function dropMarker(owner: string) {
-  for (const [key, entry] of markerEntries())
-    if (entry.owner === owner) remove(MARKER + key);
+/**
+ * Remove `owner`'s marker entries, or just its entry for `kind`, which also
+ * takes an earlier build's entry for it that names no account.
+ */
+function dropMarker(owner: string, kind?: string) {
+  for (const entry of markerEntries())
+    if (
+      kind === undefined
+        ? entry.owner === owner
+        : entry.kind === kind && (entry.owner === owner || !entry.owner)
+    )
+      remove(entry.key);
 }
 
 /**
@@ -650,7 +689,8 @@ export class CloudSync implements SyncHooks {
 
   settings(settings: Settings, stored = true) {
     if (this.stopped) return;
-    if (canon(settings) === this.syncedSettings) {
+    // An upload under way carries something else, so going back is a change.
+    if (canon(settings) === this.syncedSettings && !this.inFlight?.settings) {
       // Back where the account is, such as a selection restored once
       // imported songs load: what was waiting is no longer a change.
       if (this.pendingSettings) {
@@ -684,6 +724,7 @@ export class CloudSync implements SyncHooks {
     if (
       !this.pendingProgress.has(songId) &&
       !this.pendingDeletes.has(songId) &&
+      !(this.inFlight && songId in this.inFlight.progress) &&
       canon(progress) === this.syncedProgress.get(songId)
     )
       return;
@@ -784,13 +825,13 @@ export class CloudSync implements SyncHooks {
     const before = exact ? readUnsynced(this.userId) : stored;
     try {
       if (before.settings !== undefined && settings === undefined)
-        remove(`${MARKER}settings`);
+        dropMarker(this.userId, "settings");
       for (const id of Object.keys(before.progress))
-        if (!(id in progress)) remove(`${MARKER}progress:${id}`);
+        if (!(id in progress)) dropMarker(this.userId, `progress:${id}`);
       for (const id of Object.keys(before.deleted))
-        if (!(id in deleted)) remove(`${MARKER}deleted:${id}`);
+        if (!(id in deleted)) dropMarker(this.userId, `deleted:${id}`);
       for (const id of Object.keys(before.practice))
-        if (!(id in practice)) remove(`${MARKER}practice:${id}`);
+        if (!(id in practice)) dropMarker(this.userId, `practice:${id}`);
     } catch {
       return false;
     }
