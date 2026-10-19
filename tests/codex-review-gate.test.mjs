@@ -901,7 +901,7 @@ describe("Codex review merge gate", () => {
   );
 
   it("accepts null unresolved metadata only with complete resolved Codex finding threads", async () => {
-    const { run, github, threadGraphql, get } = setupFallback();
+    const { run, threadGraphql, get } = setupFallback();
     threadGraphql.mockResolvedValue(threadPage());
     await expect(run()).resolves.toMatchObject({ state: "success" });
     expect(threadGraphql).toHaveBeenCalledTimes(1);
@@ -1369,7 +1369,7 @@ describe("Codex review merge gate", () => {
   it.each([false, true])(
     "unresolved Codex threads fail even when outdated=%s",
     async (isOutdated) => {
-      const { run, github, threadGraphql } = setupFallback();
+      const { run, threadGraphql } = setupFallback();
       threadGraphql.mockResolvedValue(
         threadPage([
           reviewThread(),
@@ -1383,7 +1383,7 @@ describe("Codex review merge gate", () => {
   it("includes unmarked unresolved Codex threads once findings provenance is established", async () => {
     const unmarked = reviewThread({ isResolved: false });
     unmarked.comments.nodes[0].body = "Another Codex thread";
-    const { run, github, threadGraphql } = setupFallback();
+    const { run, threadGraphql } = setupFallback();
     threadGraphql.mockResolvedValue(threadPage([reviewThread(), unmarked]));
     await expect(run()).resolves.toMatchObject({ state: "failure" });
   });
@@ -1413,7 +1413,7 @@ describe("Codex review merge gate", () => {
   ])(
     "requires at least one proven Codex finding, not merely an empty clean thread list",
     async ({ threads }) => {
-      const { run, github, threadGraphql } = setupFallback();
+      const { run, threadGraphql } = setupFallback();
       threadGraphql.mockResolvedValue(threadPage(threads));
       await expect(run()).resolves.toMatchObject({ state: "pending" });
     },
@@ -1430,13 +1430,13 @@ describe("Codex review merge gate", () => {
   ])("rejects spoofed finding authors: %j", async (author) => {
     const thread = reviewThread();
     thread.comments.nodes[0].author = author;
-    const { run, github, threadGraphql } = setupFallback();
+    const { run, threadGraphql } = setupFallback();
     threadGraphql.mockResolvedValue(threadPage([thread]));
     await expect(run()).resolves.toMatchObject({ state: "pending" });
   });
 
   it("reads all thread pages before passing and checks later unresolved findings", async () => {
-    const { run, github, threadGraphql } = setupFallback();
+    const { run, threadGraphql } = setupFallback();
     threadGraphql
       .mockResolvedValueOnce(threadPage([reviewThread()], true, "page-2"))
       .mockResolvedValueOnce(
@@ -1451,7 +1451,7 @@ describe("Codex review merge gate", () => {
   });
 
   it("accepts resolved findings only after every page finishes successfully", async () => {
-    const { run, github, threadGraphql } = setupFallback();
+    const { run, threadGraphql } = setupFallback();
     threadGraphql
       .mockResolvedValueOnce(threadPage([reviewThread()], true, "next"))
       .mockResolvedValueOnce(threadPage([reviewThread({ isOutdated: true })]));
@@ -1492,7 +1492,7 @@ describe("Codex review merge gate", () => {
   ])(
     "fails closed for partial or malformed thread responses: %j",
     async (response) => {
-      const { run, github, threadGraphql, publish } = setupFallback();
+      const { run, threadGraphql, publish } = setupFallback();
       threadGraphql.mockResolvedValue(response);
       await expect(run()).rejects.toThrow();
       expect(publish).toHaveBeenLastCalledWith(
@@ -1505,7 +1505,7 @@ describe("Codex review merge gate", () => {
   );
 
   it("fails closed if a later thread page errors after resolved findings were read", async () => {
-    const { run, github, threadGraphql, publish } = setupFallback();
+    const { run, threadGraphql, publish } = setupFallback();
     threadGraphql
       .mockResolvedValueOnce(threadPage([reviewThread()], true, "next"))
       .mockRejectedValueOnce(new Error("GraphQL unavailable"));
@@ -1519,7 +1519,7 @@ describe("Codex review merge gate", () => {
   });
 
   it("fails closed if pagination repeats a cursor", async () => {
-    const { run, github, threadGraphql } = setupFallback();
+    const { run, threadGraphql } = setupFallback();
     threadGraphql.mockResolvedValue(threadPage([reviewThread()], true, "loop"));
     await expect(run()).rejects.toThrow("pagination");
     expect(threadGraphql).toHaveBeenCalledTimes(2);
@@ -1528,8 +1528,7 @@ describe("Codex review merge gate", () => {
   it.each(["head", "base", "closed"])(
     "rechecks the PR after thread resolution when its %s changes",
     async (change) => {
-      const { run, github, threadGraphql, get, pullRequest, publish } =
-        setupFallback();
+      const { run, threadGraphql, get, pullRequest, publish } = setupFallback();
       const current =
         change === "head"
           ? { ...pullRequest, head: { sha: OLD_HEAD } }

@@ -16,7 +16,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
+      # Fails when coverage falls below the floor in vite.config.ts.
+      - run: npm run test:coverage
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: npm run build
         env:
