@@ -77,14 +77,29 @@ function client(b: Backend) {
       );
     },
   });
-  const pages = (rows: () => unknown[]) => ({
-    order: () => ({
-      range: async (from: number, to: number) => {
-        await b.readGate;
-        return reply(rows().slice(from, to + 1));
-      },
-    }),
-  });
+  /** A query that sorts and pages by `column`, as the Data API does. */
+  const ordered =
+    (rows: () => Record<string, unknown>[]) => (column: string) => {
+      let after: string | undefined;
+      let count = Infinity;
+      const query = {
+        gt: (_column: string, value: string) => ((after = value), query),
+        limit: (n: number) => ((count = n), query),
+        then: (
+          resolve: (value: unknown) => unknown,
+          reject: (error: unknown) => unknown,
+        ) =>
+          (async () => {
+            await b.readGate;
+            const key = (row: Record<string, unknown>) => String(row[column]);
+            const sorted = [...rows()]
+              .sort((x, y) => (key(x) < key(y) ? -1 : 1))
+              .filter((row) => after === undefined || key(row) > after);
+            return reply(sorted.slice(0, count));
+          })().then(resolve, reject),
+      };
+      return query;
+    };
   const fake = {
     from: (table: "settings" | "progress" | "practice_sessions") => ({
       select: () => ({
@@ -94,9 +109,12 @@ function client(b: Backend) {
             ? reply(null, { message: "offline" })
             : reply(b[table][0] ?? null);
         },
-        ...pages(() => b[table]),
-        gte: (_column: "day", since: string) =>
-          pages(() => b.practice_sessions.filter((row) => row.day >= since)),
+        order: ordered(() => b[table]),
+        gte: (_column: "day", since: string) => ({
+          order: ordered(() =>
+            b.practice_sessions.filter((row) => row.day >= since),
+          ),
+        }),
       }),
       upsert: (rows: unknown) => write(`upsert ${table}`, [table, rows]),
       delete: () => ({
@@ -145,13 +163,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const unsynced = () =>
+/** The stored marker: which settings, songs and sessions are unconfirmed. */
+const marker = () =>
   read<{
-    settings?: boolean;
-    progress?: string[];
+    settings?: string;
+    progress?: Record<string, string>;
     deleted?: string[];
-    practice?: string[];
+    practice?: Record<string, string>;
   }>("unsynced", {});
+const unsynced = () => {
+  const stored = marker();
+  return {
+    settings: !!stored.settings,
+    progress: Object.keys(stored.progress ?? {}),
+    deleted: stored.deleted ?? [],
+    practice: Object.keys(stored.practice ?? {}),
+  };
+};
 
 describe("account sync", () => {
   it("lets this browser's unconfirmed changes win, and the account decide the rest", async () => {
@@ -333,6 +361,32 @@ describe("account sync", () => {
     ]);
   });
 
+  it("keeps another tab's newer save of a song when an older upload lands", async () => {
+    const b = backend();
+    const tabA = new CloudSync(client(b), USER);
+    const tabB = new CloudSync(client(b), USER);
+    const older = "2026-10-19T01:00:00.000Z",
+      newer = "2026-10-19T01:00:05.000Z";
+    b.hang = "manual";
+    tabA.progress("song", { best: 1, updated: older } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.calls).toEqual(["upsert progress"]);
+    tabB.progress("song", { best: 2, updated: newer } as never);
+    expect(marker().progress).toEqual({ song: newer });
+    b.hang = "no";
+    b.release();
+    await vi.advanceTimersByTimeAsync(0);
+    // Tab A confirmed only its older save.
+    expect(marker().progress).toEqual({ song: newer });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "song", data: { best: 2, updated: newer } },
+    ]);
+    expect(marker().progress).toEqual({});
+    tabA.stop();
+    tabB.stop();
+  });
+
   it("keeps another tab's unconfirmed changes in the shared marker", async () => {
     const b = backend();
     const tabA = new CloudSync(client(b), USER);
@@ -385,12 +439,16 @@ describe("account sync", () => {
 
   it("gives up on a request that does not answer", async () => {
     const api = client(backend());
-    const hang = { order: () => ({ range: () => new Promise(() => {}) }) };
+    const hang = {
+      gt: () => hang,
+      limit: () => hang,
+      then: () => new Promise(() => {}),
+    };
     api.from = (() => ({
       select: () => ({
         maybeSingle: () => new Promise(() => {}),
-        ...hang,
-        gte: () => hang,
+        order: () => hang,
+        gte: () => ({ order: () => hang }),
       }),
     })) as never;
     const pull = new CloudSync(api, USER).pull();
@@ -774,12 +832,71 @@ describe("account sync", () => {
       data: { best: i % 100 },
     }));
     write("progress:song-2400", { best: 1 });
-    await new CloudSync(client(b), USER).pull();
+    // Another device removes an early song between the first two pages.
+    const api = client(b);
+    const from = api.from;
+    let reads = 0;
+    api.from = ((table: "progress") => {
+      if (table === "progress" && ++reads === 2)
+        b.progress = b.progress.filter((row) => row.song_id !== "song-0000");
+      return from(table);
+    }) as never;
+    await new CloudSync(api, USER).pull();
     expect(read("progress:song-2400", {})).toEqual({ best: 0 });
     expect(read("progress:song-0001", {})).toEqual({ best: 1 });
+    // Every song still in the account arrives, none skipped by the removal.
+    expect(read("progress:song-1000", {})).toEqual({ best: 0 });
     expect(
       [...stored.keys()].filter((key) => key.startsWith("cadence:progress:")),
     ).toHaveLength(2500);
+  });
+
+  it("reads every page of recent practice", async () => {
+    const b = backend();
+    write("owner", USER);
+    const today = localDay(new Date());
+    b.practice_sessions = [
+      ...Array.from({ length: 2100 }, (_, i) => ({
+        id: `s-${String(i).padStart(4, "0")}`,
+        day: today,
+        started_at: "x",
+        seconds: 60,
+        songs: {},
+      })),
+      {
+        id: "s-old",
+        day: "2000-01-01",
+        started_at: "x",
+        seconds: 60,
+        songs: {},
+      },
+    ];
+    await new CloudSync(client(b), USER).pull();
+    const sessions = read<{ id: string }[]>("practice", []);
+    expect(sessions).toHaveLength(2100);
+    expect(sessions.some((s) => s.id === "s-old")).toBe(false);
+  });
+
+  it("keeps a newer copy of a session that another tab marked during an upload", async () => {
+    const b = backend();
+    const sync = new CloudSync(client(b), USER);
+    const session = {
+      id: "s1",
+      day: "2026-10-18",
+      startedAt: "2026-10-18T10:00:00.000Z",
+      seconds: 30,
+      songs: { song: 30 },
+    };
+    b.hang = "manual";
+    sync.practice(session, true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(marker().practice).toEqual({ s1: "000030" });
+    // Another tab saves a longer copy of the session while this upload runs.
+    write("unsynced", { ...marker(), practice: { s1: "000045" } });
+    b.release();
+    await vi.advanceTimersByTimeAsync(0);
+    // This upload confirmed only its own, shorter copy.
+    expect(marker().practice).toEqual({ s1: "000045" });
   });
 
   it("sends nothing more once stopped", async () => {

@@ -6,6 +6,9 @@
 // ./library holds index.json and songs/<id>.json + songs/<id>.mid. To add a
 // song, put its MIDI file at songs/<id>.mid and list it in index.json with an
 // id, title and collection: push converts the MIDI into songs/<id>.json.
+// Each song file records the hash of the MIDI file it was built from
+// (`sourceMidi`), and push refuses a MIDI file the song file was not built
+// from, so practice and the Download button always agree.
 // The bucket names each file after its content hash (songs/<id>.<hash>.json),
 // so browsers can keep it for a year: a changed song gets a new name. A file
 // the index stops listing is removed 24 hours later (see retired.json).
@@ -27,8 +30,11 @@ const BRIEF = "60";
  * be loading it from an index fetched just before the push.
  */
 const RETIRE_MS = 24 * 60 * 60 * 1000;
-/** songs/<id>.<hash>.json -> songs/<id>.json */
-const plainName = (path) => path.replace(/\.[0-9a-f]{16}(\.\w+)$/, "$1");
+/**
+ * The working copy's name for a song's file. It comes from the id, since an
+ * id may itself end in what looks like a hash.
+ */
+const plainName = (id, key) => `songs/${id}.${key === "song" ? "json" : "mid"}`;
 const command = process.argv[2];
 if (command !== "pull" && command !== "push") {
   console.error("Usage: node scripts/library.mjs pull|push");
@@ -71,7 +77,7 @@ async function pull(publicUrl, validateIndex) {
     for (const key of ["song", "midi"]) {
       if (!entry[key]) continue;
       const original = entry[key];
-      entry[key] = plainName(entry[key]);
+      entry[key] = plainName(entry.id, key);
       // validateIndex allows only songs/<id>.json and .mid; check again here,
       // since this writes into the repository.
       const target = resolve(FOLDER, entry[key]);
@@ -96,8 +102,8 @@ async function push(bucket, validateIndex, validateSong) {
   // The working copy uses plain names. One copied from the live index has
   // hashes; drop them, so each published name carries exactly one.
   for (const entry of index.songs) {
-    entry.song = plainName(entry.song);
-    if (entry.midi) entry.midi = plainName(entry.midi);
+    entry.song = plainName(entry.id, "song");
+    if (entry.midi) entry.midi = plainName(entry.id, "midi");
   }
   const hash = (bytes) =>
     createHash("sha256").update(bytes).digest("hex").slice(0, 16);
@@ -136,15 +142,39 @@ async function push(bucket, validateIndex, validateSong) {
     const midiPath = entry.midi && `${FOLDER}/${entry.midi}`;
     if (midiPath && !existsSync(midiPath))
       throw new Error(`${entry.id}: missing ${midiPath}`);
+    const midiBytes = midiPath && readFileSync(midiPath);
     if (!existsSync(songPath)) {
       if (!midiPath) throw new Error(`${entry.id}: missing ${songPath}`);
-      const song = parseSong(
-        new Uint8Array(readFileSync(midiPath)),
-        entry.title,
-        entry.id,
-      );
+      const song = parseSong(new Uint8Array(midiBytes), entry.title, entry.id);
+      song.sourceMidi = hash(midiBytes);
       writeFileSync(songPath, JSON.stringify(song, null, 1) + "\n");
       console.log(`Converted ${midiPath} into ${songPath}`);
+    }
+    if (midiPath) {
+      // The app plays the song file and offers the MIDI file for download,
+      // so the song file must come from this MIDI file.
+      const song = JSON.parse(readFileSync(songPath, "utf8"));
+      const was = before.get(entry.id);
+      if (song.sourceMidi === undefined) {
+        // A song file from before this record: vouch for it only if its
+        // MIDI file is the one already published with it.
+        if (was?.midi && was.midi !== hash(midiBytes))
+          throw new Error(
+            `${entry.id}: ${entry.midi} changed, and ${entry.song} does not ` +
+              `say which MIDI file it was built from. Delete ${entry.song} to ` +
+              `rebuild it from the MIDI file (that drops any lesson details ` +
+              `and fingering), or set its sourceMidi to ${hash(midiBytes)} ` +
+              `once it matches.`,
+          );
+        song.sourceMidi = hash(midiBytes);
+        writeFileSync(songPath, JSON.stringify(song, null, 1) + "\n");
+      } else if (song.sourceMidi !== hash(midiBytes))
+        throw new Error(
+          `${entry.id}: ${entry.song} was built from a different MIDI file ` +
+            `than ${entry.midi}. Update ${entry.song} to match, or delete it ` +
+            `to rebuild it from the MIDI file (that drops any lesson details ` +
+            `and fingering).`,
+        );
     }
     const songBytes = readFileSync(songPath);
     validateSong(JSON.parse(songBytes.toString("utf8")), entry.id);
@@ -154,22 +184,8 @@ async function push(bucket, validateIndex, validateSong) {
     out.song = hashed(entry.song, songBytes);
     files.push([out.song, songBytes, "application/json"]);
     if (midiPath) {
-      const midiBytes = readFileSync(midiPath);
       out.midi = hashed(entry.midi, midiBytes);
       files.push([out.midi, midiBytes, "audio/midi"]);
-      // The app plays the song data and offers the MIDI file for download,
-      // so a new MIDI file with the old song data would make them disagree.
-      const was = before.get(entry.id);
-      if (
-        was?.midi &&
-        was.midi !== hash(midiBytes) &&
-        was.song === hash(songBytes)
-      )
-        throw new Error(
-          `${entry.id}: ${entry.midi} changed but ${entry.song} did not. ` +
-            `Update ${entry.song} to match, or delete it to rebuild it from ` +
-            `the MIDI file (that drops any lesson details and fingering).`,
-        );
     }
   }
 

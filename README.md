@@ -75,8 +75,10 @@ To change the library, run `npm run library:pull`, edit `./library` (ignored by
 git), then run `npm run library:push`. To add a song, put its MIDI file at
 `library/songs/<id>.mid` and add an entry to `library/index.json` with its `id`,
 `title`, `collection`, `song: "songs/<id>.json"` and `midi: "songs/<id>.mid"`;
-push converts the MIDI into the song file. `./library` uses plain names; push
-adds the hashes. Push checks every song before it uploads anything, uploads the
+push converts the MIDI into the song file. Each song file records the hash of
+the MIDI file it was built from (`sourceMidi`), and push refuses a MIDI file
+that a song file was not built from. `./library` uses plain names; push adds
+the hashes. Push checks every song before it uploads anything, uploads the
 index last, and removes a file only 24 hours after the index stops listing it,
 since a browser may still be loading it from an earlier index (`retired.json` in
 the bucket records when each file left).
