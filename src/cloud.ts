@@ -5,6 +5,7 @@ import {
   read,
   remove,
   removeProgress,
+  storedKeys,
   write,
   type Progress,
   type Settings,
@@ -145,9 +146,20 @@ const practiceVersion = (session: PracticeSession) =>
 const unversioned = (ids: unknown[]) =>
   Object.fromEntries(ids.map((id) => [String(id), ""]));
 
-/** The marker in browser storage, including the plainer form earlier builds wrote. */
-function readUnsynced(): Unsynced {
-  const stored = read<Record<string, unknown>>("unsynced", {});
+/**
+ * Each marker entry is stored under its own key (unsynced:settings,
+ * unsynced:progress:<song id>, unsynced:deleted:<song id>), so tabs saving
+ * different songs never overwrite each other's entries.
+ */
+const MARKER = "unsynced:";
+interface MarkerEntry {
+  /** The account it belongs to; entries from earlier builds name none. */
+  owner?: string;
+  version: string;
+}
+
+/** The single marker earlier builds kept, as a marker. */
+function legacyMarker(stored: Record<string, unknown>): Unsynced {
   const { progress, practice } = stored;
   return {
     owner: typeof stored.owner === "string" ? stored.owner : undefined,
@@ -175,6 +187,71 @@ function readUnsynced(): Unsynced {
   };
 }
 
+/** Store `marker`'s entries for `owner`. False if storage refused one. */
+function putMarker(marker: Unsynced, owner: string | undefined): boolean {
+  const put = (key: string, version: string) =>
+    write(MARKER + key, { owner, version } satisfies MarkerEntry);
+  let ok = marker.settings === undefined || put("settings", marker.settings);
+  for (const [id, version] of Object.entries(marker.progress))
+    ok = put(`progress:${id}`, version) && ok;
+  for (const [id, at] of Object.entries(marker.deleted))
+    ok = put(`deleted:${id}`, at) && ok;
+  // Stashes from earlier builds carry no practice entries.
+  for (const [id, version] of Object.entries(marker.practice ?? {}))
+    ok = put(`practice:${id}`, version) && ok;
+  return ok;
+}
+
+/** Every marker entry, by its key after "unsynced:". */
+function markerEntries(): Map<string, MarkerEntry> {
+  // An earlier build's single marker moves into entries first.
+  const legacy = read<Record<string, unknown> | null>("unsynced", null);
+  if (legacy) {
+    const marker = legacyMarker(legacy);
+    if (putMarker(marker, marker.owner))
+      try {
+        remove("unsynced");
+      } catch {}
+  }
+  const entries = new Map<string, MarkerEntry>();
+  for (const key of storedKeys(MARKER)) {
+    const entry = read<MarkerEntry | null>(key, null);
+    if (entry && typeof entry.version === "string")
+      entries.set(key.slice(MARKER.length), entry);
+  }
+  return entries;
+}
+
+/** The marker entries of `owner`, with any that name no account. */
+function readUnsynced(owner: string): Unsynced {
+  const marker: Unsynced = { owner, progress: {}, deleted: {}, practice: {} };
+  for (const [key, entry] of markerEntries()) {
+    if (entry.owner && entry.owner !== owner) continue;
+    if (key === "settings") marker.settings = entry.version;
+    else if (key.startsWith("progress:"))
+      marker.progress[key.slice("progress:".length)] = entry.version;
+    else if (key.startsWith("deleted:"))
+      marker.deleted[key.slice("deleted:".length)] = entry.version;
+    else if (key.startsWith("practice:"))
+      marker.practice[key.slice("practice:".length)] = entry.version;
+  }
+  return marker;
+}
+
+/** The accounts that marker entries name. */
+function markerOwners(): Set<string> {
+  const owners = new Set<string>();
+  for (const entry of markerEntries().values())
+    if (entry.owner) owners.add(entry.owner);
+  return owners;
+}
+
+/** Remove `owner`'s marker entries. */
+function dropMarker(owner: string) {
+  for (const [key, entry] of markerEntries())
+    if (entry.owner === owner) remove(MARKER + key);
+}
+
 /**
  * One account's changes its account has not confirmed, set aside when another
  * account signs in on this browser, until the first signs in again.
@@ -192,7 +269,7 @@ interface Stash {
  * for it (the later save of a song wins). False if storage refused it.
  */
 function stashUnsent(owner: string): boolean {
-  const marker = readUnsynced();
+  const marker = readUnsynced(owner);
   const songs = Object.keys(marker.progress);
   const unsent = storedSessions().filter(
     (session) => session.id in marker.practice,
@@ -346,7 +423,8 @@ export class CloudSync implements SyncHooks {
         if ((sessions.get(session.id)?.seconds ?? -1) < session.seconds)
           sessions.set(session.id, session);
       store("practice", [...sessions.values()]);
-      store("unsynced", stash.marker);
+      if (!putMarker(stash.marker, this.userId))
+        throw new BrowserStorageError();
       store("owner", this.userId);
       // Now in the working copy, marked unconfirmed, where a failed pull
       // retries from: the stash must not come back later and win again.
@@ -526,10 +604,17 @@ export class CloudSync implements SyncHooks {
    * another account wrote after a switch is set aside for that account.
    */
   private ownMarker(): Unsynced | null {
-    const marker = readUnsynced();
-    if (!marker.owner || marker.owner === this.userId) return marker;
-    // Null, leaving that marker in place, if it cannot be set aside.
-    return stashUnsent(marker.owner) ? EMPTY_UNSYNCED : null;
+    for (const other of markerOwners()) {
+      if (other === this.userId) continue;
+      // Null, leaving those entries in place, if they cannot be set aside.
+      if (!stashUnsent(other)) return null;
+      try {
+        dropMarker(other);
+      } catch {
+        return null;
+      }
+    }
+    return readUnsynced(this.userId);
   }
 
   /**
@@ -693,13 +778,35 @@ export class CloudSync implements SyncHooks {
         if (deleted[id] > progress[id]) delete progress[id];
         else delete deleted[id];
       }
-    return write("unsynced", {
-      owner: this.userId,
-      settings,
-      progress,
-      deleted,
-      practice,
-    } satisfies Unsynced);
+    // Write each entry under its own key, and remove only the entries of
+    // this account (or of none) that this decided to drop: another tab's
+    // entries for other songs are never touched.
+    const before = exact ? readUnsynced(this.userId) : stored;
+    try {
+      if (before.settings !== undefined && settings === undefined)
+        remove(`${MARKER}settings`);
+      for (const id of Object.keys(before.progress))
+        if (!(id in progress)) remove(`${MARKER}progress:${id}`);
+      for (const id of Object.keys(before.deleted))
+        if (!(id in deleted)) remove(`${MARKER}deleted:${id}`);
+      for (const id of Object.keys(before.practice))
+        if (!(id in practice)) remove(`${MARKER}practice:${id}`);
+    } catch {
+      return false;
+    }
+    const changed: Unsynced = {
+      settings: settings !== before.settings ? settings : undefined,
+      progress: Object.fromEntries(
+        Object.entries(progress).filter(([id, v]) => before.progress[id] !== v),
+      ),
+      deleted: Object.fromEntries(
+        Object.entries(deleted).filter(([id, v]) => before.deleted[id] !== v),
+      ),
+      practice: Object.fromEntries(
+        Object.entries(practice).filter(([id, v]) => before.practice[id] !== v),
+      ),
+    };
+    return putMarker(changed, this.userId);
   }
 
   private schedule(delay = DEBOUNCE_MS) {
@@ -916,7 +1023,7 @@ export class CloudSync implements SyncHooks {
     await this.flush();
     // The marker also covers changes from before a sign-in that never
     // finished loading, which this sync has not queued.
-    const marker = readUnsynced();
+    const marker = readUnsynced(this.userId);
     const unsent =
       this.pending ||
       !!marker.settings ||

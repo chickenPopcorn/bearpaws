@@ -164,7 +164,7 @@ beforeEach(() => {
     },
     setItem: (key: string, value: string) => {
       if (storageBlocked) throw new DOMException("Blocked", "SecurityError");
-      if (key === refusedKey)
+      if (refusedKey && key.startsWith(refusedKey))
         throw new DOMException("Full", "QuotaExceededError");
       stored.set(key, value);
     },
@@ -178,14 +178,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** The stored marker: which settings, songs and sessions are unconfirmed. */
-const marker = () =>
-  read<{
-    settings?: string;
-    progress?: Record<string, string>;
-    deleted?: Record<string, string>;
-    practice?: Record<string, string>;
-  }>("unsynced", {});
+/** The stored marker entries, gathered: versions by song and session, and their owners. */
+const marker = () => {
+  const gathered = {
+    settings: undefined as string | undefined,
+    progress: {} as Record<string, string>,
+    deleted: {} as Record<string, string>,
+    practice: {} as Record<string, string>,
+    owners: new Set<string>(),
+  };
+  for (const [key, value] of stored) {
+    if (!key.startsWith("cadence:unsynced:")) continue;
+    const entry = JSON.parse(value) as { owner?: string; version: string };
+    if (entry.owner) gathered.owners.add(entry.owner);
+    const name = key.slice("cadence:unsynced:".length);
+    if (name === "settings") gathered.settings = entry.version;
+    else if (name.startsWith("progress:"))
+      gathered.progress[name.slice("progress:".length)] = entry.version;
+    else if (name.startsWith("deleted:"))
+      gathered.deleted[name.slice("deleted:".length)] = entry.version;
+    else gathered.practice[name.slice("practice:".length)] = entry.version;
+  }
+  return gathered;
+};
 const unsynced = () => {
   const stored = marker();
   return {
@@ -271,7 +286,7 @@ describe("account sync", () => {
   it("adopts again after a first pull that could not save its marker", async () => {
     const b = backend();
     write("progress:only-here", { best: 4 });
-    refusedKey = "cadence:unsynced";
+    refusedKey = "cadence:unsynced:";
     await expect(new CloudSync(client(b), USER).pull()).rejects.toBeInstanceOf(
       BrowserStorageError,
     );
@@ -431,6 +446,21 @@ describe("account sync", () => {
     expect(b.upserts.at(-1)?.[1]).toEqual([
       { user_id: USER, song_id: "song", data: { best: 6, updated: later } },
     ]);
+  });
+
+  it("keeps an entry another tab writes while this one updates the marker", async () => {
+    const sync = new CloudSync(client(backend()), USER);
+    let injected = false;
+    afterGet = (key) => {
+      if (injected || !key.startsWith("cadence:unsynced")) return;
+      injected = true;
+      // Another tab saves a different song between this tab's read and write.
+      write("unsynced:progress:b", { owner: USER, version: "v" });
+    };
+    sync.progress("a", { best: 1, updated: "u" } as never);
+    afterGet = null;
+    expect(marker().progress).toEqual({ a: "u", b: "v" });
+    sync.stop();
   });
 
   it("keeps another tab's unconfirmed changes in the shared marker", async () => {
@@ -636,7 +666,11 @@ describe("account sync", () => {
     await expect(
       new CloudSync(client(backend()), USER).pull(),
     ).rejects.toBeInstanceOf(BrowserStorageError);
-    expect(read("unsynced", null)).toEqual(foreign);
+    // Still there, and still the other account's.
+    expect(marker()).toMatchObject({
+      progress: { theirs: "t" },
+      owners: new Set([OTHER]),
+    });
   });
 
   it("lets a later removal win when setting changes aside again", async () => {
@@ -750,7 +784,7 @@ describe("account sync", () => {
     sync.practice(session, true);
     // Another tab saves a longer copy of the session before the upload.
     write("practice", [{ ...session, seconds: 50, songs: { ode: 50 } }]);
-    write("unsynced", { ...marker(), practice: { s1: "000050" } });
+    write("unsynced:practice:s1", { owner: USER, version: "000050" });
     await vi.advanceTimersByTimeAsync(2000);
     expect(b.upserts).toEqual([
       [
@@ -1317,7 +1351,7 @@ describe("account sync", () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect(marker().practice).toEqual({ s1: "000030" });
     // Another tab saves a longer copy of the session while this upload runs.
-    write("unsynced", { ...marker(), practice: { s1: "000045" } });
+    write("unsynced:practice:s1", { owner: USER, version: "000045" });
     b.release();
     await vi.advanceTimersByTimeAsync(0);
     // This upload confirmed only its own, shorter copy.
