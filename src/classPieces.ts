@@ -972,10 +972,10 @@ export const classPieces: readonly ClassPiece[] = [
 ];
 
 /**
- * George Bear’s Classes in display order: the single source for the built-in
- * song order and the collection. Dancing Raindrops (built in lessons.ts) stays
- * first because it is not from Recital Book 3; the book pieces follow in
- * book order.
+ * Music Recital Book 3 in display order: the single source for the built-in
+ * song order and George Bear’s Classes. Dancing Raindrops (built in
+ * lessons.ts) is also from the book; its page is not recorded, so it stays
+ * first. The other pieces follow in book order.
  */
 export const georgeClassesOrder: readonly string[] = [
   "cadence-dancing-raindrops-v1",

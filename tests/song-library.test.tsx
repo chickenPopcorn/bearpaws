@@ -4,9 +4,29 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SongLibrary } from "../src/SongLibrary";
 import { builtInSongs } from "../src/lessons";
-import { midiPieces } from "../src/midiPieces";
-import { popsPieces } from "../src/popsPieces";
 import type { Song } from "../src/song";
+
+// Lesson Book 3 has no songs yet, so the tests give both books their own.
+const bookIds = vi.hoisted(() => ({
+  "recital-3": ["cadence-dancing-raindrops-v1", "frere-jacques", "my-waltz"],
+  "lesson-3": ["jasmine-flower", "an-jing", "jingle-bells"],
+}));
+vi.mock("../src/books", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/books")>();
+  const books = actual.books.map((book) => ({
+    ...book,
+    songs: bookIds[book.id],
+  }));
+  const bookForSong = (id: string) =>
+    books.find((book) => book.songs.includes(id)) ?? books[0];
+  return {
+    ...actual,
+    books,
+    bookForSong,
+    songsInBook: (songs: readonly Song[], id: string) =>
+      songs.filter((song) => bookForSong(song.id).id === id),
+  };
+});
 
 type LibraryProps = ComponentProps<typeof SongLibrary>;
 const base = builtInSongs()[0];
@@ -18,12 +38,12 @@ const song = (id: string, title: string, composer?: string): Song => ({
 });
 const songs = [
   song("cadence-dancing-raindrops-v1", "Dancing Raindrops", "Émile Example"),
-  song("cadence-ode-to-joy-v1", "Frère Jacques", "Traditional"),
-  song(popsPieces[0].id, "Jasmine Flower", "Traditional"),
-  song("imported-waltz", "My Waltz"),
+  song("frere-jacques", "Frère Jacques", "Traditional"),
+  song("jasmine-flower", "Jasmine Flower", "Traditional"),
+  song("my-waltz", "My Waltz"),
 ];
 const fullPiano: Song = {
-  ...song(midiPieces[0].id, "安静 · 周杰伦"),
+  ...song("an-jing", "安静 · 周杰伦"),
   source: {
     composer: "周杰伦 · Jay Chou",
     description: "Full piano arrangement without suggested finger numbers.",
@@ -74,7 +94,6 @@ beforeEach(() => {
     songs,
     selected: songs[1].id,
     onSelect: vi.fn(),
-    onImport: vi.fn(),
   };
 });
 afterEach(async () => {
@@ -85,22 +104,42 @@ afterEach(async () => {
 });
 
 describe("song library", () => {
-  it("shows every collection and identifies the selected song and imported files", async () => {
+  it("shows George Bear’s Classes, one section per book, and the selected song", async () => {
     await render();
+    expect(container.querySelector(".nav-label")?.textContent).toBe(
+      "George Bear’s Classes 4",
+    );
+    expect(
+      Array.from(
+        container.querySelectorAll(".library-section-title"),
+        (title) => title.textContent,
+      ),
+    ).toEqual([
+      "Music for Little MozartsMusic Recital Book 3",
+      "Music for Little MozartsMusic Lesson Book 3",
+    ]);
     expect(titles()).toEqual([
       "Dancing Raindrops",
       "Frère Jacques",
       "My Waltz",
       "Jasmine Flower",
     ]);
-    expect(container.querySelectorAll(".library-section")).toHaveLength(3);
     expect(
       container.querySelector(".song[aria-pressed=true]")?.textContent,
     ).toContain("Frère Jacques");
-    expect(groupContent("songs").textContent).toContain(
-      "Imported MIDI · On this browser",
+    expect(container.textContent).not.toContain("Import MIDI");
+    expect(container.textContent).not.toContain("starter MIDI pack");
+  });
+
+  it("shows a book with no songs yet", async () => {
+    await render({
+      songs: songs.filter((s) => bookIds["recital-3"].includes(s.id)),
+    });
+    expect(groupToggle("lesson-3").textContent).toMatch(/Lesson Book 3 *0$/);
+    await click(groupToggle("lesson-3"));
+    expect(groupContent("lesson-3").textContent).toBe(
+      "No songs in this book yet.",
     );
-    expect(container.querySelector(".nav-label span")?.textContent).toBe("4");
   });
 
   it.each([
@@ -155,7 +194,7 @@ describe("song library", () => {
   it("labels source arrangements as full piano without suggesting finger numbers", async () => {
     await render({ songs: [fullPiano], selected: fullPiano.id });
     const button =
-      groupContent("pops").querySelector<HTMLButtonElement>(".song")!;
+      groupContent("lesson-3").querySelector<HTMLButtonElement>(".song")!;
     expect(button.querySelector("small")?.textContent).toBe(
       "Full piano · No finger numbers",
     );
@@ -167,9 +206,9 @@ describe("song library", () => {
   it("keeps a matching source-composer search when revealing the selected arrangement", async () => {
     await render({ songs: [...songs, fullPiano] });
     await type("JAY CHOU");
-    await click(groupToggle("pops"));
+    await click(groupToggle("lesson-3"));
     await render({ selected: fullPiano.id });
-    expect(groupContent("pops").hidden).toBe(false);
+    expect(groupContent("lesson-3").hidden).toBe(false);
     expect(search().value).toBe("JAY CHOU");
     expect(titles()).toEqual([fullPiano.title]);
     expect(
@@ -180,9 +219,9 @@ describe("song library", () => {
   it("clears an unrelated search when revealing a selected source arrangement", async () => {
     await render({ songs: [...songs, fullPiano] });
     await type("waltz");
-    await click(groupToggle("pops"));
+    await click(groupToggle("lesson-3"));
     await render({ selected: fullPiano.id });
-    expect(groupContent("pops").hidden).toBe(false);
+    expect(groupContent("lesson-3").hidden).toBe(false);
     expect(search().value).toBe("");
     expect(titles()).toContain(fullPiano.title);
   });
@@ -191,16 +230,16 @@ describe("song library", () => {
     await render({ selected: songs[0].id, savedSelection: songs[2].id });
     // The saved song loads after the first render, as the library does.
     await render({ selected: songs[2].id });
-    expect(groupContent("pops").hidden).toBe(true);
-    expect(groupContent("classes").hidden).toBe(true);
+    expect(groupContent("lesson-3").hidden).toBe(true);
+    expect(groupContent("recital-3").hidden).toBe(true);
     await render({ selected: songs[0].id });
-    expect(groupContent("classes").hidden).toBe(false);
-    expect(groupContent("pops").hidden).toBe(true);
+    expect(groupContent("recital-3").hidden).toBe(false);
+    expect(groupContent("lesson-3").hidden).toBe(true);
   });
 
-  it("starts with collections folded, toggles each one, and opens all when searching", async () => {
+  it("starts with books folded, toggles each one, and opens all when searching", async () => {
     await render();
-    for (const group of ["classes", "songs", "pops"]) {
+    for (const group of ["recital-3", "lesson-3"]) {
       expect(groupToggle(group).getAttribute("aria-expanded")).toBe("false");
       expect(groupContent(group).hidden).toBe(true);
       await click(groupToggle(group));
@@ -210,7 +249,7 @@ describe("song library", () => {
       expect(groupContent(group).hidden).toBe(true);
     }
     await type("traditional");
-    for (const group of ["classes", "songs", "pops"]) {
+    for (const group of ["recital-3", "lesson-3"]) {
       expect(groupToggle(group).getAttribute("aria-expanded")).toBe("true");
       expect(groupContent(group).hidden).toBe(false);
     }
@@ -220,9 +259,9 @@ describe("song library", () => {
   it("reveals an externally selected song even if its group and search hid it", async () => {
     await render();
     await type("frere");
-    await click(groupToggle("pops"));
+    await click(groupToggle("lesson-3"));
     await render({ selected: songs[2].id });
-    expect(groupContent("pops").hidden).toBe(false);
+    expect(groupContent("lesson-3").hidden).toBe(false);
     expect(search().value).toBe("");
     expect(titles()).toContain("Jasmine Flower");
     expect(
@@ -246,15 +285,13 @@ describe("song library", () => {
     expect(titles()).toEqual(["Frère Jacques", "Jasmine Flower"]);
   });
 
-  it("dispatches selection and import actions with the selected song object", async () => {
+  it("dispatches selection with the selected song object", async () => {
     await render();
     const raindrops = container.querySelector<HTMLButtonElement>(
-      "#library-classes .song",
+      "#library-recital-3 .song",
     )!;
     await click(raindrops);
     expect(props.onSelect).toHaveBeenCalledExactlyOnceWith(songs[0]);
-    await click(container.querySelector<HTMLButtonElement>(".import")!);
-    expect(props.onImport).toHaveBeenCalledOnce();
   });
 
   it("shows search-specific empty results and restores songs after clearing", async () => {
@@ -265,30 +302,19 @@ describe("song library", () => {
       container.querySelectorAll(".library-empty"),
       (element) => element.textContent,
     );
-    expect(messages).toEqual(Array(3).fill("No matches in this section."));
+    expect(messages).toEqual(Array(2).fill("No matches in this book."));
     await type("");
     expect(titles()).toHaveLength(songs.length);
   });
 
-  it("shows an empty-library message while retaining the import action", async () => {
+  it("shows an empty-library message", async () => {
     await render({ songs: [] });
     expect(titles()).toEqual([]);
-    expect(container.textContent).toContain("Songs you add will appear here.");
-    await click(container.querySelector<HTMLButtonElement>(".import")!);
-    expect(props.onImport).toHaveBeenCalledOnce();
+    expect(
+      Array.from(
+        container.querySelectorAll(".library-empty"),
+        (element) => element.textContent,
+      ),
+    ).toEqual(Array(2).fill("No songs in this book yet."));
   });
-
-  it.each(["./", "/practice/"])(
-    "downloads the ZIP using the deployment base %s",
-    async (baseUrl) => {
-      vi.stubEnv("BASE_URL", baseUrl);
-      await render();
-      const link =
-        container.querySelector<HTMLAnchorElement>(".library-download")!;
-      expect(link.getAttribute("href")).toBe(
-        `${baseUrl}midi/cadence-starter-library.zip`,
-      );
-      expect(link.hasAttribute("download")).toBe(true);
-    },
-  );
 });
