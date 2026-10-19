@@ -38,7 +38,7 @@ export function createClickTrack(song: Timing) {
   };
   const beatOf = (time: number) => clock.at(time) - lead;
   const timeOf = (beat: number) => clock.time(beat + lead);
-  return {
+  const track = {
     /** The clicks from `from` up to `to`, in song seconds, in time order. */
     between(from: number, to: number): Click[] {
       const clicks: Click[] = [];
@@ -64,16 +64,19 @@ export function createClickTrack(song: Timing) {
     },
     /**
      * Where a count-in before `position` begins: at the start of its bar, so
-     * the count leads into the music on the beat. When that leaves fewer
-     * than two clicks, as on a bar's first beat, it begins a bar earlier.
+     * the count leads into the music on the beat. While that leaves fewer
+     * than two clicks, as on a bar's first beat or after a bar shortened by
+     * a meter change, it begins a bar earlier.
      */
     countIn(position: number) {
-      const beat = beatOf(position),
-        bar = barAt(beat),
-        before = Math.ceil((beat - bar.start) / bar.unit - 1e-9);
-      return timeOf(before < 2 ? barAt(bar.start - 1e-6).start : bar.start);
+      let start = barAt(beatOf(position)).start;
+      // Each bar back adds at least its first beat, so this soon ends.
+      while (track.between(timeOf(start), position).length < 2)
+        start = barAt(start - 1e-6).start;
+      return timeOf(start);
     },
   };
+  return track;
 }
 export type ClickTrack = ReturnType<typeof createClickTrack>;
 

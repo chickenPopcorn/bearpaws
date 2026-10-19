@@ -82,6 +82,20 @@ describe("metronome clicks", () => {
     // From its second beat, one click is too few: a bar earlier.
     expect(track.countIn(1)).toBeCloseTo(-1.5);
   });
+  it("counts in past a bar that a meter change shortened to one beat", () => {
+    // 4/4 changes to 3/4 after one beat, so the first bar has one click.
+    const track = createClickTrack({
+      ...timing,
+      leadInBeats: 0,
+      timeSignatures: [
+        { tick: 0, numerator: 4, denominator: 4 },
+        { tick: 480, numerator: 3, denominator: 4 },
+      ],
+    });
+    const start = track.countIn(0.5);
+    expect(start).toBeCloseTo(-2);
+    expect(track.between(start, 0.5)).toHaveLength(5);
+  });
   it("counts in at the song's opening tempo", () => {
     // 80 BPM from the first tick, as the library's lessons have it.
     const track = createClickTrack({
