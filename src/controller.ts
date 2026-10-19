@@ -489,7 +489,15 @@ export class Studio {
   /** The metronome turns on and off; playback goes on. */
   click() {
     this.settings.click = !this.settings.click;
-    if (!this.settings.click) this.metronome.stop(this.audio.now());
+    if (!this.settings.click) {
+      const now = this.audio.now();
+      this.metronome.stop(now);
+      // A count-in has nothing left to count: play from here at once.
+      if (this.countIn) {
+        this.countIn = null;
+        this.transport.play(now);
+      }
+    }
     this.persist();
     this.emit();
   }
@@ -540,8 +548,10 @@ export class Studio {
     if (resume) void this.play();
   }
   seek(position: number) {
-    // A count-in starts again from the new position.
-    const counting = this.countIn !== null;
+    // With the metronome on, playback counts in again from the new position,
+    // as Play does. A start still loading or counting in starts over too.
+    const recount = this.clicking && (this.playing || this.playbackPending);
+    if (recount) this.pause();
     this.cancelPlaybackPreparation();
     this.midi.player.stop();
     this.audio.stop(!this.transport.playing);
@@ -557,7 +567,7 @@ export class Studio {
     this.notice = "";
     this.save();
     this.emit();
-    if (counting) void this.play();
+    if (recount) void this.play();
   }
   pause() {
     this.midiRouted = false;
@@ -569,6 +579,8 @@ export class Studio {
     this.position = this.transport.position;
     this.midi.player.stop();
     this.audio.stop();
+    // After the last tick, which can schedule a click ahead.
+    this.metronome.stop(now);
     this.save();
     this.emit();
   }

@@ -2050,6 +2050,42 @@ describe("metronome", () => {
     expect(studio.transport.playing).toBe(true);
     expect(studio.position).toBeCloseTo(1.05);
   });
+  it("plays at once when turned off during the count-in", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    advance(studio, 1);
+    studio.click();
+    expect(studio.transport.playing).toBe(true);
+    advance(studio, 0.5);
+    expect(studio.position).toBeCloseTo(0.5);
+  });
+  it("counts in again after a seek during playback", async () => {
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    run(studio, 2.2);
+    expect(studio.transport.playing).toBe(true);
+    studio.seek(1);
+    await vi.waitFor(() => expect(studio.playing).toBe(true));
+    expect(studio.transport.playing).toBe(false);
+    expect(studio.position).toBe(1);
+    // The bar's first two beats, 1 s, then playback from the seek.
+    advance(studio, 1.05);
+    expect(studio.transport.playing).toBe(false);
+    advance(studio, 0.1);
+    expect(studio.transport.playing).toBe(true);
+    expect(studio.position).toBeCloseTo(1.05);
+  });
+  it("cancels the clicks the last tick before a pause scheduled", async () => {
+    const tick = vi.spyOn(Metronome.prototype, "tick"),
+      stop = vi.spyOn(Metronome.prototype, "stop");
+    const studio = clicking(song([[60, 0.5]]));
+    await studio.play();
+    run(studio, 2.2);
+    studio.pause();
+    const last = (spy: typeof tick | typeof stop) =>
+      spy.mock.invocationCallOrder.at(-1)!;
+    expect(last(stop)).toBeGreaterThan(last(tick));
+  });
   it("carries a count-in on at a new speed", async () => {
     const studio = clicking(song([[60, 0.5]]));
     await studio.play();

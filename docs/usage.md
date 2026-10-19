@@ -105,8 +105,9 @@ the bar up to where playback starts, or the whole bar before it when that
 leaves fewer than two clicks, as on a bar's first beat. From the start of a
 lesson in 4/4 the count is "1, 2, 3", and the song's lead-in beat is "4". The
 music, the score and the waterfall stay still during the count. Pause stops
-it, a seek counts in again from the new place, and a loop goes on to its next
-pass without one. In Rhythm, a note played early as the count ends scores as
+it, a seek counts in again from the new place, even during playback, and a
+loop goes on to its next pass without one. Turning the metronome off during
+the count starts the music at once. In Rhythm, a note played early as the count ends scores as
 early, as it would during playback.
 
 Wait for me has no metronome: the music waits for you there, so there is no
