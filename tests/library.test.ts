@@ -116,6 +116,22 @@ describe("song library", () => {
       /bad note/,
     ],
     [
+      "a time signature over 3",
+      (song: Song) => ({
+        ...song,
+        timeSignatures: [{ tick: 0, numerator: 4, denominator: 3 }],
+      }),
+      /denominator a power of two/,
+    ],
+    [
+      "a note written with a negative length",
+      (song: Song) => ({
+        ...song,
+        notes: [{ ...song.notes[0], notatedBeats: -2 }],
+      }),
+      /bad note/,
+    ],
+    [
       "a silent note",
       (song: Song) => ({
         ...song,
