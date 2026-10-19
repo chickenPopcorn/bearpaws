@@ -360,6 +360,2526 @@
     ]
   },
   {
+    "id": "pawpal-far-away-v1",
+    "title": "Far Away",
+    "filename": "pawpal-far-away-v1.mid",
+    "composer": "Anton Dvořák · from your piano book",
+    "description": "The theme from the New World Symphony, played twice. The left hand sings most of the tune on G, A and B; the right hand answers on D.",
+    "level": "Beginner · Middle C position",
+    "bpm": 72,
+    "handPositions": {
+      "left": "Middle C position · F3 (5) to C4 (1)",
+      "right": "Middle C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 4,
+    "ticksPerBeat": 480,
+    "countInBeats": 4,
+    "notes": [
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 1920,
+        "endTick": 2368,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 2400,
+        "endTick": 2848,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 2880,
+        "endTick": 3808,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 3840,
+        "endTick": 4288,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 4320,
+        "endTick": 4768,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 4800,
+        "endTick": 5728,
+        "finger": 4,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 5760,
+        "endTick": 6208,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 6240,
+        "endTick": 6688,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 6720,
+        "endTick": 7168,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 7200,
+        "endTick": 7648,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 7680,
+        "endTick": 9568,
+        "finger": 3,
+        "hand": "left",
+        "beats": 4
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 9600,
+        "endTick": 10048,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 10080,
+        "endTick": 10528,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 10560,
+        "endTick": 11488,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 11520,
+        "endTick": 11968,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 12000,
+        "endTick": 12448,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 12480,
+        "endTick": 13408,
+        "finger": 4,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 13440,
+        "endTick": 13888,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 13920,
+        "endTick": 14368,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 14400,
+        "endTick": 14848,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 14880,
+        "endTick": 15328,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 15360,
+        "endTick": 17248,
+        "finger": 4,
+        "hand": "left",
+        "beats": 4
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 17280,
+        "endTick": 17728,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 17760,
+        "endTick": 18208,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 18240,
+        "endTick": 19168,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 19200,
+        "endTick": 19648,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 19680,
+        "endTick": 20128,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 20160,
+        "endTick": 21088,
+        "finger": 4,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 21120,
+        "endTick": 21568,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 21600,
+        "endTick": 22048,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 22080,
+        "endTick": 22528,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 22560,
+        "endTick": 23008,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 23040,
+        "endTick": 24928,
+        "finger": 3,
+        "hand": "left",
+        "beats": 4
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 24960,
+        "endTick": 25408,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 25440,
+        "endTick": 25888,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 25920,
+        "endTick": 26848,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 26880,
+        "endTick": 27328,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 27360,
+        "endTick": 27808,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 27840,
+        "endTick": 28768,
+        "finger": 4,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 28800,
+        "endTick": 29248,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 29280,
+        "endTick": 29728,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 29760,
+        "endTick": 30208,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 30240,
+        "endTick": 30688,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 30720,
+        "endTick": 32608,
+        "finger": 4,
+        "hand": "left",
+        "beats": 4
+      }
+    ]
+  },
+  {
+    "id": "pawpal-dancing-shoes-v1",
+    "title": "Dancing Shoes",
+    "filename": "pawpal-dancing-shoes-v1.mid",
+    "composer": "From your piano book",
+    "description": "A 3/4 dance, played twice. The right hand climbs and steps back down in C position; the left hand answers with a low C.",
+    "level": "Beginner · C position",
+    "bpm": 100,
+    "handPositions": {
+      "left": "C position · C3 (5) to G3 (1)",
+      "right": "C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 3,
+    "ticksPerBeat": 480,
+    "countInBeats": 3,
+    "notes": [
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 1440,
+        "endTick": 1876,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 1920,
+        "endTick": 2356,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 2400,
+        "endTick": 2836,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 2880,
+        "endTick": 4276,
+        "finger": 4,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 67,
+        "startTick": 4320,
+        "endTick": 4756,
+        "finger": 5,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 4800,
+        "endTick": 5236,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 5280,
+        "endTick": 5716,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 5760,
+        "endTick": 7156,
+        "finger": 2,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 7200,
+        "endTick": 8596,
+        "finger": 1,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 8640,
+        "endTick": 10036,
+        "finger": 5,
+        "hand": "left",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 10080,
+        "endTick": 11476,
+        "finger": 1,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 11520,
+        "endTick": 12916,
+        "finger": 5,
+        "hand": "left",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 12960,
+        "endTick": 13396,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 13440,
+        "endTick": 13876,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 13920,
+        "endTick": 14356,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 14400,
+        "endTick": 15796,
+        "finger": 4,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 67,
+        "startTick": 15840,
+        "endTick": 16276,
+        "finger": 5,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 16320,
+        "endTick": 16756,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 16800,
+        "endTick": 17236,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 17280,
+        "endTick": 18676,
+        "finger": 2,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 18720,
+        "endTick": 20116,
+        "finger": 1,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 20160,
+        "endTick": 21556,
+        "finger": 5,
+        "hand": "left",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 21600,
+        "endTick": 22996,
+        "finger": 1,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 23040,
+        "endTick": 24436,
+        "finger": 5,
+        "hand": "left",
+        "beats": 3
+      }
+    ]
+  },
+  {
+    "id": "pawpal-on-my-grandpas-knee-v1",
+    "title": "On My Grandpa's Knee",
+    "filename": "pawpal-on-my-grandpas-knee-v1.mid",
+    "composer": "From your piano book",
+    "description": "A soft, sweet song. The left hand starts on E, D and C; the right hand finishes on E, F and G, coming home to middle C.",
+    "level": "Beginner · C position",
+    "bpm": 84,
+    "handPositions": {
+      "left": "C position · C3 (5) to G3 (1)",
+      "right": "C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 4,
+    "ticksPerBeat": 480,
+    "countInBeats": 4,
+    "notes": [
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 1920,
+        "endTick": 2843,
+        "finger": 3,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 50,
+        "startTick": 2880,
+        "endTick": 3803,
+        "finger": 4,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 3840,
+        "endTick": 4283,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 4320,
+        "endTick": 4763,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 50,
+        "startTick": 4800,
+        "endTick": 5723,
+        "finger": 4,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 5760,
+        "endTick": 6683,
+        "finger": 3,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 6720,
+        "endTick": 7643,
+        "finger": 5,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 7680,
+        "endTick": 8123,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 8160,
+        "endTick": 8603,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 50,
+        "startTick": 8640,
+        "endTick": 9563,
+        "finger": 4,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 9600,
+        "endTick": 10523,
+        "finger": 3,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 10560,
+        "endTick": 11483,
+        "finger": 4,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 67,
+        "startTick": 11520,
+        "endTick": 11963,
+        "finger": 5,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 67,
+        "startTick": 12000,
+        "endTick": 12443,
+        "finger": 5,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 12480,
+        "endTick": 13403,
+        "finger": 4,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 13440,
+        "endTick": 14363,
+        "finger": 3,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 14400,
+        "endTick": 15323,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 15360,
+        "endTick": 15803,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 15840,
+        "endTick": 16283,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 16320,
+        "endTick": 17243,
+        "finger": 1,
+        "hand": "right",
+        "beats": 2
+      }
+    ]
+  },
+  {
+    "id": "pawpal-the-conductor-v1",
+    "title": "The Conductor",
+    "filename": "pawpal-the-conductor-v1.mid",
+    "composer": "From your piano book",
+    "description": "A steady march of short, bouncy staccato notes and quarter rests: four bars for the right hand, then four for the left.",
+    "level": "Beginner · C position",
+    "bpm": 100,
+    "handPositions": {
+      "left": "C position · C3 (5) to G3 (1)",
+      "right": "C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 4,
+    "ticksPerBeat": 480,
+    "countInBeats": 4,
+    "notes": [
+      {
+        "track": 1,
+        "pitch": 67,
+        "startTick": 1920,
+        "endTick": 2136,
+        "finger": 5,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 67,
+        "startTick": 2400,
+        "endTick": 2616,
+        "finger": 5,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 2880,
+        "endTick": 3096,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 3360,
+        "endTick": 3576,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 3840,
+        "endTick": 4056,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 4320,
+        "endTick": 4536,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 4800,
+        "endTick": 5016,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 5760,
+        "endTick": 5976,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 6720,
+        "endTick": 6936,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 7680,
+        "endTick": 7896,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 8160,
+        "endTick": 8376,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 8640,
+        "endTick": 8856,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 9600,
+        "endTick": 9816,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 10080,
+        "endTick": 10296,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 53,
+        "startTick": 10560,
+        "endTick": 10776,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 53,
+        "startTick": 11040,
+        "endTick": 11256,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 11520,
+        "endTick": 11736,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 50,
+        "startTick": 12000,
+        "endTick": 12216,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 12480,
+        "endTick": 12696,
+        "finger": 5,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 13440,
+        "endTick": 13656,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 14400,
+        "endTick": 14616,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 15360,
+        "endTick": 15576,
+        "finger": 5,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 15840,
+        "endTick": 16056,
+        "finger": 5,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 16320,
+        "endTick": 16536,
+        "finger": 5,
+        "hand": "left",
+        "beats": 1
+      }
+    ]
+  },
+  {
+    "id": "pawpal-tiptoeing-v1",
+    "title": "Tiptoeing",
+    "filename": "pawpal-tiptoeing-v1.mid",
+    "composer": "From your piano book",
+    "description": "A quiet 3/4 piece, played twice. Play the dotted notes short and light, like tiptoeing, and let the long notes ring.",
+    "level": "Beginner · Middle C position",
+    "bpm": 104,
+    "handPositions": {
+      "left": "Middle C position · F3 (5) to C4 (1)",
+      "right": "Middle C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 3,
+    "ticksPerBeat": 480,
+    "countInBeats": 3,
+    "notes": [
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 1440,
+        "endTick": 1656,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 1920,
+        "endTick": 2136,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 2400,
+        "endTick": 2616,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 2880,
+        "endTick": 3096,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 3360,
+        "endTick": 3576,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 3840,
+        "endTick": 4056,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 4320,
+        "endTick": 4536,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 4800,
+        "endTick": 5016,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 5280,
+        "endTick": 5496,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 5760,
+        "endTick": 7154,
+        "finger": 2,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 7200,
+        "endTick": 7416,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 7680,
+        "endTick": 7896,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 8160,
+        "endTick": 8376,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 8640,
+        "endTick": 8856,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 9120,
+        "endTick": 9336,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 9600,
+        "endTick": 9816,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 10080,
+        "endTick": 10296,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 10560,
+        "endTick": 10776,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 11040,
+        "endTick": 11256,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 11520,
+        "endTick": 12914,
+        "finger": 1,
+        "hand": "left",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 12960,
+        "endTick": 13176,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 13440,
+        "endTick": 13656,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 13920,
+        "endTick": 14136,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 14400,
+        "endTick": 14616,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 14880,
+        "endTick": 15096,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 15360,
+        "endTick": 15576,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 15840,
+        "endTick": 16056,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 16320,
+        "endTick": 16536,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 16800,
+        "endTick": 17016,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 17280,
+        "endTick": 18674,
+        "finger": 2,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 18720,
+        "endTick": 18936,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 19200,
+        "endTick": 19416,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 19680,
+        "endTick": 19896,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 20160,
+        "endTick": 20376,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 20640,
+        "endTick": 20856,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 21120,
+        "endTick": 21336,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 21600,
+        "endTick": 21816,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 22080,
+        "endTick": 22296,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 22560,
+        "endTick": 22776,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 23040,
+        "endTick": 24434,
+        "finger": 1,
+        "hand": "left",
+        "beats": 3
+      }
+    ]
+  },
+  {
+    "id": "pawpal-the-search-v1",
+    "title": "The Search",
+    "filename": "pawpal-the-search-v1.mid",
+    "composer": "From your piano book",
+    "description": "A bold piece in C position. Short notes lead into long ones: the right hand climbs from C to G, then the left hand steps down from G to C.",
+    "level": "Beginner · C position",
+    "bpm": 104,
+    "handPositions": {
+      "left": "C position · C3 (5) to G3 (1)",
+      "right": "C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 4,
+    "ticksPerBeat": 480,
+    "countInBeats": 4,
+    "notes": [
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 1920,
+        "endTick": 2136,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 2400,
+        "endTick": 2616,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 2880,
+        "endTick": 3794,
+        "finger": 3,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 3840,
+        "endTick": 4056,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 4320,
+        "endTick": 4536,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 4800,
+        "endTick": 5714,
+        "finger": 3,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 5760,
+        "endTick": 5976,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 6240,
+        "endTick": 6456,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 6720,
+        "endTick": 6936,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 7200,
+        "endTick": 7416,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 67,
+        "startTick": 7680,
+        "endTick": 7896,
+        "finger": 5,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 8160,
+        "endTick": 8376,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 8640,
+        "endTick": 9554,
+        "finger": 3,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 9600,
+        "endTick": 9816,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 53,
+        "startTick": 10080,
+        "endTick": 10296,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 53,
+        "startTick": 10560,
+        "endTick": 11474,
+        "finger": 2,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 53,
+        "startTick": 11520,
+        "endTick": 11736,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 12000,
+        "endTick": 12216,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 12480,
+        "endTick": 13394,
+        "finger": 3,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 13440,
+        "endTick": 13656,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 13920,
+        "endTick": 14136,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 50,
+        "startTick": 14400,
+        "endTick": 14616,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 50,
+        "startTick": 14880,
+        "endTick": 15096,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 15360,
+        "endTick": 15576,
+        "finger": 5,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 15840,
+        "endTick": 16056,
+        "finger": 5,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 16320,
+        "endTick": 17234,
+        "finger": 5,
+        "hand": "left",
+        "beats": 2
+      }
+    ]
+  },
+  {
+    "id": "pawpal-may-i-dance-v1",
+    "title": "May I Dance?",
+    "filename": "pawpal-may-i-dance-v1.mid",
+    "composer": "From your piano book",
+    "description": "A tender waltz in Middle C position, played twice. The hands take turns: the right hand around D and F, the left hand on B and G.",
+    "level": "Beginner · Middle C position",
+    "bpm": 96,
+    "handPositions": {
+      "left": "Middle C position · F3 (5) to C4 (1)",
+      "right": "Middle C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 3,
+    "ticksPerBeat": 480,
+    "countInBeats": 3,
+    "notes": [
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 1440,
+        "endTick": 2358,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 2400,
+        "endTick": 2838,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 2880,
+        "endTick": 4278,
+        "finger": 2,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 4320,
+        "endTick": 5238,
+        "finger": 2,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 5280,
+        "endTick": 5718,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 5760,
+        "endTick": 7158,
+        "finger": 2,
+        "hand": "left",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 7200,
+        "endTick": 8118,
+        "finger": 4,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 8160,
+        "endTick": 8598,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 8640,
+        "endTick": 9558,
+        "finger": 2,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 9600,
+        "endTick": 10038,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 10080,
+        "endTick": 10998,
+        "finger": 1,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 11040,
+        "endTick": 11478,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 11520,
+        "endTick": 12918,
+        "finger": 1,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 12960,
+        "endTick": 13878,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 13920,
+        "endTick": 14358,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 14400,
+        "endTick": 15798,
+        "finger": 2,
+        "hand": "right",
+        "beats": 3
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 15840,
+        "endTick": 16758,
+        "finger": 2,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 16800,
+        "endTick": 17238,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 17280,
+        "endTick": 18678,
+        "finger": 2,
+        "hand": "left",
+        "beats": 3
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 18720,
+        "endTick": 19638,
+        "finger": 4,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 19680,
+        "endTick": 20118,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 20160,
+        "endTick": 21078,
+        "finger": 2,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 21120,
+        "endTick": 21558,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 21600,
+        "endTick": 22518,
+        "finger": 1,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 22560,
+        "endTick": 22998,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 23040,
+        "endTick": 24438,
+        "finger": 1,
+        "hand": "right",
+        "beats": 3
+      }
+    ]
+  },
+  {
+    "id": "pawpal-a-special-tune-v1",
+    "title": "A Special Tune",
+    "filename": "pawpal-a-special-tune-v1.mid",
+    "composer": "From your piano book",
+    "description": "A strong, majestic tune, played twice. Both thumbs share middle C: the left hand starts, then the right hand answers.",
+    "level": "Beginner · Middle C position",
+    "bpm": 88,
+    "handPositions": {
+      "left": "Middle C position · F3 (5) to C4 (1)",
+      "right": "Middle C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 4,
+    "ticksPerBeat": 480,
+    "countInBeats": 4,
+    "notes": [
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 1920,
+        "endTick": 2361,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 2400,
+        "endTick": 2841,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 2880,
+        "endTick": 3321,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 3360,
+        "endTick": 3801,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 3840,
+        "endTick": 4281,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 4320,
+        "endTick": 4761,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 4800,
+        "endTick": 5241,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 5760,
+        "endTick": 6681,
+        "finger": 1,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 6720,
+        "endTick": 7641,
+        "finger": 2,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 7680,
+        "endTick": 9561,
+        "finger": 3,
+        "hand": "left",
+        "beats": 4
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 9600,
+        "endTick": 10041,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 10080,
+        "endTick": 10521,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 10560,
+        "endTick": 11001,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 11040,
+        "endTick": 11481,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 11520,
+        "endTick": 11961,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 12000,
+        "endTick": 12441,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 12480,
+        "endTick": 12921,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 13440,
+        "endTick": 14361,
+        "finger": 1,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 14400,
+        "endTick": 15321,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 15360,
+        "endTick": 17241,
+        "finger": 1,
+        "hand": "right",
+        "beats": 4
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 17280,
+        "endTick": 17721,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 17760,
+        "endTick": 18201,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 18240,
+        "endTick": 18681,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 18720,
+        "endTick": 19161,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 19200,
+        "endTick": 19641,
+        "finger": 1,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 19680,
+        "endTick": 20121,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 20160,
+        "endTick": 20601,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 60,
+        "startTick": 21120,
+        "endTick": 22041,
+        "finger": 1,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 59,
+        "startTick": 22080,
+        "endTick": 23001,
+        "finger": 2,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 57,
+        "startTick": 23040,
+        "endTick": 24921,
+        "finger": 3,
+        "hand": "left",
+        "beats": 4
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 24960,
+        "endTick": 25401,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 25440,
+        "endTick": 25881,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 25920,
+        "endTick": 26361,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 26400,
+        "endTick": 26841,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 26880,
+        "endTick": 27321,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 27360,
+        "endTick": 27801,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 27840,
+        "endTick": 28281,
+        "finger": 1,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 28800,
+        "endTick": 29721,
+        "finger": 1,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 29760,
+        "endTick": 30681,
+        "finger": 2,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 30720,
+        "endTick": 32601,
+        "finger": 1,
+        "hand": "right",
+        "beats": 4
+      }
+    ]
+  },
+  {
+    "id": "pawpal-mister-moon-v1",
+    "title": "Mister Moon",
+    "filename": "pawpal-mister-moon-v1.mid",
+    "composer": "From your piano book",
+    "description": "A gentle wish to the moon. The left hand leaps between G and E, the right hand between C and E, and both walk home to C.",
+    "level": "Beginner · C position",
+    "bpm": 88,
+    "handPositions": {
+      "left": "C position · C3 (5) to G3 (1)",
+      "right": "C position · C4 (1) to G4 (5)"
+    },
+    "beatsPerBar": 4,
+    "ticksPerBeat": 480,
+    "countInBeats": 4,
+    "notes": [
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 1920,
+        "endTick": 2841,
+        "finger": 1,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 2880,
+        "endTick": 3801,
+        "finger": 3,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 3840,
+        "endTick": 4761,
+        "finger": 1,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 4800,
+        "endTick": 5721,
+        "finger": 3,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 0,
+        "pitch": 48,
+        "startTick": 5760,
+        "endTick": 6201,
+        "finger": 5,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 50,
+        "startTick": 6240,
+        "endTick": 6681,
+        "finger": 4,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 52,
+        "startTick": 6720,
+        "endTick": 7161,
+        "finger": 3,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 53,
+        "startTick": 7200,
+        "endTick": 7641,
+        "finger": 2,
+        "hand": "left",
+        "beats": 1
+      },
+      {
+        "track": 0,
+        "pitch": 55,
+        "startTick": 7680,
+        "endTick": 8601,
+        "finger": 1,
+        "hand": "left",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 9600,
+        "endTick": 10521,
+        "finger": 1,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 10560,
+        "endTick": 11481,
+        "finger": 3,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 11520,
+        "endTick": 12441,
+        "finger": 1,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 12480,
+        "endTick": 13401,
+        "finger": 3,
+        "hand": "right",
+        "beats": 2
+      },
+      {
+        "track": 1,
+        "pitch": 67,
+        "startTick": 13440,
+        "endTick": 13881,
+        "finger": 5,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 65,
+        "startTick": 13920,
+        "endTick": 14361,
+        "finger": 4,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 64,
+        "startTick": 14400,
+        "endTick": 14841,
+        "finger": 3,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 62,
+        "startTick": 14880,
+        "endTick": 15321,
+        "finger": 2,
+        "hand": "right",
+        "beats": 1
+      },
+      {
+        "track": 1,
+        "pitch": 60,
+        "startTick": 15360,
+        "endTick": 16761,
+        "finger": 1,
+        "hand": "right",
+        "beats": 3
+      }
+    ]
+  },
+  {
     "id": "cadence-dancing-raindrops-v1",
     "title": "Dancing Raindrops",
     "filename": "cadence-dancing-raindrops-v1.mid",

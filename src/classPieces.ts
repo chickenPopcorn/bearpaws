@@ -4,7 +4,7 @@ import type { Finger, Note, Song } from "./song";
 // book. Each bar lists what each hand plays, in quarter-note beats; null is a
 // printed rest and an omitted hand rests for the whole bar. Finger numbers
 // follow the printed five-finger position, which matches every printed number.
-// The teacher duet parts and the lyrics are not included.
+// The teacher duet parts are in recitalDuets.ts; the lyrics are not included.
 
 type Pitches = number | readonly number[];
 /** Pitches (one note or a chord), written beats, and an optional staccato dot. */
@@ -86,6 +86,227 @@ export const classPositions: Record<
 
 const velocities: Record<Dynamic, number> = { p: 0.45, mf: 0.6, f: 0.75 };
 const credit = "From your piano book";
+
+const staccato = "staccato";
+
+const farAwayVerse: readonly ClassBar[] = [
+  {
+    right: [
+      [null, 1],
+      [D4, 1],
+      [D4, 2],
+    ],
+    left: [
+      [B3, 1],
+      [null, 1],
+      [null, 2],
+    ],
+  },
+  {
+    left: [
+      [B3, 1],
+      [A3, 1],
+      [G3, 2],
+    ],
+  },
+  {
+    right: [
+      [null, 2],
+      [D4, 1],
+      [null, 1],
+    ],
+    left: [
+      [A3, 1],
+      [B3, 1],
+      [null, 1],
+      [B3, 1],
+    ],
+  },
+  { left: [[A3, 4]] },
+  {
+    right: [
+      [null, 1],
+      [D4, 1],
+      [D4, 2],
+    ],
+    left: [
+      [B3, 1],
+      [null, 1],
+      [null, 2],
+    ],
+  },
+  {
+    left: [
+      [B3, 1],
+      [A3, 1],
+      [G3, 2],
+    ],
+  },
+  {
+    left: [
+      [A3, 1],
+      [B3, 1],
+      [A3, 1],
+      [G3, 1],
+    ],
+  },
+  { left: [[G3, 4]] },
+];
+
+const dancingShoesVerse: readonly ClassBar[] = [
+  {
+    right: [
+      [C4, 1],
+      [D4, 1],
+      [E4, 1],
+    ],
+  },
+  { right: [[F4, 3]] },
+  {
+    right: [
+      [G4, 1],
+      [F4, 1],
+      [E4, 1],
+    ],
+  },
+  { right: [[D4, 3]] },
+  { right: [[C4, 3]] },
+  { left: [[C3, 3]] },
+  { right: [[C4, 3]] },
+  { left: [[C3, 3]] },
+];
+
+const tiptoeingVerse: readonly ClassBar[] = [
+  {
+    right: [
+      [F4, 1, staccato],
+      [F4, 1, staccato],
+      [F4, 1, staccato],
+    ],
+  },
+  {
+    right: [
+      [D4, 1, staccato],
+      [D4, 1, staccato],
+      [D4, 1, staccato],
+    ],
+  },
+  {
+    right: [
+      [C4, 1, staccato],
+      [D4, 1, staccato],
+      [E4, 1, staccato],
+    ],
+  },
+  { right: [[D4, 3]] },
+  {
+    left: [
+      [G3, 1, staccato],
+      [G3, 1, staccato],
+      [G3, 1, staccato],
+    ],
+  },
+  {
+    left: [
+      [B3, 1, staccato],
+      [B3, 1, staccato],
+      [B3, 1, staccato],
+    ],
+  },
+  {
+    left: [
+      [G3, 1, staccato],
+      [A3, 1, staccato],
+      [B3, 1, staccato],
+    ],
+  },
+  { left: [[C4, 3]] },
+];
+
+const mayIDanceVerse: readonly ClassBar[] = [
+  {
+    right: [
+      [D4, 2],
+      [F4, 1],
+    ],
+  },
+  { right: [[D4, 3]] },
+  {
+    left: [
+      [B3, 2],
+      [G3, 1],
+    ],
+  },
+  { left: [[B3, 3]] },
+  {
+    right: [
+      [F4, 2],
+      [D4, 1],
+    ],
+  },
+  {
+    left: [
+      [B3, 2],
+      [G3, 1],
+    ],
+  },
+  {
+    right: [
+      [C4, 2],
+      [C4, 1],
+    ],
+  },
+  { right: [[C4, 3]] },
+];
+
+const specialTuneVerse: readonly ClassBar[] = [
+  {
+    left: [
+      [C4, 1],
+      [B3, 1],
+      [C4, 1],
+      [B3, 1],
+    ],
+  },
+  {
+    left: [
+      [C4, 1],
+      [B3, 1],
+      [A3, 1],
+      [null, 1],
+    ],
+  },
+  {
+    left: [
+      [C4, 2],
+      [B3, 2],
+    ],
+  },
+  { left: [[A3, 4]] },
+  {
+    right: [
+      [C4, 1],
+      [D4, 1],
+      [C4, 1],
+      [D4, 1],
+    ],
+  },
+  {
+    right: [
+      [E4, 1],
+      [D4, 1],
+      [C4, 1],
+      [null, 1],
+    ],
+  },
+  {
+    right: [
+      [C4, 2],
+      [D4, 2],
+    ],
+  },
+  { right: [[C4, 4]] },
+];
 
 const sleepTightVerse: readonly ClassBar[] = [
   { left: [[G3, 3]] },
@@ -314,12 +535,365 @@ const blackbird: readonly ClassBar[] = [
 ];
 
 /**
- * Book order: Music for Little Mozarts, Recital Book 3. The photos cut off the
- * page numbers of the first five story pieces; facing pages and the story keep
- * them in this order. Mozart Mouse's Special Music is page 21, and the
- * Challenge Repertoire follows on odd pages 23 to 31.
+ * Book order: Music for Little Mozarts, Recital Book 3. The story pieces run
+ * from page 4 (Far Away) to page 21 (Mozart Mouse's Special Music), with
+ * Dancing Raindrops on page 13, and the Challenge Repertoire follows on odd
+ * pages 23 to 31.
  */
 export const classPieces: readonly ClassPiece[] = [
+  {
+    id: "pawpal-far-away-v1",
+    title: "Far Away",
+    composer: `Anton Dvořák · ${credit.toLowerCase()}`,
+    description:
+      "The theme from the New World Symphony, played twice. The left hand sings most of the tune on G, A and B; the right hand answers on D.",
+    bpm: 72,
+    beatsPerBar: 4,
+    position: "middle-c",
+    bars: [
+      { ...farAwayVerse[0], dynamic: "p" },
+      ...farAwayVerse.slice(1),
+      ...farAwayVerse,
+    ],
+  },
+  {
+    id: "pawpal-dancing-shoes-v1",
+    title: "Dancing Shoes",
+    composer: credit,
+    description:
+      "A 3/4 dance, played twice. The right hand climbs and steps back down in C position; the left hand answers with a low C.",
+    bpm: 100,
+    beatsPerBar: 3,
+    position: "c",
+    bars: [
+      { ...dancingShoesVerse[0], dynamic: "mf" },
+      ...dancingShoesVerse.slice(1),
+      ...dancingShoesVerse,
+    ],
+  },
+  {
+    id: "pawpal-on-my-grandpas-knee-v1",
+    title: "On My Grandpa's Knee",
+    composer: credit,
+    description:
+      "A soft, sweet song. The left hand starts on E, D and C; the right hand finishes on E, F and G, coming home to middle C.",
+    bpm: 84,
+    beatsPerBar: 4,
+    position: "c",
+    bars: [
+      {
+        left: [
+          [E3, 2],
+          [D3, 2],
+        ],
+        dynamic: "p",
+      },
+      {
+        left: [
+          [E3, 1],
+          [E3, 1],
+          [D3, 2],
+        ],
+      },
+      {
+        left: [
+          [E3, 2],
+          [C3, 2],
+        ],
+      },
+      {
+        left: [
+          [E3, 1],
+          [E3, 1],
+          [D3, 2],
+        ],
+      },
+      {
+        right: [
+          [E4, 2],
+          [F4, 2],
+        ],
+      },
+      {
+        right: [
+          [G4, 1],
+          [G4, 1],
+          [F4, 2],
+        ],
+      },
+      {
+        right: [
+          [E4, 2],
+          [D4, 2],
+        ],
+      },
+      {
+        right: [
+          [C4, 1],
+          [C4, 1],
+          [C4, 2],
+        ],
+      },
+    ],
+  },
+  {
+    id: "pawpal-the-conductor-v1",
+    title: "The Conductor",
+    composer: credit,
+    description:
+      "A steady march of short, bouncy staccato notes and quarter rests: four bars for the right hand, then four for the left.",
+    bpm: 100,
+    beatsPerBar: 4,
+    position: "c",
+    bars: [
+      {
+        right: [
+          [G4, 1, staccato],
+          [G4, 1, staccato],
+          [F4, 1, staccato],
+          [F4, 1, staccato],
+        ],
+        dynamic: "mf",
+      },
+      {
+        right: [
+          [E4, 1, staccato],
+          [D4, 1, staccato],
+          [C4, 1, staccato],
+          [null, 1],
+        ],
+      },
+      {
+        right: [
+          [D4, 1, staccato],
+          [null, 1],
+          [E4, 1, staccato],
+          [null, 1],
+        ],
+      },
+      {
+        right: [
+          [F4, 1, staccato],
+          [E4, 1, staccato],
+          [D4, 1, staccato],
+          [null, 1],
+        ],
+      },
+      {
+        left: [
+          [G3, 1, staccato],
+          [G3, 1, staccato],
+          [F3, 1, staccato],
+          [F3, 1, staccato],
+        ],
+      },
+      {
+        left: [
+          [E3, 1, staccato],
+          [D3, 1, staccato],
+          [C3, 1, staccato],
+          [null, 1],
+        ],
+      },
+      {
+        left: [
+          [G3, 1, staccato],
+          [null, 1],
+          [E3, 1, staccato],
+          [null, 1],
+        ],
+      },
+      {
+        left: [
+          [C3, 1, staccato],
+          [C3, 1, staccato],
+          [C3, 1, staccato],
+          [null, 1],
+        ],
+      },
+    ],
+  },
+  {
+    id: "pawpal-tiptoeing-v1",
+    title: "Tiptoeing",
+    composer: credit,
+    description:
+      "A quiet 3/4 piece, played twice. Play the dotted notes short and light, like tiptoeing, and let the long notes ring.",
+    bpm: 104,
+    beatsPerBar: 3,
+    position: "middle-c",
+    bars: [
+      { ...tiptoeingVerse[0], dynamic: "p" },
+      ...tiptoeingVerse.slice(1),
+      ...tiptoeingVerse,
+    ],
+  },
+  {
+    id: "pawpal-the-search-v1",
+    title: "The Search",
+    composer: credit,
+    description:
+      "A bold piece in C position. Short notes lead into long ones: the right hand climbs from C to G, then the left hand steps down from G to C.",
+    bpm: 104,
+    beatsPerBar: 4,
+    position: "c",
+    bars: [
+      {
+        right: [
+          [C4, 1, staccato],
+          [D4, 1, staccato],
+          [E4, 2],
+        ],
+        dynamic: "f",
+      },
+      {
+        right: [
+          [D4, 1, staccato],
+          [E4, 1, staccato],
+          [E4, 2],
+        ],
+      },
+      {
+        right: [
+          [E4, 1, staccato],
+          [E4, 1, staccato],
+          [F4, 1, staccato],
+          [F4, 1, staccato],
+        ],
+      },
+      {
+        right: [
+          [G4, 1, staccato],
+          [F4, 1, staccato],
+          [E4, 2],
+        ],
+      },
+      {
+        left: [
+          [G3, 1, staccato],
+          [F3, 1, staccato],
+          [F3, 2],
+        ],
+      },
+      {
+        left: [
+          [F3, 1, staccato],
+          [E3, 1, staccato],
+          [E3, 2],
+        ],
+      },
+      {
+        left: [
+          [E3, 1, staccato],
+          [E3, 1, staccato],
+          [D3, 1, staccato],
+          [D3, 1, staccato],
+        ],
+      },
+      {
+        left: [
+          [C3, 1, staccato],
+          [C3, 1, staccato],
+          [C3, 2],
+        ],
+      },
+    ],
+  },
+  {
+    id: "pawpal-may-i-dance-v1",
+    title: "May I Dance?",
+    composer: credit,
+    description:
+      "A tender waltz in Middle C position, played twice. The hands take turns: the right hand around D and F, the left hand on B and G.",
+    bpm: 96,
+    beatsPerBar: 3,
+    position: "middle-c",
+    bars: [
+      { ...mayIDanceVerse[0], dynamic: "p" },
+      ...mayIDanceVerse.slice(1),
+      ...mayIDanceVerse,
+    ],
+  },
+  {
+    id: "pawpal-a-special-tune-v1",
+    title: "A Special Tune",
+    composer: credit,
+    description:
+      "A strong, majestic tune, played twice. Both thumbs share middle C: the left hand starts, then the right hand answers.",
+    bpm: 88,
+    beatsPerBar: 4,
+    position: "middle-c",
+    bars: [
+      { ...specialTuneVerse[0], dynamic: "f" },
+      ...specialTuneVerse.slice(1),
+      ...specialTuneVerse,
+    ],
+  },
+  {
+    id: "pawpal-mister-moon-v1",
+    title: "Mister Moon",
+    composer: credit,
+    description:
+      "A gentle wish to the moon. The left hand leaps between G and E, the right hand between C and E, and both walk home to C.",
+    bpm: 88,
+    beatsPerBar: 4,
+    position: "c",
+    bars: [
+      {
+        left: [
+          [G3, 2],
+          [E3, 2],
+        ],
+        dynamic: "mf",
+      },
+      {
+        left: [
+          [G3, 2],
+          [E3, 2],
+        ],
+      },
+      {
+        left: [
+          [C3, 1],
+          [D3, 1],
+          [E3, 1],
+          [F3, 1],
+        ],
+      },
+      {
+        left: [
+          [G3, 2],
+          [null, 2],
+        ],
+      },
+      {
+        right: [
+          [C4, 2],
+          [E4, 2],
+        ],
+      },
+      {
+        right: [
+          [C4, 2],
+          [E4, 2],
+        ],
+      },
+      {
+        right: [
+          [G4, 1],
+          [F4, 1],
+          [E4, 1],
+          [D4, 1],
+        ],
+      },
+      {
+        right: [
+          [C4, 3],
+          [null, 1],
+        ],
+      },
+    ],
+  },
   {
     id: "pawpal-five-oclock-v1",
     title: "Five O'Clock",
@@ -974,12 +1548,14 @@ export const classPieces: readonly ClassPiece[] = [
 /**
  * Music Recital Book 3 in display order: the single source for the built-in
  * song order and George Bear’s Classes. Dancing Raindrops (built in
- * lessons.ts) is also from the book; its page is not recorded, so it stays
- * first. The other pieces follow in book order.
+ * lessons.ts) is page 13, between Mister Moon and Five O'Clock.
  */
+const raindropsPage =
+  classPieces.findIndex((piece) => piece.id === "pawpal-mister-moon-v1") + 1;
 export const georgeClassesOrder: readonly string[] = [
+  ...classPieces.slice(0, raindropsPage).map((piece) => piece.id),
   "cadence-dancing-raindrops-v1",
-  ...classPieces.map((piece) => piece.id),
+  ...classPieces.slice(raindropsPage).map((piece) => piece.id),
 ];
 
 /** Build a two-hand lesson with the printed rhythm, rests, dynamics and fingers. */

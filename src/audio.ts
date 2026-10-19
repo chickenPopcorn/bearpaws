@@ -129,6 +129,8 @@ export class ReferenceAudio {
   private playbackFiles = new Set<string>();
   /** When each note of a pass was struck, in context time, for rt_decay. */
   private struck = new WeakMap<Set<string>, Map<string, number>>();
+  /** The ids of the notes in each list schedule() was given. */
+  private noteIds = new WeakMap<readonly Note[], Set<string>>();
   /** The passage that playback prepared, which its optional voices follow. */
   private playback?: { notes: readonly Note[]; pedals: readonly PedalSpan[] };
   private voiceEventCache?: {
@@ -568,9 +570,20 @@ export class ReferenceAudio {
     );
     try {
       voice.gain.gain.cancelAndHoldAtTime(hold);
-      voice.gain.gain.setTargetAtTime(0, voice.releaseAt, voice.releaseTime);
+      // A held voice rings on until it is retimed again.
+      if (Number.isFinite(voice.releaseAt))
+        voice.gain.gain.setTargetAtTime(0, voice.releaseAt, voice.releaseTime);
       voice.source.stop(voice.end);
     } catch {}
+  }
+  /**
+   * Keep sounding notes held while the transport waits, as at a Wait gate.
+   * reschedule() releases them where their notes end once it moves on.
+   */
+  hold() {
+    const now = this.now();
+    for (const voice of this.voices)
+      if (voice.start <= now) this.retime(voice, now, Infinity);
   }
   stop(releasePrepared = true, resetRoom = true) {
     if (releasePrepared) {
@@ -765,11 +778,16 @@ export class ReferenceAudio {
     }
     return true;
   }
+  /**
+   * Schedule the notes that start within the lookahead. Near a loop's end,
+   * the next pass starts from `ahead`, which defaults to the same notes.
+   */
   schedule(
     notes: Note[],
     transport: Transport,
     enabled: boolean,
     pedals: readonly PedalSpan[] = NO_PEDALS,
+    ahead: Note[] = notes,
   ) {
     if (!enabled || !transport.playing || !this.context) return;
     const now = this.now(),
@@ -804,7 +822,7 @@ export class ReferenceAudio {
     if (loop && position + LOOKAHEAD_SECONDS * transport.speed >= loop[1]) {
       this.aheadStart = now + (loop[1] - position) / transport.speed;
       this.schedulePass(
-        notes,
+        ahead,
         pedals,
         transport,
         now,
@@ -854,6 +872,12 @@ export class ReferenceAudio {
     const { events, resonance } = this.playback
       ? this.voiceEvents(this.playback.notes, this.playback.pedals)
       : this.voiceEvents(notes, pedals);
+    // The prepared passage can hold notes this pass may not play yet, such as
+    // a duet waiting at a Wait gate: their optional voices wait with them.
+    let ids = this.noteIds.get(notes);
+    if (!ids) this.noteIds.set(notes, (ids = new Set(notes.map((n) => n.id))));
+    const playable = (event: PianoVoiceEvent) =>
+      event.notes.every((id) => ids.has(id));
     /** Where the next pass's first pedal press falls, after this pass. */
     const wrappedPress = () => {
       if (!Number.isFinite(to)) return Infinity;
@@ -940,7 +964,8 @@ export class ReferenceAudio {
         (event.time === to && !lift) ||
         (event.time === boundary && lift) ||
         !this.sound.voices[event.region.voice] ||
-        pass.has(event.ids[0])
+        pass.has(event.ids[0]) ||
+        !playable(event)
       )
         continue;
       sound(event, event.time);
