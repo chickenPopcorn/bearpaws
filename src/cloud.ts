@@ -214,8 +214,16 @@ function stashUnsent(owner: string): boolean {
 /** What the studio reports so the signed-in account stays current. */
 export interface SyncHooks {
   settings(settings: Settings): void;
-  /** `loaded`: the save made as the song opens, before any practice. */
-  progress(songId: string, progress: Progress, loaded?: boolean): void;
+  /**
+   * `loaded`: the save made as the song opens, before any practice.
+   * `stored`: false if browser storage refused the record.
+   */
+  progress(
+    songId: string,
+    progress: Progress,
+    loaded?: boolean,
+    stored?: boolean,
+  ): void;
   /** The song was removed from this browser, so its progress goes too. */
   forgetProgress(songId: string): void;
   /** A practice session gained time; `saved` is false if storage refused it. */
@@ -298,6 +306,13 @@ export class CloudSync implements SyncHooks {
       store("practice", [...sessions.values()]);
       store("unsynced", stash.marker);
       store("owner", this.userId);
+      // Now in the working copy, marked unconfirmed, where a failed pull
+      // retries from: the stash must not come back later and win again.
+      try {
+        remove(`stash:${this.userId}`);
+      } catch {
+        throw new BrowserStorageError();
+      }
     }
     // The first account on this browser adopts what was saved here before.
     // The owner mark is written only once the pull succeeds, so a failed
@@ -325,18 +340,22 @@ export class CloudSync implements SyncHooks {
     // have saved changes while they were under way.
     const unsynced = adopting ? EMPTY_UNSYNCED : readUnsynced();
 
+    // A marker entry newer than the record it names is for a save this
+    // browser could not store, so the record is not that change.
+    const unconfirmed = (id: string, local: Partial<Progress>) =>
+      id in unsynced.progress &&
+      progressVersion(local) >= unsynced.progress[id];
+
     // Settings: this browser's unconfirmed change wins, then the account's.
     const localSettings = read<Settings | null>("settings", null);
     if (settings.data) this.syncedSettings = canon(settings.data.data);
-    if (localSettings && (unsynced.settings || !settings.data))
-      this.pendingSettings = localSettings;
-    else if (settings.data) store("settings", settings.data.data);
+    let keepSettings =
+      !!localSettings && (!!unsynced.settings || !settings.data);
 
     // Progress: this browser's unconfirmed changes win; otherwise the account
     // is the record. Adopted progress fills in songs the account lacks.
     const remote = new Map(rows.map((row) => [row.song_id, row.data]));
     for (const [id, data] of remote) this.syncedProgress.set(id, canon(data));
-    const changed = new Set(Object.keys(unsynced.progress));
     for (const [id, at] of Object.entries(unsynced.deleted)) {
       // A marker from an earlier build can list a song both ways; the save
       // came after the removal, or the progress would be gone.
@@ -344,24 +363,43 @@ export class CloudSync implements SyncHooks {
       this.pendingDeletes.set(id, at);
       remote.delete(id);
     }
+    const removals = new Set<string>();
     for (const { id, progress: local } of localProgress()) {
-      if (changed.has(id) || (adopting && !remote.has(id))) {
+      if (unconfirmed(id, local) || (adopting && !remote.has(id))) {
         this.pendingProgress.set(id, local as Progress);
         remote.delete(id);
-      } else if (!remote.has(id) && !this.pendingDeletes.has(id)) {
+      } else if (!remote.has(id) && !this.pendingDeletes.has(id))
         // Uploaded before, and since removed from the account.
-        try {
-          removeProgress(id);
-        } catch {
-          throw new BrowserStorageError();
-        }
-      }
+        removals.add(id);
     }
-    for (const [id, data] of remote) store(`progress:${id}`, data);
+
+    // Another tab may have saved while this decided: entries added to the
+    // marker since it was read win too, before anything is overwritten.
+    const latest = adopting ? EMPTY_UNSYNCED : readUnsynced();
+    if (!adopting) {
+      if (latest.settings !== unsynced.settings && localSettings)
+        keepSettings = true;
+      for (const [id, version] of Object.entries(latest.progress)) {
+        const local = read<Partial<Progress> | null>(`progress:${id}`, null);
+        if (unsynced.progress[id] === version || !local) continue;
+        if (progressVersion(local) < version) continue;
+        this.pendingDeletes.delete(id);
+        this.pendingProgress.set(id, local as Progress);
+        remote.delete(id);
+        removals.delete(id);
+      }
+      for (const [id, at] of Object.entries(latest.deleted))
+        if (unsynced.deleted[id] !== at && !(id in latest.progress)) {
+          this.pendingProgress.delete(id);
+          this.pendingDeletes.set(id, at);
+          remote.delete(id);
+        }
+    }
 
     // Practice: the account's sessions, with this browser's copy wherever it
     // has more time. A session only grows, so the larger copy is the newer
-    // one, whichever tab or upload made it.
+    // one, whichever tab or upload made it. Sessions the account lacks stay
+    // if the marker named them at either read.
     const sessions = new Map<string, PracticeSession>(
       practiceRows.map((row) => [
         row.id,
@@ -379,12 +417,24 @@ export class CloudSync implements SyncHooks {
       if (
         remote
           ? session.seconds > remote.seconds
-          : session.id in unsynced.practice || adopting
+          : session.id in unsynced.practice ||
+            session.id in latest.practice ||
+            adopting
       ) {
         sessions.set(session.id, session);
         this.pendingPractice.set(session.id, session);
       }
     }
+
+    if (keepSettings) this.pendingSettings = localSettings;
+    else if (settings.data) store("settings", settings.data.data);
+    for (const id of removals)
+      try {
+        removeProgress(id);
+      } catch {
+        throw new BrowserStorageError();
+      }
+    for (const [id, data] of remote) store(`progress:${id}`, data);
     store(
       "practice",
       [...sessions.values()].filter((session) => session.day >= since),
@@ -393,12 +443,6 @@ export class CloudSync implements SyncHooks {
     // longer adopts, and only the marker would keep what this one adopted.
     if (!this.saveUnsynced({ exact: true })) throw new BrowserStorageError();
     store("owner", this.userId);
-    if (stash)
-      try {
-        remove(`stash:${this.userId}`);
-      } catch {
-        throw new BrowserStorageError();
-      }
     this.error = "";
     if (this.pending) this.schedule(0);
   }
@@ -436,13 +480,23 @@ export class CloudSync implements SyncHooks {
 
   settings(settings: Settings) {
     if (this.stopped) return;
-    if (!this.pendingSettings && canon(settings) === this.syncedSettings)
+    if (canon(settings) === this.syncedSettings) {
+      // Back where the account is, such as a selection restored once
+      // imported songs load: what was waiting is no longer a change.
+      if (this.pendingSettings) {
+        const withdrawn = settingsVersion(this.pendingSettings);
+        this.pendingSettings = null;
+        this.saveUnsynced({
+          confirmed: { ...EMPTY_UNSYNCED, settings: withdrawn },
+        });
+      }
       return;
+    }
     this.pendingSettings = { ...settings };
     this.queued();
   }
 
-  progress(songId: string, progress: Progress, loaded = false) {
+  progress(songId: string, progress: Progress, loaded = false, stored = true) {
     if (this.stopped) return;
     // A song the account has no progress for takes the save made as it opens
     // as its baseline: an untouched song is no change, and uploading it could
@@ -464,7 +518,8 @@ export class CloudSync implements SyncHooks {
       return;
     this.pendingDeletes.delete(songId);
     this.pendingProgress.set(songId, { ...progress });
-    this.queued();
+    // A record the browser could not keep exists only here until it uploads.
+    this.queued(!stored);
   }
 
   forgetProgress(songId: string) {
@@ -479,27 +534,18 @@ export class CloudSync implements SyncHooks {
   practice(session: PracticeSession, saved: boolean) {
     if (this.stopped) return;
     this.pendingPractice.set(session.id, { ...session });
-    // Without its stored copy, a reload before the upload would lose this
-    // time, so upload at once.
-    if (saved) this.queued();
-    else {
-      this.saveUnsynced();
-      this.uploadNow();
-    }
+    // A session the browser could not keep exists only here until it uploads.
+    this.queued(!saved);
   }
 
   /**
    * Remember a queued change and schedule its upload. If browser storage
-   * cannot hold the marker, a reload before the upload lands would let the
-   * account's older copy win, so upload at once and say so.
+   * cannot hold the marker, or (`urgent`) the change itself, a reload before
+   * the upload lands would lose it, so upload at once and say so.
    */
-  private queued() {
-    if (this.saveUnsynced()) return this.schedule();
+  private queued(urgent = false) {
+    if (this.saveUnsynced() && !urgent) return this.schedule();
     this.setError(STORAGE_FULL);
-    this.uploadNow();
-  }
-
-  private uploadNow() {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     this.schedule(0);
@@ -593,27 +639,53 @@ export class CloudSync implements SyncHooks {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    const settings = this.pendingSettings,
+    let settings = this.pendingSettings,
       progress = [...this.pendingProgress],
-      deleted = [...this.pendingDeletes],
       practice = [...this.pendingPractice.values()];
+    const deleted = [...this.pendingDeletes];
     const deletedIds = deleted.map(([id]) => id);
-    const practiceVersions = Object.fromEntries(
-      practice.map((session) => [session.id, practiceVersion(session)]),
-    );
     this.pendingSettings = null;
     this.pendingProgress.clear();
     this.pendingDeletes.clear();
     this.pendingPractice.clear();
+    const practiceVersions = () =>
+      Object.fromEntries(
+        practice.map((session) => [session.id, practiceVersion(session)]),
+      );
     this.inFlight = {
       settings: settings ? settingsVersion(settings) : undefined,
       progress: Object.fromEntries(
         progress.map(([id, data]) => [id, progressVersion(data)]),
       ),
       deleted: Object.fromEntries(deleted),
-      practice: practiceVersions,
+      practice: practiceVersions(),
     };
     const upload = async () => {
+      // Another tab may have saved these since they were queued, and its
+      // upload may already have landed: send the newest copy this browser
+      // holds, so an older one never lands last.
+      const latestSettings = read<Settings | null>("settings", null);
+      if (settings && latestSettings) settings = latestSettings;
+      progress = progress.map(([id, data]) => {
+        const local = read<Progress | null>(`progress:${id}`, null);
+        return local && progressVersion(local) > progressVersion(data)
+          ? [id, local]
+          : [id, data];
+      });
+      const storedPractice = new Map(storedSessions().map((s) => [s.id, s]));
+      practice = practice.map((session) => {
+        const local = storedPractice.get(session.id);
+        return local && local.seconds > session.seconds ? local : session;
+      });
+      const sentPractice = practiceVersions();
+      this.inFlight = {
+        settings: settings ? settingsVersion(settings) : undefined,
+        progress: Object.fromEntries(
+          progress.map(([id, data]) => [id, progressVersion(data)]),
+        ),
+        deleted: Object.fromEntries(deleted),
+        practice: sentPractice,
+      };
       // Aborting at the time limit settles the request, so it cannot land
       // after the retry that replaces it.
       const controller = new AbortController();
@@ -709,7 +781,7 @@ export class CloudSync implements SyncHooks {
               )
             : {},
           deleted: deletesOk ? Object.fromEntries(deleted) : {},
-          practice: practiceOk ? practiceVersions : {},
+          practice: practiceOk ? sentPractice : {},
         },
       });
       if (ok) this.setError("");

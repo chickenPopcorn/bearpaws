@@ -259,9 +259,10 @@ export class Studio {
       loopEnabled: this.loopEnabled,
       loop: [this.loopStart, this.loopEnd],
     };
-    if (!write(`progress:${this.song.id}`, this.progress))
+    const stored = write(`progress:${this.song.id}`, this.progress);
+    if (!stored)
       this.storageNotice = "Progress could not be saved in this browser.";
-    this.sync?.progress(this.song.id, this.progress, loaded);
+    this.sync?.progress(this.song.id, this.progress, loaded, stored);
     if (!this.practiceLog.commit())
       this.storageNotice = "Practice time could not be saved in this browser.";
   }

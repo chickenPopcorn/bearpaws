@@ -126,9 +126,17 @@ export function validateSong(value: unknown, id: string): Song {
       where,
       "timeSignatures must be a list of { tick, numerator 1-255, denominator a power of two }",
     );
-  for (const key of ["beatsPerBar", "leadInBeats"])
-    if (value[key] !== undefined && !finite(value[key]))
-      fail(where, `${key} must be a number`);
+  // The score would quietly replace anything else (see createMeterMap).
+  if (
+    value.beatsPerBar !== undefined &&
+    !(finite(value.beatsPerBar) && (value.beatsPerBar as number) > 0)
+  )
+    fail(where, "beatsPerBar must be a positive number");
+  if (
+    value.leadInBeats !== undefined &&
+    !(finite(value.leadInBeats) && (value.leadInBeats as number) >= 0)
+  )
+    fail(where, "leadInBeats must be zero or more");
   if (
     value.lesson !== undefined &&
     !(
@@ -181,14 +189,19 @@ export function validateSong(value: unknown, id: string): Song {
       "pedals must be a list of { channel, start, end } inside the song",
     );
   // Pedal lookup searches each channel's spans by start time.
-  const pedalStarts = new Map<number, number>();
+  // One channel's pedal is down for one span at a time.
+  const pedalEnds = new Map<number, number>();
   for (const p of (value.pedals ?? []) as {
     channel: number;
     start: number;
+    end: number;
   }[]) {
-    if (p.start < (pedalStarts.get(p.channel) ?? 0))
-      fail(where, "pedals must be in start order on each channel");
-    pedalStarts.set(p.channel, p.start);
+    if (p.start < (pedalEnds.get(p.channel) ?? 0))
+      fail(
+        where,
+        "pedals must be in start order on each channel, without overlaps",
+      );
+    pedalEnds.set(p.channel, p.end);
   }
   if (!Array.isArray(value.tracks) || !value.tracks.length)
     fail(where, "missing tracks");
