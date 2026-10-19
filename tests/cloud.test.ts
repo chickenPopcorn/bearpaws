@@ -353,6 +353,7 @@ describe("account sync", () => {
 
   it("signs out only once Supabase confirms it", async () => {
     const b = backend();
+    write("owner", USER);
     const api = client(b);
     const sync = new CloudSync(api, USER);
     b.signOutError = { message: "offline" };
@@ -379,6 +380,7 @@ describe("account sync", () => {
 
   it("waits for Supabase's answer however long sign-out takes", async () => {
     const b = backend();
+    write("owner", USER);
     b.signOutDelay = 45000;
     const sync = new CloudSync(client(b), USER);
     const done = vi.fn();
@@ -390,6 +392,50 @@ describe("account sync", () => {
     await signing;
     expect(done).toHaveBeenCalledOnce();
     expect(clearAccountData).toHaveBeenCalledOnce();
+  });
+
+  it("signs out of a failed sign-in without losing earlier unsent changes", async () => {
+    const b = backend();
+    write("owner", USER);
+    write("progress:song", { best: 7 });
+    write("unsynced", { progress: ["song"] });
+    b.failReads = true;
+    const sync = new CloudSync(client(b), USER);
+    await expect(sync.pull()).rejects.toBeTruthy();
+    await sync.signOut();
+    expect(clearAccountData).not.toHaveBeenCalled();
+    expect(read("progress:song", null)).toEqual({ best: 7 });
+
+    // Nothing unsent, but this account never finished a pull here: what the
+    // browser held before stays for that first sign-in to adopt.
+    stored.clear();
+    write("progress:song", { best: 3 });
+    await new CloudSync(client(b), USER).signOut();
+    expect(clearAccountData).not.toHaveBeenCalled();
+  });
+
+  it("holds a new sync's uploads until the replaced sync's request settles", async () => {
+    const b = backend();
+    const old = new CloudSync(client(b), USER);
+    b.hang = "manual";
+    old.progress("song", { best: 1 } as never);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.calls).toEqual(["upsert progress"]);
+    // Signed out elsewhere and back in while the old request is under way.
+    old.stop();
+    const release = b.release;
+    b.hang = "no";
+    const next = new CloudSync(client(b), USER);
+    next.progress("song", { best: 2 } as never);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(b.calls).toEqual(["upsert progress"]);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.calls).toEqual(["upsert progress", "upsert progress"]);
+    // The newer progress lands last.
+    expect(b.upserts.at(-1)?.[1]).toEqual([
+      { user_id: USER, song_id: "song", data: { best: 2 } },
+    ]);
   });
 
   it("keeps unsent changes on the browser when signing out offline", async () => {

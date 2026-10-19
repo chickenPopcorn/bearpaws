@@ -116,6 +116,14 @@ describe("song library", () => {
       /bad note/,
     ],
     [
+      "a silent note",
+      (song: Song) => ({
+        ...song,
+        notes: [{ ...song.notes[0], velocity: 0 }],
+      }),
+      /bad note/,
+    ],
+    [
       "a note that ends before it starts",
       (song: Song) => ({
         ...song,

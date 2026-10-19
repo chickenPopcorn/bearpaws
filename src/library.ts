@@ -214,6 +214,9 @@ export function validateSong(value: unknown, id: string): Song {
       !finite(note.end) ||
       !finite(note.soundEnd) ||
       !finite(note.velocity) ||
+      // A silent note would still be a target to play.
+      (note.velocity as number) <= 0 ||
+      (note.velocity as number) > 1 ||
       !whole(note.channel) ||
       !tracks.has(note.track as number) ||
       (note.finger !== undefined &&

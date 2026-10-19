@@ -4,9 +4,12 @@ import { useState } from "react";
 export function OpeningStudio({
   error,
   message = "Opening your studio…",
+  onSignOut,
 }: {
   error: string;
   message?: string;
+  /** Offered with an error, so a shared device can still be signed out. */
+  onSignOut?: () => void;
 }) {
   return (
     <main className="signin" aria-busy={!error}>
@@ -31,6 +34,11 @@ export function OpeningStudio({
             >
               Try again
             </button>
+            {onSignOut && (
+              <button type="button" className="text-button" onClick={onSignOut}>
+                Sign out
+              </button>
+            )}
           </>
         ) : (
           <p role="status">{message}</p>

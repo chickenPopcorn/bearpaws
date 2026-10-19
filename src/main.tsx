@@ -1096,6 +1096,33 @@ async function signOut() {
   setGate({ status: "signed-out", error: "" });
 }
 
+/** Sign out of a sign-in that could not finish loading. */
+async function leaveFailedSignIn() {
+  const sync = loading;
+  if (!sync) return;
+  const failed = gate;
+  setGate({ status: "signing-out" });
+  try {
+    await sync.signOut();
+  } catch {
+    if (loading !== sync) return;
+    setGate(
+      failed.status === "failed"
+        ? {
+            ...failed,
+            error: "Sign-out failed. Check your connection and try again.",
+          }
+        : failed,
+    );
+    return;
+  }
+  // The auth event may already have moved on to a newer session.
+  if (loading !== sync) return;
+  loading = null;
+  currentUser = "";
+  setGate({ status: "signed-out", error: "" });
+}
+
 if (supabase) {
   // Supabase asks that auth callbacks not await its own calls directly.
   supabase.auth.onAuthStateChange((_event, session) => {
@@ -1126,7 +1153,12 @@ function Root() {
   if (current.status === "signing-out")
     return <OpeningStudio error="" message="Signing out…" />;
   if (current.status === "failed")
-    return <OpeningStudio error={current.error} />;
+    return (
+      <OpeningStudio
+        error={current.error}
+        onSignOut={() => void leaveFailedSignIn()}
+      />
+    );
   return (
     <SignIn
       error={current.error}

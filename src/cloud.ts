@@ -109,7 +109,12 @@ export class CloudSync implements SyncHooks {
   /** What the upload in progress carries, until the account confirms it. */
   private inFlight: Required<Unsynced> | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private flushing: Promise<void> | null = null;
+  /**
+   * The upload under way, shared by every CloudSync: a sync that replaces
+   * another, such as after signing back in, waits for the old one's request
+   * to settle, so that request cannot land after newer data and undo it.
+   */
+  private static flushing: Promise<void> | null = null;
   private stopped = false;
   /**
    * What this browser last loaded from or confirmed with the account. A save
@@ -287,7 +292,7 @@ export class CloudSync implements SyncHooks {
   /** Upload waiting changes now. Failures stay queued and retry later. */
   async flush(): Promise<void> {
     // One upload at a time: a newer change never overtakes an older request.
-    while (this.flushing) await this.flushing;
+    while (CloudSync.flushing) await CloudSync.flushing;
     if (!this.pending || this.stopped) return;
     if (this.timer !== null) {
       clearTimeout(this.timer);
@@ -304,7 +309,7 @@ export class CloudSync implements SyncHooks {
       progress: progress.map(([id]) => id),
       deleted,
     };
-    this.flushing = (async () => {
+    CloudSync.flushing = (async () => {
       // Aborting at the time limit settles the request, so it cannot land
       // after the retry that replaces it.
       const controller = new AbortController();
@@ -363,9 +368,9 @@ export class CloudSync implements SyncHooks {
         this.schedule(RETRY_MS);
       }
     })().finally(() => {
-      this.flushing = null;
+      CloudSync.flushing = null;
     });
-    await this.flushing;
+    await CloudSync.flushing;
   }
 
   /** Stop syncing, such as when the session ended elsewhere. Nothing more is sent. */
@@ -379,8 +384,9 @@ export class CloudSync implements SyncHooks {
   }
 
   /**
-   * Upload what is waiting, then sign out. Close the studio first, so its
-   * final save is in the upload and nothing changes during sign-out. Throws,
+   * Upload what is waiting, then sign out; this also ends a sign-in whose
+   * pull failed. Close the studio first, so its final save is in the upload
+   * and nothing changes during sign-out. Throws,
    * still signed in and still syncing, if Supabase cannot end the session.
    * Once signed out, syncing stops and this browser's copy of the account's
    * settings and progress is cleared, unless some changes could not be
@@ -389,7 +395,17 @@ export class CloudSync implements SyncHooks {
    */
   async signOut() {
     await this.flush();
-    const unsent = this.pending;
+    // The marker also covers changes from before a sign-in that never
+    // finished loading, which this sync has not queued.
+    const marker = read<Unsynced>("unsynced", {});
+    const unsent =
+      this.pending ||
+      !!marker.settings ||
+      !!marker.progress?.length ||
+      !!marker.deleted?.length;
+    // What this browser held before its first successful pull is kept too,
+    // for that sign-in to adopt.
+    const owned = read<string | null>("owner", null) === this.userId;
     // No time limit: the request cannot be cancelled, so a timeout could
     // report failure and then sign out later anyway. Supabase answers with an
     // error when it cannot reach the server. Only this browser signs out;
@@ -397,6 +413,6 @@ export class CloudSync implements SyncHooks {
     const { error } = await this.client.auth.signOut({ scope: "local" });
     if (error) throw error;
     this.stop();
-    if (!unsent) clearAccountData();
+    if (!unsent && owned) clearAccountData();
   }
 }
