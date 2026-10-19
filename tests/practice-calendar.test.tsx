@@ -113,6 +113,16 @@ describe("practice calendar", () => {
     ).toContain("earned");
   });
 
+  it("asks for the day's goal with its minutes in bold", async () => {
+    await render([]);
+    expect(container.querySelector(".practice-today")!.textContent).toBe(
+      "Play 5 minutes today to earn a star.",
+    );
+    expect(container.querySelector(".practice-today strong")!.textContent).toBe(
+      "5 minutes",
+    );
+  });
+
   it("titles the calendar with the learner's name", async () => {
     await render([], "2026-10-18", { learnerName: "  George  " });
     expect(container.querySelector(".practice-learner")!.textContent).toBe(

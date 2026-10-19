@@ -231,11 +231,16 @@ export const PracticeCalendar = memo(function PracticeCalendar({
       </div>
       <div className="practice-foot">
         <p className="practice-today">
-          {done
-            ? `Today's star earned. Great job${name ? `, ${name}` : ""}!`
-            : todaySeconds > 0
-              ? `Today: ${minutes(todaySeconds)} of ${goalMinutes} minutes`
-              : `Play ${goalMinutes} minutes today to earn a star.`}
+          {done ? (
+            `Today's star earned. Great job${name ? `, ${name}` : ""}!`
+          ) : todaySeconds > 0 ? (
+            `Today: ${minutes(todaySeconds)} of ${goalMinutes} minutes`
+          ) : (
+            <>
+              Play <strong>{plural(goalMinutes, "minute")}</strong> today to
+              earn a star.
+            </>
+          )}
         </p>
         <button
           type="button"
