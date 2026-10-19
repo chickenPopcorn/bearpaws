@@ -12,6 +12,8 @@ export class MidiDuet {
   private started = new Set<string>();
   /** Attacks crossed last tick that waited behind an earlier one on their pitch. */
   private deferred = new Set<string>();
+  /** Notes of the pass a loop wrap just left: they ring one more tick. */
+  private ending: Note[] = [];
   private position: number | undefined;
   private cycle = -1;
   private channel = 0;
@@ -76,8 +78,11 @@ export class MidiDuet {
   }
   /** Silence current keys without replaying earlier attacks when Listen continues. */
   silence() {
-    const pitches = new Set([...this.active.values()].map((n) => n.pitch));
+    const pitches = new Set(
+      [...this.active.values(), ...this.ending].map((n) => n.pitch),
+    );
     this.active.clear();
+    this.ending = [];
     for (const pitch of pitches) this.noteOff(pitch);
   }
   stop() {
@@ -96,8 +101,17 @@ export class MidiDuet {
     passStart = position,
   ) {
     if (!this.port) return;
+    // The last pass's notes have had their extra tick.
+    for (const pitch of new Set(this.ending.map((n) => n.pitch)))
+      if (!this.sounding(pitch).length) this.noteOff(pitch);
+    this.ending = [];
     if (cycle !== this.cycle) {
+      // A loop wrap: an attack just before it still sounds for a tick,
+      // rather than being released in the same instant.
+      const ending = this.cycle >= 0 ? [...this.active.values()] : [];
+      this.active.clear();
       this.stop();
+      this.ending = ending;
       this.cycle = cycle;
       this.position = passStart;
     }
@@ -152,9 +166,11 @@ export class MidiDuet {
       const unison = others.some(
         (other) => Math.abs(other.start - note.start) < 1e-6,
       );
-      if (!unison && others.length) {
+      const tail = this.ending.some((n) => n.pitch === note.pitch);
+      if (!unison && (others.length || tail)) {
         // Retriggering ended these voices: their old tails cannot own the new key.
         for (const old of others) this.active.delete(old.id);
+        this.ending = this.ending.filter((n) => n.pitch !== note.pitch);
         this.noteOff(note.pitch);
       }
       this.active.set(note.id, note);

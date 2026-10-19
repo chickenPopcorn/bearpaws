@@ -176,6 +176,35 @@ describe("teacher MIDI output", () => {
     });
   });
 
+  it("lets an attack just before a loop wrap ring for a tick into the next pass", () => {
+    const { duet, send } = setup();
+    const notes = [note("last", 48, 0.99, 1.5), note("first", 52, 0, 0.5)];
+    duet.schedule(notes, 0.98, 1, false);
+    // The wrap: the old pass is finished up to its end, then the new one begins.
+    duet.schedule(notes, 1, 1, false);
+    duet.schedule(notes, 0.005, 2, false, 0);
+    expect(send.mock.calls).toEqual([[[0x90, 48, 64]], [[0x90, 52, 64]]]);
+    duet.schedule(notes, 0.025, 2, false);
+    expect(send).toHaveBeenLastCalledWith([0x80, 48, 0]);
+    duet.stop();
+    expect(send).toHaveBeenLastCalledWith([0x80, 52, 0]);
+  });
+
+  it("restrikes a pitch the new pass opens with while the old pass's note rings", () => {
+    const { duet, send } = setup();
+    const notes = [note("last", 48, 0.99, 1.5), note("first", 48, 0, 0.5)];
+    duet.schedule(notes, 1, 1, false, 0.98);
+    duet.schedule(notes, 0.005, 2, false, 0);
+    expect(send.mock.calls).toEqual([
+      [[0x90, 48, 64]],
+      [[0x80, 48, 0]],
+      [[0x90, 48, 64]],
+    ]);
+    // The new pass's note keeps the key past the old note's extra tick.
+    duet.schedule(notes, 0.025, 2, false);
+    expect(send).toHaveBeenCalledTimes(3);
+  });
+
   it("does not leave a zero-duration event sounding", () => {
     const { duet, send } = setup();
     duet.schedule([note("zero", 48, 0, 0)], 0, 1, false);
