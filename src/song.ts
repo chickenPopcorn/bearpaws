@@ -98,7 +98,7 @@ const MAX_TRACKS = 256;
 const NOTE_LIMIT_MESSAGE =
   "This MIDI file has more than 50,000 notes. Export a smaller passage for practice.";
 /** Reject an oversized file before reading or parsing it. */
-export function checkMidiSize(bytes: number) {
+function checkMidiSize(bytes: number) {
   if (bytes > 10 * 1024 * 1024)
     throw new Error("Please choose a MIDI file smaller than 10 MB.");
 }

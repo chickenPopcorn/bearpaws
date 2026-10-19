@@ -57,37 +57,40 @@ describe("practice log", () => {
     expect(addDays("2028-02-28", 1)).toBe("2028-02-29");
   });
 
-  it("adds up playing time and reports each whole second gained", () => {
-    const onCommit = vi.fn();
-    const log = new PracticeLog(onCommit, clock);
+  it("adds up playing time and saves each whole second gained", () => {
+    const log = new PracticeLog(clock);
     log.add(0.6, "ode");
     // Totals show the session in progress before it is saved.
     expect(log.totals().get("2026-10-18")).toBe(0);
     log.add(0.6, "ode");
     expect(log.totals().get("2026-10-18")).toBe(1);
+    expect(saved()).toHaveLength(0);
     expect(log.commit()).toBe(true);
-    expect(onCommit).toHaveBeenCalledOnce();
-    expect(onCommit.mock.calls[0][0]).toMatchObject({
-      day: "2026-10-18",
-      seconds: 1,
-      songs: { ode: 1 },
-    });
-    // Nothing new to report until another whole second.
+    expect(saved()).toEqual([
+      expect.objectContaining({
+        day: "2026-10-18",
+        seconds: 1,
+        songs: { ode: 1 },
+      }),
+    ]);
+    // Nothing new to save until another whole second.
+    const writes = vi.spyOn(localStorage, "setItem");
     log.add(0.3, "lamb");
     log.commit();
-    expect(onCommit).toHaveBeenCalledOnce();
+    expect(writes).not.toHaveBeenCalled();
     log.add(0.5, "lamb");
     log.commit();
-    expect(onCommit).toHaveBeenCalledTimes(2);
-    expect(onCommit.mock.calls[1][0]).toMatchObject({
-      seconds: 2,
-      songs: { ode: 1, lamb: 0 },
-    });
-    expect(saved()).toHaveLength(1);
+    expect(writes).toHaveBeenCalledOnce();
+    expect(saved()).toEqual([
+      expect.objectContaining({
+        seconds: 2,
+        songs: { ode: 1, lamb: 0 },
+      }),
+    ]);
   });
 
   it("starts a new session at midnight and after a long pause", () => {
-    const log = new PracticeLog(undefined, clock);
+    const log = new PracticeLog(clock);
     log.add(3, "ode");
     now = new Date(2026, 9, 18, 10, 20);
     log.add(2, "ode");
@@ -123,18 +126,16 @@ describe("practice log", () => {
     stored.set(sessionKey("broken"), JSON.stringify({ id: "broken" }));
     stored.set(sessionKey("garbled"), "{");
     expect(storedSessions().map((s) => s.id)).toEqual(["old"]);
-    const log = new PracticeLog(undefined, clock);
+    const log = new PracticeLog(clock);
     log.add(2, "ode");
     log.commit();
     expect(saved().map((s) => s.seconds)).toEqual([2]);
     expect(stored.has(sessionKey("old"))).toBe(false);
-    expect([...new PracticeLog(undefined, clock).totals()]).toEqual([
-      ["2026-10-18", 2],
-    ]);
+    expect([...new PracticeLog(clock).totals()]).toEqual([["2026-10-18", 2]]);
   });
 
   it("totals songs whose ids match object properties", () => {
-    const log = new PracticeLog(() => {}, clock);
+    const log = new PracticeLog(clock);
     log.add(2, "__proto__");
     log.add(1, "constructor");
     log.commit();
@@ -144,15 +145,10 @@ describe("practice log", () => {
     ]);
   });
 
-  it("tells the sync when browser storage refused a session", () => {
-    const onCommit = vi.fn();
-    const log = new PracticeLog(onCommit, clock);
+  it("reports when browser storage refused a session, and keeps counting it", () => {
+    const log = new PracticeLog(clock);
     log.add(1, "ode");
     expect(log.commit()).toBe(true);
-    expect(onCommit).toHaveBeenLastCalledWith(
-      expect.objectContaining({ seconds: 1 }),
-      true,
-    );
     vi.stubGlobal(
       "localStorage",
       storage(() => {
@@ -161,15 +157,12 @@ describe("practice log", () => {
     );
     log.add(1, "ode");
     expect(log.commit()).toBe(false);
-    expect(onCommit).toHaveBeenLastCalledWith(
-      expect.objectContaining({ seconds: 2 }),
-      false,
-    );
+    expect(log.totals().get("2026-10-18")).toBe(2);
   });
 
   it("takes in a session another tab saved while this one sits idle", () => {
-    const tabA = new PracticeLog(() => {}, clock);
-    const tabB = new PracticeLog(() => {}, clock);
+    const tabA = new PracticeLog(clock);
+    const tabB = new PracticeLog(clock);
     tabA.add(300, "ode");
     tabA.commit();
     expect(tabB.totals().get("2026-10-18")).toBeUndefined();
@@ -200,8 +193,8 @@ describe("practice log", () => {
   });
 
   it("keeps other tabs' sessions when saving its own", () => {
-    const tabA = new PracticeLog(() => {}, clock);
-    const tabB = new PracticeLog(() => {}, clock);
+    const tabA = new PracticeLog(clock);
+    const tabB = new PracticeLog(clock);
     tabA.add(3, "ode");
     tabA.commit();
     tabB.add(2, "lamb");
@@ -219,8 +212,8 @@ describe("practice log", () => {
   });
 
   it("saves only its own session, so tabs saving together cannot overwrite each other", () => {
-    const tabA = new PracticeLog(() => {}, clock);
-    const tabB = new PracticeLog(() => {}, clock);
+    const tabA = new PracticeLog(clock);
+    const tabB = new PracticeLog(clock);
     const writes: string[] = [];
     vi.stubGlobal(
       "localStorage",
@@ -251,7 +244,7 @@ describe("practice log", () => {
       session("one-too-old", HISTORY_DAYS),
     ])
       stored.set(sessionKey(s.id), JSON.stringify(s));
-    const log = new PracticeLog(undefined, clock);
+    const log = new PracticeLog(clock);
     log.add(1, "ode");
     log.commit();
     expect(saved().map((s) => s.id)).toEqual([

@@ -108,10 +108,6 @@ export function remove(key: string) {
     return false;
   }
 }
-/** Throws when browser storage is blocked. */
-export function removeProgress(id: string) {
-  localStorage.removeItem(storageKey(`progress:${id}`));
-}
 /** Every song's saved progress on this browser, unvalidated, for account sync. */
 export function localProgress() {
   const saved: { id: string; progress: Partial<Progress> }[] = [];
@@ -136,7 +132,9 @@ export function settings(): Settings {
     voices: s.pianoVoices,
   });
   return {
-    mode: ["listen", "wait", "rhythm"].includes(s.mode) ? s.mode : "wait",
+    mode: ["listen", "wait", "rhythm"].includes(s.mode)
+      ? s.mode
+      : defaults.mode,
     // Older saves used 5% steps; snap them onto the slider's steps.
     speed: Number.isFinite(s.speed)
       ? (Math.round(
@@ -150,7 +148,7 @@ export function settings(): Settings {
       : defaults.speed,
     tolerance: Number.isFinite(s.tolerance)
       ? Math.max(0.08, Math.min(0.35, s.tolerance))
-      : 0.22,
+      : defaults.tolerance,
     left: !!s.left,
     right: !!s.right,
     duet: !!s.duet,

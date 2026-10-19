@@ -411,8 +411,8 @@ export function SheetTimeline({
           labelY: (hand === "right" ? 134 : 242) + row * LABEL_ROW,
         });
       }
-      // Built-in lessons retain printed values, including rests and articulation.
-      // Imported performance MIDI does not supply reliable rest notation.
+      // Lessons retain printed values, including rests and articulation.
+      // Performance MIDI does not supply reliable rest notation.
       if (song.lesson) {
         for (const hand of ["right", "left"] as const) {
           const intervals = bar

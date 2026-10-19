@@ -80,7 +80,7 @@ export function streak(
 /**
  * Adds up practice time into sessions and keeps them in browser storage. The
  * studio reports playing time as it happens; commit() saves the session in
- * progress and hands it to `onCommit`.
+ * progress.
  */
 export class PracticeLog {
   private sessions = new Map<string, PracticeSession>();
@@ -95,14 +95,7 @@ export class PracticeLog {
   /** Changes whenever a day's total does, so views can skip work. */
   revision = 0;
 
-  constructor(
-    /** `saved` is false when browser storage refused the session. */
-    private onCommit: (
-      session: PracticeSession,
-      saved: boolean,
-    ) => void = () => {},
-    private clock: () => Date = () => new Date(),
-  ) {
+  constructor(private clock: () => Date = () => new Date()) {
     for (const session of storedSessions())
       this.sessions.set(session.id, session);
   }
@@ -168,7 +161,6 @@ export class PracticeLog {
         this.sessions.delete(id);
         remove(sessionKey(id));
       }
-    this.onCommit(updated, saved);
     return saved;
   }
 

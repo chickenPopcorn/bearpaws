@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MAX_OPTIONAL_VOICES,
   MAX_PIANO_CACHE_BYTES,
-  MAX_REFERENCE_VOICES,
-  ReferenceAudio,
+  MAX_PIANO_VOICES,
+  PianoAudio,
 } from "../src/audio";
 import {
   PIANO_REGIONS,
@@ -41,7 +41,7 @@ const sizedBuffer = (bytes: number): AudioBuffer =>
 const sound = (pitch: number, velocity = 0.8) => ({ pitch, velocity });
 const fileFor = (pitch: number, velocity = 0.8) =>
   selectPianoRegion(pitch, velocity)!.file;
-const cachedBytes = (audio: ReferenceAudio) =>
+const cachedBytes = (audio: PianoAudio) =>
   [...audio.samples.values()].reduce(
     (sum, sample) => sum + sample.length * sample.numberOfChannels * 4,
     0,
@@ -134,7 +134,7 @@ function fixture(loaded = true) {
       disconnect: vi.fn(),
     })),
   };
-  const audio = new ReferenceAudio();
+  const audio = new PianoAudio();
   audio.context = context as unknown as AudioContext;
   if (loaded)
     for (const region of PIANO_REGIONS)
@@ -158,7 +158,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-describe("bounded reference audio", () => {
+describe("bounded piano audio", () => {
   it("reuses the shared sound bus for playback and previews after repeated audio unlocks", async () => {
     const { audio, context } = fixture();
     await audio.unlock();
@@ -223,7 +223,7 @@ describe("bounded reference audio", () => {
       expect(
         context.createGain.mock.results[0].value.disconnect,
       ).toHaveBeenCalledOnce();
-      expect(audio.error).toMatch(/Reference sound could not start/);
+      expect(audio.error).toMatch(/Piano sound could not start/);
     },
   );
 
@@ -275,7 +275,7 @@ describe("bounded reference audio", () => {
     const notes = Array.from({ length: 50000 }, (_, i) =>
       note(i, 60, 1 + (i % 3)),
     );
-    audio.schedule(notes, transport, true);
+    audio.schedule(notes, transport);
     expect(context.createBufferSource).toHaveBeenCalledTimes(1);
     expect(context.createGain).toHaveBeenCalledTimes(1);
     expect(
@@ -283,7 +283,7 @@ describe("bounded reference audio", () => {
     ).toHaveBeenCalledWith(0, 3, 0.24);
     expect(nodes[0].stop.mock.calls[0][0]).toBeCloseTo(4.7);
     expect(audio.scheduled.size).toBe(50000);
-    audio.schedule(notes, transport, true);
+    audio.schedule(notes, transport);
     expect(context.createBufferSource).toHaveBeenCalledTimes(1);
   });
   it("caps an imported dense chord before node allocation and cancels all retained voices", () => {
@@ -291,13 +291,10 @@ describe("bounded reference audio", () => {
     audio.schedule(
       Array.from({ length: 50000 }, (_, i) => note(i, i % 128)),
       transport,
-      true,
     );
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
-    expect(context.createBufferSource).toHaveBeenCalledTimes(
-      MAX_REFERENCE_VOICES,
-    );
-    expect(context.createGain).toHaveBeenCalledTimes(MAX_REFERENCE_VOICES);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
+    expect(context.createBufferSource).toHaveBeenCalledTimes(MAX_PIANO_VOICES);
+    expect(context.createGain).toHaveBeenCalledTimes(MAX_PIANO_VOICES);
     audio.stop();
     expect(audio.voices.size).toBe(0);
     expect(audio.scheduled.size).toBe(0);
@@ -344,34 +341,34 @@ describe("bounded reference audio", () => {
     const gain = (index: number) =>
       context.createGain.mock.results[index].value.gain;
     // A pedalled passage: one long note every 10 ms.
-    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+    for (let i = 0; i < MAX_PIANO_VOICES; i++)
       audio.tone(36 + (i % 60), 0.8, i / 100, 10);
     context.currentTime = 0.5;
     audio.tone(100, 0.8, 0.5, 1);
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES + 1);
     expect(gain(0).cancelAndHoldAtTime).toHaveBeenCalledWith(0.5);
     expect(gain(0).setTargetAtTime).toHaveBeenLastCalledWith(0, 0.5, 0.008);
     expect(nodes[0].stop.mock.lastCall![0]).toBeCloseTo(0.55);
     expect(gain(1).cancelAndHoldAtTime).not.toHaveBeenCalled();
     // Fifty voices started before 0.5 s. The others, and each new voice, wait.
     for (let i = 0; i < 100; i++) audio.tone(100, 0.8, 0.5, 1);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 50);
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
-    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES + 50);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
+    for (let i = 0; i < MAX_PIANO_VOICES; i++)
       expect(gain(i).cancelAndHoldAtTime).toHaveBeenCalledTimes(i < 50 ? 1 : 0);
   });
   it("replaces a voice at the cap only once the new note is due, so no fade is left pending", () => {
     const { audio, transport, context, nodes } = fixture();
     const gain = (index: number) =>
       context.createGain.mock.results[index].value.gain;
-    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+    for (let i = 0; i < MAX_PIANO_VOICES; i++)
       audio.tone(36 + (i % 60), 0.8, i / 100, 10);
     context.currentTime = 0.4;
     // Ahead of its attack the note waits, and no sounding voice is cut early,
     // so a speed change before then has no deferred fade to move.
     expect(audio.tone(100, 0.8, 0.5, 1)).toBe(false);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES);
     transport.setSpeed(0.5, 0.4);
     audio.reschedule(transport);
     for (let i = 0; i < 40; i++)
@@ -386,37 +383,37 @@ describe("bounded reference audio", () => {
       ...note(i, 21 + (i % 88), 2),
       start: i * 0.0001,
     }));
-    audio.schedule(notes, transport, true);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
+    audio.schedule(notes, transport);
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES);
     // The rest are due by the next tick: each replaces a voice, which fades.
     context.currentTime = 0.02;
-    audio.schedule(notes, transport, true);
-    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    audio.schedule(notes, transport);
+    expect(nodes).toHaveLength(2 * MAX_PIANO_VOICES);
     // Faded voices hold their nodes until they end, so later ticks wait.
     context.currentTime = 0.2;
-    audio.schedule(notes, transport, true);
-    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
-    for (const osc of nodes.slice(0, MAX_REFERENCE_VOICES)) osc.onended!();
+    audio.schedule(notes, transport);
+    expect(nodes).toHaveLength(2 * MAX_PIANO_VOICES);
+    for (const osc of nodes.slice(0, MAX_PIANO_VOICES)) osc.onended!();
     context.currentTime = 0.22;
-    audio.schedule(notes, transport, true);
-    expect(nodes).toHaveLength(3 * MAX_REFERENCE_VOICES);
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    audio.schedule(notes, transport);
+    expect(nodes).toHaveLength(3 * MAX_PIANO_VOICES);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
   });
   it("retries a note the voice cap refused once a voice is free", () => {
     const { audio, transport, context, nodes } = fixture();
-    const notes = Array.from({ length: MAX_REFERENCE_VOICES + 1 }, (_, i) => ({
+    const notes = Array.from({ length: MAX_PIANO_VOICES + 1 }, (_, i) => ({
       ...note(i, 30 + i),
       start: 0.05,
     }));
-    audio.schedule(notes, transport, true);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
-    expect(audio.scheduled.has(String(MAX_REFERENCE_VOICES))).toBe(false);
+    audio.schedule(notes, transport);
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES);
+    expect(audio.scheduled.has(String(MAX_PIANO_VOICES))).toBe(false);
     nodes[0].onended!();
     context.currentTime = 0.02;
-    audio.schedule(notes, transport, true);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    audio.schedule(notes, transport);
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES + 1);
     expect(nodes.at(-1)!.start.mock.calls[0][0]).toBeCloseTo(0.05);
-    expect(audio.scheduled.has(String(MAX_REFERENCE_VOICES))).toBe(true);
+    expect(audio.scheduled.has(String(MAX_PIANO_VOICES))).toBe(true);
   });
   it("takes voices fading after a stop out of the fresh room, keeping their compressed dry path", async () => {
     const { audio, context } = fixture();
@@ -461,15 +458,15 @@ describe("bounded reference audio", () => {
           ended.add(osc);
           osc.onended!();
         }
-      audio.schedule(notes, transport, true);
+      audio.schedule(notes, transport);
     }
     expect(context.createBufferSource).toHaveBeenCalledTimes(200);
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
   });
   it("moves waiting voices to a new speed, and a sounding note's release, without striking it again", () => {
     const { audio, transport, context, nodes } = fixture();
     const notes = [note(1, 60, 2), { ...note(2, 64, 2), start: 0.1 }];
-    audio.schedule(notes, transport, true);
+    audio.schedule(notes, transport);
     audio.tone(67, 0.8, 0.3, 0.4);
     expect(nodes).toHaveLength(3);
     const gain = (index: number) =>
@@ -492,14 +489,14 @@ describe("bounded reference audio", () => {
     );
     expect(gain(1).cancelAndHoldAtTime).toHaveBeenCalledExactlyOnceWith(0.05);
     expect(gain(2).cancelAndHoldAtTime).not.toHaveBeenCalled();
-    audio.schedule(notes, transport, true);
+    audio.schedule(notes, transport);
     expect(nodes).toHaveLength(4);
     // 0.05 of the song remains before the note, played at half speed.
     expect(nodes[3].start.mock.calls[0][0]).toBeCloseTo(0.15);
   });
   it("holds sounding notes at a Wait gate, then releases them where they end from there", () => {
     const { audio, transport, context, nodes } = fixture();
-    audio.schedule([note(1, 60, 2)], transport, true);
+    audio.schedule([note(1, 60, 2)], transport);
     const gain = context.createGain.mock.results[0].value.gain;
     const releaseTime = gain.setTargetAtTime.mock.calls[0][2];
     context.currentTime = 1;
@@ -525,7 +522,7 @@ describe("bounded reference audio", () => {
 
   it("keeps a just-struck note's full level when its release moves", () => {
     const { audio, transport, context } = fixture();
-    audio.schedule([note(1, 60, 2)], transport, true);
+    audio.schedule([note(1, 60, 2)], transport);
     context.currentTime = 0.001;
     transport.setSpeed(0.5, 0.001);
     audio.reschedule(transport);
@@ -536,20 +533,20 @@ describe("bounded reference audio", () => {
   it("caps active and fading voices together across rapid stops", () => {
     const { audio, nodes } = fixture();
     const fill = (when: number) => {
-      for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+      for (let i = 0; i < MAX_PIANO_VOICES; i++)
         audio.tone(36 + (i % 60), 0.8, when, 10);
     };
     fill(0);
     audio.stop();
     fill(0);
-    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
+    expect(nodes).toHaveLength(2 * MAX_PIANO_VOICES);
     // A second stop inside the 50 ms fade leaves 128 sources still fading.
     audio.stop();
     expect(audio.tone(60, 0.8, 0, 1)).toBe(false);
-    expect(nodes).toHaveLength(2 * MAX_REFERENCE_VOICES);
-    for (const osc of nodes.slice(0, MAX_REFERENCE_VOICES)) osc.onended!();
+    expect(nodes).toHaveLength(2 * MAX_PIANO_VOICES);
+    for (const osc of nodes.slice(0, MAX_PIANO_VOICES)) osc.onended!();
     fill(0);
-    expect(nodes).toHaveLength(3 * MAX_REFERENCE_VOICES);
+    expect(nodes).toHaveLength(3 * MAX_PIANO_VOICES);
   });
   describe("across loop passes", () => {
     // The loop [0.5, 1.5] at 1x wraps when the clock reaches 1 s.
@@ -569,7 +566,7 @@ describe("bounded reference audio", () => {
       const tick = (now: number) => {
         result.context.currentTime = now;
         transport.update(now);
-        result.audio.schedule(loopNotes, transport, true);
+        result.audio.schedule(loopNotes, transport);
       };
       return { ...result, transport, tick };
     }
@@ -600,7 +597,7 @@ describe("bounded reference audio", () => {
       transport.update(0.9);
       // As in a Wait loop, only note 2 may start the next pass; note 1,
       // which would sound into it, waits.
-      audio.schedule(loopNotes, transport, true, undefined, [loopNotes[1]]);
+      audio.schedule(loopNotes, transport, undefined, [loopNotes[1]]);
       expect(starts(nodes).slice(3)).toEqual([
         expect.closeTo(0.95),
         expect.closeTo(1),
@@ -645,16 +642,14 @@ describe("bounded reference audio", () => {
   it("applies the same cap to direct previews and future-scheduled voices, then reuses freed slots", () => {
     const { audio, context, nodes } = fixture();
     for (let i = 0; i < 5000; i++) audio.tone(i % 128, 0.8, 100, 10);
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
-    expect(context.createBufferSource).toHaveBeenCalledTimes(
-      MAX_REFERENCE_VOICES,
-    );
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
+    expect(context.createBufferSource).toHaveBeenCalledTimes(MAX_PIANO_VOICES);
     nodes[0].onended!();
     audio.tone(60, 0.8, 0, 1);
     expect(context.createBufferSource).toHaveBeenCalledTimes(
-      MAX_REFERENCE_VOICES + 1,
+      MAX_PIANO_VOICES + 1,
     );
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
   });
   it("contains audio allocation failures and waits for an explicit unlock before retrying", async () => {
     const { audio, context, nodes } = fixture();
@@ -664,7 +659,7 @@ describe("bounded reference audio", () => {
     expect(() => audio.tone(60, 0.8, 0, 1)).not.toThrow();
     expect(audio.voices.size).toBe(0);
     expect(nodes[0].disconnect).toHaveBeenCalledOnce();
-    expect(audio.error).toMatch(/Reference sound could not start/);
+    expect(audio.error).toMatch(/Piano sound could not start/);
     for (let i = 0; i < 1000; i++) audio.tone(60, 0.8, 0, 1);
     expect(context.createBufferSource).toHaveBeenCalledTimes(1);
     await audio.unlock();
@@ -1058,7 +1053,7 @@ describe("piano sample loading", () => {
     vi.stubGlobal("fetch", fetcher);
     await audio.unlock();
     audio.setPlaybackNotes([sound(60), sound(63)]);
-    audio.schedule([{ ...note(1), velocity: 0.8 }], transport, true);
+    audio.schedule([{ ...note(1), velocity: 0.8 }], transport);
     expect(audio.voices.size).toBe(1);
     await expect(audio.prepare([sound(66)])).rejects.toThrow(
       /too many piano samples/,
@@ -1090,7 +1085,7 @@ describe("piano sample loading", () => {
     );
     expect(audio.samples.has(future)).toBe(true);
     expect(audio.error).toMatch(/too many piano samples/);
-    audio.schedule([{ ...note(1, 63), velocity: 0.8 }], transport, true);
+    audio.schedule([{ ...note(1, 63), velocity: 0.8 }], transport);
     expect(context.createBufferSource).toHaveBeenCalledOnce();
     expect(audio.voices.size).toBe(1);
   });
@@ -1108,7 +1103,7 @@ describe("piano sample loading", () => {
     await audio.unlock();
     await expect(audio.prepare([sound(60)])).rejects.toThrow("offline");
     expect(audio.error).toMatch(/piano samples could not load/);
-    audio.schedule([{ ...note(1, 63), velocity: 0.8 }], transport, true);
+    audio.schedule([{ ...note(1, 63), velocity: 0.8 }], transport);
     expect(context.createBufferSource).toHaveBeenCalledOnce();
     expect(audio.voices.size).toBe(1);
   });
@@ -1216,7 +1211,7 @@ describe("optional piano voices", () => {
     const run = (notes: Note[], pedals: PedalSpan[], until: number) => {
       for (let tick = 0; tick * 0.02 <= until; tick++) {
         setup.context.currentTime = tick * 0.02;
-        setup.audio.schedule(notes, setup.transport, true, pedals);
+        setup.audio.schedule(notes, setup.transport, pedals);
       }
     };
     const optional = () =>
@@ -1339,10 +1334,7 @@ describe("optional piano voices", () => {
       const resonance = resonanceFor(notes);
       expect(resonance).toBeGreaterThan(MAX_OPTIONAL_VOICES);
       run(notes, pedals, 0);
-      const expected = Math.min(
-        MAX_OPTIONAL_VOICES,
-        MAX_REFERENCE_VOICES - count,
-      );
+      const expected = Math.min(MAX_OPTIONAL_VOICES, MAX_PIANO_VOICES - count);
       expect(optional()).toBe(expected);
       expect(audio.voices.size).toBe(count + expected);
       // Refused resonance is left out, not struck late once the chord sounds.
@@ -1360,16 +1352,16 @@ describe("optional piano voices", () => {
     for (let i = 0; i < 40; i++) audio.tone(36 + i, 0.8, i / 1000, 10);
     context.currentTime = 0.1;
     const [notes, pedals] = chord(12, 0.1);
-    audio.schedule(notes, transport, true, pedals);
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
-    expect(optional()).toBe(MAX_REFERENCE_VOICES - 52);
+    audio.schedule(notes, transport, pedals);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
+    expect(optional()).toBe(MAX_PIANO_VOICES - 52);
     context.currentTime = 0.5;
     // C7 has no resonance of its own.
     const late = { ...note(99, 96, 3), start: 0.5, end: 2 };
-    audio.schedule([...notes, late], transport, true, pedals);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
-    expect(optional()).toBe(MAX_REFERENCE_VOICES - 53);
+    audio.schedule([...notes, late], transport, pedals);
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES + 1);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
+    expect(optional()).toBe(MAX_PIANO_VOICES - 53);
     const faded = nodes
       .map((_, index) => index)
       .filter((index) => gain(index).cancelAndHoldAtTime.mock.calls.length);
@@ -1380,20 +1372,17 @@ describe("optional piano voices", () => {
   it("lets a due note cancel an optional voice waiting to start before it takes a note's", () => {
     const { audio, transport, context, nodes, gain } = withVoices();
     const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
-    const older = MAX_REFERENCE_VOICES - 1 - resonance;
+    const older = MAX_PIANO_VOICES - 1 - resonance;
     for (let i = 0; i < older; i++) audio.tone(36 + i, 0.8, i / 1000, 10);
     context.currentTime = 0.05;
     // A pedalled note and its resonance wait to start at 0.1 s.
-    audio.schedule(
-      [{ ...note(1, 64, 3), start: 0.1, end: 2 }],
-      transport,
-      true,
-      [{ channel: 0, start: 0.1, end: 3 }],
-    );
-    expect(audio.voices.size).toBe(MAX_REFERENCE_VOICES);
+    audio.schedule([{ ...note(1, 64, 3), start: 0.1, end: 2 }], transport, [
+      { channel: 0, start: 0.1, end: 3 },
+    ]);
+    expect(audio.voices.size).toBe(MAX_PIANO_VOICES);
     // An on-screen preview, due now.
     expect(audio.tone(100, 0.8, 0.05, 1)).toBe(true);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES + 1);
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES + 1);
     const faded = nodes
       .map((_, index) => index)
       .filter((index) => gain(index).cancelAndHoldAtTime.mock.calls.length);
@@ -1413,9 +1402,9 @@ describe("optional piano voices", () => {
       { ...note(2, 64, 1), end: 1 },
     ];
     audio.setPlaybackNotes(released, []);
-    audio.schedule([released[0]], transport, true);
+    audio.schedule([released[0]], transport);
     expect(audio.scheduled).toEqual(new Set(["1~keyNoise~0", "1~release~0"]));
-    audio.schedule(released, transport, true);
+    audio.schedule(released, transport);
     expect(audio.scheduled).toEqual(
       new Set(["1~keyNoise~0", "1~release~0", "2~keyNoise~0", "2~release~0"]),
     );
@@ -1423,14 +1412,14 @@ describe("optional piano voices", () => {
 
   it("never takes a note's voice for an optional voice", () => {
     const { audio, transport, context, nodes, gain } = withVoices();
-    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+    for (let i = 0; i < MAX_PIANO_VOICES; i++)
       audio.tone(36 + (i % 60), 0.8, i / 100, 10);
     context.currentTime = 1;
     // Its key comes up now, with the pedal up: harmonics and key noise.
     const released = { ...note(99, 60, 1), end: 1 };
-    audio.schedule([released], transport, true);
-    expect(nodes).toHaveLength(MAX_REFERENCE_VOICES);
-    for (let i = 0; i < MAX_REFERENCE_VOICES; i++)
+    audio.schedule([released], transport);
+    expect(nodes).toHaveLength(MAX_PIANO_VOICES);
+    for (let i = 0; i < MAX_PIANO_VOICES; i++)
       expect(gain(i).cancelAndHoldAtTime).not.toHaveBeenCalled();
     expect(audio.scheduled).toEqual(new Set(["99~keyNoise~0", "99~release~0"]));
   });
@@ -1444,7 +1433,7 @@ describe("optional piano voices", () => {
       // Its key comes up as playback starts: that belongs before it.
       { ...note(2, 62, 1.5), start: 0.5, end: 1 },
     ];
-    audio.schedule(notes, transport, true, [{ channel: 0, start: 1, end: 2 }]);
+    audio.schedule(notes, transport, [{ channel: 0, start: 1, end: 2 }]);
     expect(played()).toEqual([
       // The pedal holds it, so its note sounds from here.
       [fileFor(62, 0.5), 0.02],
@@ -1467,7 +1456,7 @@ describe("optional piano voices", () => {
     for (let tick = 0; tick * 0.02 <= 1.95; tick++) {
       context.currentTime = tick * 0.02;
       transport.update(context.currentTime);
-      audio.schedule(notes, transport, true, pedals);
+      audio.schedule(notes, transport, pedals);
     }
     const release = pianoVoiceRegions("release", 60, 0.5)[0].file;
     const lifts = played().filter(([file]) =>
@@ -1497,7 +1486,7 @@ describe("optional piano voices", () => {
     // The first tick comes 1.12 s after playback starts at 0.
     context.currentTime = 1.12;
     const late = transport.at(1.12) - 0.12 * transport.speed;
-    audio.schedule([{ ...note(1, 60, late), end: late }], transport, true, []);
+    audio.schedule([{ ...note(1, 60, late), end: late }], transport, []);
     expect(played().map(([file]) => file)).toEqual([
       "rel40.flac",
       pianoVoiceRegions("release", 60, 0.5)[0].file,
@@ -1517,7 +1506,7 @@ describe("optional piano voices", () => {
     for (let tick = 0; tick * 0.02 <= 1.95; tick++) {
       context.currentTime = tick * 0.02;
       transport.update(context.currentTime);
-      audio.schedule(notes, transport, true, []);
+      audio.schedule(notes, transport, []);
     }
     expect(
       played().filter(([file]) => (file as string).startsWith("rel")),
@@ -1531,7 +1520,7 @@ describe("optional piano voices", () => {
     const { audio, transport, played, gain } = withVoices();
     transport.seek(1, 0);
     const notes = [{ ...note(1, 64, 3), start: 0.5, end: 2.5 }];
-    audio.schedule(notes, transport, true, [{ channel: 0, start: 0, end: 3 }]);
+    audio.schedule(notes, transport, [{ channel: 0, start: 0, end: 3 }]);
     const resonance = pianoVoiceRegions("resonance", 64, 0.5);
     expect(played()).toEqual([
       [fileFor(64, 0.5), 0],
@@ -1549,7 +1538,7 @@ describe("optional piano voices", () => {
     // Playback starts 20 ms before the pedal lifts and damps the note.
     transport.seek(2.98, 0);
     const notes = [{ ...note(1, 64, 3), start: 0.5, end: 2.5 }];
-    audio.schedule(notes, transport, true, [{ channel: 0, start: 0, end: 3 }]);
+    audio.schedule(notes, transport, [{ channel: 0, start: 0, end: 3 }]);
     const resonance = pianoVoiceRegions("resonance", 64, 0.5).length;
     expect(resonance).toBeGreaterThan(0);
     for (let i = 0; i < resonance; i++) {
@@ -1587,7 +1576,7 @@ describe("optional piano voices", () => {
     audio.reschedule(transport);
     for (let tick = 26; tick * 0.02 <= 1.6; tick++) {
       context.currentTime = tick * 0.02;
-      audio.schedule(notes, transport, true, []);
+      audio.schedule(notes, transport, []);
     }
     const region = pianoVoiceRegions("release", 60, 0.5)[0];
     const index = played().findIndex(([file]) => file === region.file);
@@ -1612,7 +1601,7 @@ describe("optional piano voices", () => {
     ];
     for (let tick = 0; tick * 0.02 <= 1.1; tick++) {
       context.currentTime = tick * 0.02;
-      audio.schedule(notes, transport, true, []);
+      audio.schedule(notes, transport, []);
     }
     const region = pianoVoiceRegions("release", 60, 0.5)[0];
     const index = played().findIndex(([file]) => file === region.file);
@@ -1638,7 +1627,7 @@ describe("optional piano voices", () => {
     for (let tick = 0; tick * 0.02 <= 1.6; tick++) {
       context.currentTime = tick * 0.02;
       transport.update(context.currentTime);
-      audio.schedule(notes, transport, true, pedals);
+      audio.schedule(notes, transport, pedals);
     }
     // Channel 1 has no note in the prepared passage: no pedal noise.
     expect(
@@ -1649,7 +1638,7 @@ describe("optional piano voices", () => {
     const before = played().length;
     context.currentTime = 0.5;
     transport.seek(0.45, 0.5);
-    audio.schedule(notes, transport, true, pedals);
+    audio.schedule(notes, transport, pedals);
     expect(
       played()
         .slice(before)
@@ -1661,7 +1650,7 @@ describe("optional piano voices", () => {
     const { audio, transport } = withVoices();
     const cache = () =>
       (audio as unknown as { voiceEventCache?: unknown }).voiceEventCache;
-    audio.schedule([note(1, 60, 0.4)], transport, true, []);
+    audio.schedule([note(1, 60, 0.4)], transport, []);
     expect(cache()).toBeDefined();
     audio.stop();
     expect(cache()).toBeUndefined();

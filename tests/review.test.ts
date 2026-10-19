@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeMidi } from "midi-file";
-import { ReferenceAudio } from "../src/audio";
+import { PianoAudio } from "../src/audio";
 import { PIANO_REGIONS, selectPianoRegion } from "../src/piano";
 import { MidiState, Practice, Transport } from "../src/engine";
 import {
@@ -171,32 +171,30 @@ describe("teacher duet in the waterfall", () => {
     const selected = [student];
     const { canvas, noteFills } = drawingCanvas();
     // Duet off: the teacher part is not drawn, and the keys fit the student.
-    draw(
-      canvas,
-      fixture,
-      selected,
-      0,
-      new MidiState(),
-      new Practice(selected),
-      false,
-      false,
-      false,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: selected,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(selected),
+      names: false,
+      waiting: false,
+      listen: false,
+    });
     expect(noteFills.map(({ color }) => color)).toEqual([rightColor]);
     expect(range(fixture)).toEqual([48, 84]);
     noteFills.length = 0;
-    draw(
-      canvas,
-      fixture,
-      selected,
-      0,
-      new MidiState(),
-      new Practice(selected),
-      false,
-      false,
-      false,
-      fixture.duet.notes,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: selected,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(selected),
+      names: false,
+      waiting: false,
+      listen: false,
+      duet: fixture.duet.notes,
+    });
     expect(noteFills.map(({ color, alpha }) => ({ color, alpha }))).toEqual([
       { color: duetColor, alpha: DUET_ALPHA },
       { color: rightColor, alpha: 1 },
@@ -219,18 +217,17 @@ describe("teacher duet in the waterfall", () => {
     ];
     const fixture = { ...song(students), duet: { octaves: 1, notes: teacher } };
     const { canvas, noteFills } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
-      students,
-      0,
-      new MidiState(),
-      new Practice(students),
-      false,
-      false,
-      false,
-      teacher,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: students,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(students),
+      names: false,
+      waiting: false,
+      listen: false,
+      duet: teacher,
+    });
     const duetFills = noteFills.filter(({ color }) => color === duetColor);
     // Two shapes were left: the repeated outline counts once, and "t2" waits.
     expect(duetFills).toHaveLength(2);
@@ -265,17 +262,16 @@ describe("review regressions", () => {
     const practice = new Practice(selected);
     const { canvas, context, fills, noteFills, labels, noteStrokes } =
       drawingCanvas();
-    draw(
-      canvas,
-      fixture,
-      selected,
-      1.25,
-      new MidiState(),
+    draw(canvas, {
+      song: fixture,
+      notes: selected,
+      position: 1.25,
+      input: new MidiState(),
       practice,
-      true,
-      false,
-      true,
-    );
+      names: true,
+      waiting: false,
+      listen: true,
+    });
 
     expect(noteFills.map(({ color, alpha }) => ({ color, alpha }))).toEqual([
       { color: leftColor, alpha: 0.5 },
@@ -309,17 +305,16 @@ describe("review regressions", () => {
     });
     expect(context.globalAlpha).toBe(1);
 
-    draw(
-      canvas,
-      fixture,
-      selected,
-      1.25,
-      new MidiState(),
+    draw(canvas, {
+      song: fixture,
+      notes: selected,
+      position: 1.25,
+      input: new MidiState(),
       practice,
-      false,
-      true,
-      false,
-    );
+      names: false,
+      waiting: true,
+      listen: false,
+    });
     expect(noteStrokes).toHaveLength(1);
     expect(noteStrokes[0].x).toBeCloseTo(rightKey.x * 880 + 2);
     expect(noteStrokes[0].y).toBeCloseTo(strikeLine - 0.75 * pixelsPerSecond);
@@ -342,17 +337,16 @@ describe("review regressions", () => {
       count: background.length,
     });
     const { canvas, context, noteFills } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
-      selected,
-      0,
-      new MidiState(),
-      new Practice(selected),
-      false,
-      false,
-      false,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: selected,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(selected),
+      names: false,
+      waiting: false,
+      listen: false,
+    });
     expect(context.roundRect).toHaveBeenCalledTimes(MAX_VISIBLE_NOTES);
     expect(noteFills.filter(({ alpha }) => alpha === 0.5)).toHaveLength(
       MAX_VISIBLE_NOTES - 1,
@@ -376,17 +370,16 @@ describe("review regressions", () => {
       tempos: [{ tick: 0, microseconds: 1_000_000 }],
     };
     const { canvas, context } = drawingCanvas();
-    draw(
-      canvas,
-      piece,
-      piece.notes,
-      0,
-      new MidiState(),
-      new Practice([]),
-      false,
-      false,
-      false,
-    );
+    draw(canvas, {
+      song: piece,
+      notes: piece.notes,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice([]),
+      names: false,
+      waiting: false,
+      listen: false,
+    });
     expect(context.fillText).toHaveBeenCalledWith(
       "beat 1",
       7,
@@ -406,17 +399,16 @@ describe("review regressions", () => {
       timeSignatures: [{ tick: 0, numerator: 6, denominator: 8 }],
     };
     const { canvas, context } = drawingCanvas();
-    draw(
-      canvas,
-      piece,
-      piece.notes,
-      0,
-      new MidiState(),
-      new Practice([]),
-      false,
-      false,
-      false,
-    );
+    draw(canvas, {
+      song: piece,
+      notes: piece.notes,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice([]),
+      names: false,
+      waiting: false,
+      listen: false,
+    });
     expect(context.fillText).toHaveBeenCalledWith(
       "beat 7",
       7,
@@ -438,17 +430,16 @@ describe("review regressions", () => {
     const piece = song([n]);
     const practice = new Practice(piece.notes);
     const { canvas, context } = drawingCanvas();
-    draw(
-      canvas,
-      piece,
-      piece.notes,
-      0,
-      new MidiState(),
+    draw(canvas, {
+      song: piece,
+      notes: piece.notes,
+      position: 0,
+      input: new MidiState(),
       practice,
-      false,
-      true,
-      false,
-    );
+      names: false,
+      waiting: true,
+      listen: false,
+    });
     expect(
       context.fillText.mock.calls.filter(([text]) => text === "3"),
     ).toHaveLength(2);
@@ -457,17 +448,16 @@ describe("review regressions", () => {
     );
     piece.tracks[0].hand = "left";
     context.fillText.mockClear();
-    draw(
-      canvas,
-      piece,
-      piece.notes,
-      0,
-      new MidiState(),
+    draw(canvas, {
+      song: piece,
+      notes: piece.notes,
+      position: 0,
+      input: new MidiState(),
       practice,
-      false,
-      true,
-      false,
-    );
+      names: false,
+      waiting: true,
+      listen: false,
+    });
     expect(context.fillText.mock.calls.some(([text]) => text === "3")).toBe(
       false,
     );
@@ -481,17 +471,16 @@ describe("review regressions", () => {
     ];
     const fixture = song(notes);
     const { canvas, context, labelPaints } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
+    draw(canvas, {
+      song: fixture,
       notes,
-      0,
-      new MidiState(),
-      new Practice(notes),
-      true,
-      false,
-      false,
-    );
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(notes),
+      names: true,
+      waiting: false,
+      listen: false,
+    });
     expect(
       context.roundRect.mock.calls.map(([, , , height]) => height),
     ).toEqual([8, 8]);
@@ -528,17 +517,16 @@ describe("review regressions", () => {
           font: (context as unknown as { font: string }).font,
         });
       });
-      draw(
-        canvas,
-        fixture,
-        fixture.notes,
-        0,
-        new MidiState(),
-        new Practice(fixture.notes),
-        true,
-        false,
-        false,
-      );
+      draw(canvas, {
+        song: fixture,
+        notes: fixture.notes,
+        position: 0,
+        input: new MidiState(),
+        practice: new Practice(fixture.notes),
+        names: true,
+        waiting: false,
+        listen: false,
+      });
       const [, , blockWidth] = context.roundRect.mock.calls[0] as number[];
       const label = paints.find(({ args }) => args[0] === "C♯4");
       if (blockWidth <= 18) continue;
@@ -567,17 +555,16 @@ describe("review regressions", () => {
     };
     const fixture = song([n]);
     const { canvas, context, labelPaints } = drawingCanvas(1760);
-    draw(
-      canvas,
-      fixture,
-      fixture.notes,
-      0,
-      new MidiState(),
-      new Practice(fixture.notes),
-      true,
-      false,
-      false,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: fixture.notes,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(fixture.notes),
+      names: true,
+      waiting: false,
+      listen: false,
+    });
     const [x, y, width, height] = context.roundRect.mock.calls[0] as number[];
     const labels = labelPaints.filter(
       ({ text }) => text === "C♯4" || text === "2",
@@ -600,17 +587,16 @@ describe("review regressions", () => {
     };
     const fixture = song([n]);
     const { canvas, context, labelPaints } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
-      fixture.notes,
-      0,
-      new MidiState(),
-      new Practice(fixture.notes),
-      false,
-      false,
-      false,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: fixture.notes,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(fixture.notes),
+      names: false,
+      waiting: false,
+      listen: false,
+    });
     const [x, y, width, height] = context.roundRect.mock.calls[0] as number[];
     const label = labelPaints.find(({ text }) => text === "3")!;
     expect(y).toBeLessThan(0);
@@ -636,17 +622,16 @@ describe("review regressions", () => {
       };
       const fixture = song([n]);
       const { canvas, context, labelPaints } = drawingCanvas(width);
-      draw(
-        canvas,
-        fixture,
-        fixture.notes,
-        0,
-        new MidiState(),
-        new Practice(fixture.notes),
-        true,
-        false,
-        false,
-      );
+      draw(canvas, {
+        song: fixture,
+        notes: fixture.notes,
+        position: 0,
+        input: new MidiState(),
+        practice: new Practice(fixture.notes),
+        names: true,
+        waiting: false,
+        listen: false,
+      });
       const [x, , w] = context.roundRect.mock.calls[0] as number[];
       expect(w).toBeLessThanOrEqual(18);
       const waterfall = labelPaints.filter(({ y }) => y < strikeLine);
@@ -668,17 +653,16 @@ describe("review regressions", () => {
       pitches.map((pitch) => note(`edge-${pitch}`, pitch, 1.8, 2.4)),
     );
     const { canvas, labelPaints, noteFills } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
-      fixture.notes,
-      0,
-      new MidiState(),
-      new Practice(fixture.notes),
-      false,
-      false,
-      false,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: fixture.notes,
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(fixture.notes),
+      names: false,
+      waiting: false,
+      listen: false,
+    });
     const label = labelPaints.find(({ text }) => text === "beat 5")!;
     expect(label.y).toBeCloseTo(strikeLine - 2 * pixelsPerSecond - 5);
     // The test canvas measures text at 0.6 em per character.
@@ -703,17 +687,16 @@ describe("review regressions", () => {
     const fixture = song([right, left]);
     fixture.tracks.push({ id: 1, name: "Left", hand: "left", count: 1 });
     const { canvas, context } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
-      [right],
-      1.25,
-      new MidiState(),
-      new Practice([right]),
-      true,
-      false,
-      true,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: [right],
+      position: 1.25,
+      input: new MidiState(),
+      practice: new Practice([right]),
+      names: true,
+      waiting: false,
+      listen: true,
+    });
     const keyLabels = context.fillText.mock.calls
       .filter(([, , y]) => Number(y) >= strikeLine)
       .map(([text]) => text);
@@ -732,17 +715,16 @@ describe("review regressions", () => {
     };
     const fixture = song([n]);
     const { canvas, fills, labelPaints } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
-      fixture.notes,
-      1.25,
-      new MidiState(),
-      new Practice(fixture.notes),
-      true,
-      false,
-      true,
-    );
+    draw(canvas, {
+      song: fixture,
+      notes: fixture.notes,
+      position: 1.25,
+      input: new MidiState(),
+      practice: new Practice(fixture.notes),
+      names: true,
+      waiting: false,
+      listen: true,
+    });
     const [min, max] = range(fixture);
     const key = keyLayout(min, max).find((entry) => entry.pitch === n.pitch)!;
     expect(fills).toContainEqual({
@@ -895,17 +877,16 @@ describe("review regressions", () => {
     const practice = new Practice(fixture.notes);
     const check = (position: number) => {
       context.roundRect.mockClear();
-      draw(
-        canvas,
-        fixture,
-        fixture.notes,
+      draw(canvas, {
+        song: fixture,
+        notes: fixture.notes,
         position,
-        new MidiState(),
+        input: new MidiState(),
         practice,
-        false,
-        false,
-        false,
-      );
+        names: false,
+        waiting: false,
+        listen: false,
+      });
       return context.roundRect.mock.calls[0] as number[];
     };
     const before = check(0.9),
@@ -976,17 +957,16 @@ describe("review regressions", () => {
     Object.defineProperty(fixture, "tempos", { get: readTempos });
     const render = (current: Song, position: number) => {
       context.fillText.mockClear();
-      draw(
-        canvas,
-        current,
-        current.notes,
+      draw(canvas, {
+        song: current,
+        notes: current.notes,
         position,
-        new MidiState(),
-        new Practice(current.notes),
-        false,
-        false,
-        false,
-      );
+        input: new MidiState(),
+        practice: new Practice(current.notes),
+        names: false,
+        waiting: false,
+        listen: false,
+      });
       return context.fillText.mock.calls.find(([text]) => text === "beat 5");
     };
 
@@ -1032,17 +1012,16 @@ describe("review regressions", () => {
     const fixture = song(notes);
     fixture.tracks.push({ id: 1, name: "Left", hand: "left", count: 1 });
     const { canvas, context, fills } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
+    draw(canvas, {
+      song: fixture,
       notes,
-      0.5,
-      new MidiState(),
-      new Practice(notes),
-      false,
-      false,
-      true,
-    );
+      position: 0.5,
+      input: new MidiState(),
+      practice: new Practice(notes),
+      names: false,
+      waiting: false,
+      listen: true,
+    });
     expect(context.roundRect).toHaveBeenCalledTimes(MAX_VISIBLE_NOTES);
     const [min, max] = range(fixture);
     const left = keyLayout(min, max).find((key) => key.pitch === 48)!;
@@ -1060,17 +1039,16 @@ describe("review regressions", () => {
     );
     const fixture = song(notes);
     const { canvas, context } = drawingCanvas();
-    draw(
-      canvas,
-      fixture,
+    draw(canvas, {
+      song: fixture,
       notes,
-      0,
-      new MidiState(),
-      new Practice(notes),
-      false,
-      false,
-      false,
-    );
+      position: 0,
+      input: new MidiState(),
+      practice: new Practice(notes),
+      names: false,
+      waiting: false,
+      listen: false,
+    });
     expect(context.roundRect).toHaveBeenCalledTimes(MAX_VISIBLE_NOTES);
     const rectangles = context.roundRect.mock.calls as number[][];
     expect(rectangles[0][1] + rectangles[0][3]).toBe(strikeLine);
@@ -1098,17 +1076,16 @@ describe("review regressions", () => {
     const { canvas, context } = drawingCanvas();
     for (let frame = 0; frame < 3; frame++) {
       context.roundRect.mockClear();
-      draw(
-        canvas,
-        fixture,
+      draw(canvas, {
+        song: fixture,
         notes,
-        frame / 10,
-        new MidiState(),
+        position: frame / 10,
+        input: new MidiState(),
         practice,
-        false,
-        true,
-        false,
-      );
+        names: false,
+        waiting: true,
+        listen: false,
+      });
       expect(context.roundRect).toHaveBeenCalledTimes(2);
     }
     expect(readExpected).toHaveBeenCalledOnce();
@@ -1168,10 +1145,10 @@ function audioContext() {
   return { context, sources, envelopes };
 }
 
-describe("reference audio scheduling with a fake Web Audio context", () => {
+describe("piano audio scheduling with a fake Web Audio context", () => {
   it("uses transport speed for onset and sustain duration, avoids duplicate scheduling, and cancels on seek", () => {
     const { context, sources, envelopes } = audioContext();
-    const audio = new ReferenceAudio();
+    const audio = new PianoAudio();
     audio.context = context as unknown as AudioContext;
     for (const region of PIANO_REGIONS)
       audio.samples.set(region.file, {
@@ -1184,20 +1161,20 @@ describe("reference audio scheduling with a fake Web Audio context", () => {
     transport.play(10);
     const n = { ...note("reference", 69, 0.05, 0.25), soundEnd: 0.5 };
     const region = selectPianoRegion(n.pitch, n.velocity)!;
-    audio.schedule([n], transport, true);
+    audio.schedule([n], transport);
     expect(sources).toHaveLength(1);
     expect(sources[0].start.mock.calls[0][0]).toBeCloseTo(10.1);
     expect(sources[0].start.mock.calls[0][1]).toBe(region.offset);
     expect(sources[0].playbackRate.value).toBe(1);
     expect(envelopes[0].setTargetAtTime.mock.calls[0][1]).toBeCloseTo(11);
-    audio.schedule([n], transport, true);
+    audio.schedule([n], transport);
     expect(sources).toHaveLength(1);
 
     context.currentTime = 10.2;
-    // Studio.seek stops the reference before it moves the transport.
+    // Studio.seek stops the audio before it moves the transport.
     audio.stop(false);
     transport.seek(0.2, context.currentTime);
-    audio.schedule([n], transport, true);
+    audio.schedule([n], transport);
     expect(sources).toHaveLength(2);
     expect(sources[0].stop.mock.lastCall![0]).toBeCloseTo(10.25);
     expect(envelopes[0].disconnect).not.toHaveBeenCalled();
@@ -1211,7 +1188,7 @@ describe("reference audio scheduling with a fake Web Audio context", () => {
     expect(audio.voices.size).toBe(0);
     expect(audio.scheduled.size).toBe(0);
     expect(sources[1].stop.mock.lastCall![0]).toBeCloseTo(10.25);
-    audio.schedule([n], transport, true);
+    audio.schedule([n], transport);
     expect(sources).toHaveLength(2);
   });
 });
