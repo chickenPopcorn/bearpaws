@@ -539,6 +539,85 @@ describe("account sync", () => {
     expect(read(`stash:${OTHER}`, null)).toBeNull();
   });
 
+  it("adds unsent practice to an account's earlier stash, the longer copy winning", async () => {
+    const OTHER = "22222222-2222-2222-2222-222222222222";
+    const today = localDay(new Date());
+    const session = (id: string, seconds: number) => ({
+      id,
+      day: today,
+      startedAt: "x",
+      seconds,
+      songs: { ode: seconds },
+    });
+    write(`stash:${OTHER}`, {
+      marker: {
+        owner: OTHER,
+        progress: {},
+        deleted: {},
+        practice: { grew: "000030", kept: "000090" },
+      },
+      settings: null,
+      progress: {},
+      practice: [session("grew", 30), session("kept", 90)],
+    });
+    write("owner", OTHER);
+    write("practice", [
+      session("grew", 50),
+      session("kept", 60),
+      session("new", 10),
+    ]);
+    write("unsynced", {
+      owner: OTHER,
+      progress: {},
+      deleted: {},
+      practice: { grew: "000050", kept: "000060", new: "000010" },
+    });
+    await new CloudSync(client(backend()), USER).pull();
+    const stash = read<{
+      marker: { practice: Record<string, string> };
+      practice: { id: string; seconds: number }[];
+    } | null>(`stash:${OTHER}`, null)!;
+    expect(stash.practice.map((s) => [s.id, s.seconds])).toEqual([
+      ["grew", 50],
+      ["kept", 90],
+      ["new", 10],
+    ]);
+    expect(stash.marker.practice).toEqual({
+      grew: "000050",
+      kept: "000090",
+      new: "000010",
+    });
+  });
+
+  it("keeps a switched-out account's late saves out of the new account", async () => {
+    const OTHER = "22222222-2222-2222-2222-222222222222";
+    write("owner", OTHER);
+    const b = backend();
+    let open!: () => void;
+    b.readGate = new Promise((resolve) => (open = resolve));
+    const pulling = new CloudSync(client(b), USER).pull();
+    // A tab of the other account, not yet told of the switch, saves.
+    write("progress:theirs", { best: 7, updated: "t" });
+    write("settings", { mode: "rhythm" });
+    write("unsynced", {
+      owner: OTHER,
+      settings: "s",
+      progress: { theirs: "t" },
+      deleted: {},
+    });
+    open();
+    await pulling;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(b.upserts).toEqual([]);
+    expect(read("progress:theirs", null)).toBeNull();
+    expect(read("settings", null)).toBeNull();
+    expect(
+      read<{ progress: Record<string, unknown> }>(`stash:${OTHER}`, {
+        progress: {},
+      }).progress,
+    ).toEqual({ theirs: { best: 7, updated: "t" } });
+  });
+
   it("drops a restored stash even when that pull fails", async () => {
     const OTHER = "22222222-2222-2222-2222-222222222222";
     write(`stash:${USER}`, {

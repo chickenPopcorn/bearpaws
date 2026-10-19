@@ -31,6 +31,9 @@ import {
 import type { SyncHooks } from "./cloud";
 import { IDLE_SECONDS, PracticeLog } from "./practiceLog";
 const SOUND_UNAVAILABLE = "Piano sound is unavailable. Please try again.";
+/** A progress record's content, leaving out when it was saved. */
+const unstamped = ({ updated: _updated, ...rest }: Progress) =>
+  JSON.stringify(rest);
 const NO_PEDALS: readonly PedalSpan[] = [];
 export class Studio {
   settings = settings();
@@ -70,6 +73,8 @@ export class Studio {
   private lastKeyAt = -Infinity;
   /** The previous tick while practice time was being counted. */
   private lastPracticeTick: number | null = null;
+  /** The current song's record as last written, without its stamp. */
+  private savedProgress = "";
   progress: Progress = {
     position: 0,
     best: 0,
@@ -249,22 +254,32 @@ export class Studio {
   }
   /** `loaded`: this save is made as the song opens, before any practice. */
   save(loaded = false) {
-    this.progress = {
+    // Practice time grows on its own, so it is saved even when progress has
+    // not changed.
+    if (!this.practiceLog.commit())
+      this.storageNotice = "Practice time could not be saved in this browser.";
+    const next: Progress = {
       ...this.progress,
       position: this.position,
-      updated: new Date().toISOString(),
       assignments: Object.fromEntries(
         this.song.tracks.map((t) => [t.id, t.hand]),
       ),
       loopEnabled: this.loopEnabled,
       loop: [this.loopStart, this.loopEnd],
     };
+    // Only a change gets a new stamp and is written: another tab picks the
+    // copy with the latest stamp to upload, so an idle tab re-saving what it
+    // loaded must not look newer than practice saved since.
+    if (unstamped(next) === this.savedProgress) {
+      if (loaded) this.sync?.progress(this.song.id, this.progress, true, true);
+      return;
+    }
+    this.progress = { ...next, updated: new Date().toISOString() };
+    this.savedProgress = unstamped(next);
     const stored = write(`progress:${this.song.id}`, this.progress);
     if (!stored)
       this.storageNotice = "Progress could not be saved in this browser.";
     this.sync?.progress(this.song.id, this.progress, loaded, stored);
-    if (!this.practiceLog.commit())
-      this.storageNotice = "Practice time could not be saved in this browser.";
   }
   load(song: Song) {
     this.cancelPlaybackPreparation();
@@ -274,6 +289,7 @@ export class Studio {
     this.settings.selected = song.id;
     this.persist();
     this.progress = progress(song.id, song.duration);
+    this.savedProgress = this.progress.updated ? unstamped(this.progress) : "";
     for (const t of this.song.tracks) {
       const hand = this.progress.assignments[t.id];
       if (["left", "right", "off"].includes(hand)) t.hand = hand as Hand;

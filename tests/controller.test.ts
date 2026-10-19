@@ -1498,10 +1498,16 @@ describe("account sync hooks", () => {
       true,
       true,
     );
+    // Saving with nothing changed neither restamps nor reports the record.
+    const calls = sync.progress.mock.calls.length;
+    const stamp = studio.progress.updated;
     studio.save();
+    expect(sync.progress).toHaveBeenCalledTimes(calls);
+    expect(studio.progress.updated).toBe(stamp);
+    studio.seek(1);
     expect(sync.progress).toHaveBeenLastCalledWith(
       "controller-fixture",
-      expect.objectContaining({ updated: expect.any(String) }),
+      expect.objectContaining({ position: 1, updated: expect.any(String) }),
       false,
       true,
     );
