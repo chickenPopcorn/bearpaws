@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { writeMidi } from "midi-file";
 import { buildScore } from "../src/notation";
-import { parseSong, type TimeSignature } from "../src/song";
+import {
+  parseSong,
+  songVersion,
+  type Song,
+  type TimeSignature,
+} from "../src/song";
+import { createBeatClock } from "../src/timeline";
+import { fixtureLibrary } from "./fixtures/library";
 
 function midi(signatures: TimeSignature[], count = 12, noteTicks = 240) {
   let previous = 0;
@@ -113,4 +120,50 @@ describe("imported MIDI meter", () => {
       ).toThrow("unsupported time signature");
     },
   );
+});
+
+describe("song version", () => {
+  const ode = () => fixtureLibrary()[0];
+  /** `song` at a steady `microseconds` per beat: the same notes on the same beats. */
+  function retimed(song: Song, microseconds: number): Song {
+    const tempos = [{ tick: 0, microseconds }],
+      from = createBeatClock(song.ppq, song.tempos),
+      to = createBeatClock(song.ppq, tempos),
+      time = (seconds: number) => to.time(from.at(seconds));
+    return {
+      ...song,
+      tempos,
+      duration: time(song.duration),
+      notes: song.notes.map((note) => ({
+        ...note,
+        start: time(note.start),
+        end: time(note.end),
+        soundEnd: time(note.soundEnd),
+      })),
+    };
+  }
+
+  it("stays the same when only the tempo changes", () => {
+    const song = ode();
+    expect(songVersion(song)).toMatch(/^[0-9a-f]{8}$/);
+    for (const microseconds of [1_000_000, 444_444, 500_000])
+      expect(songVersion(retimed(song, microseconds))).toBe(songVersion(song));
+  });
+
+  it("follows the student's notes, not their order or the duet", () => {
+    const song = fixtureLibrary()[1];
+    const version = songVersion(song);
+    expect(songVersion({ ...song, notes: [...song.notes].reverse() })).toBe(
+      version,
+    );
+    expect(songVersion({ ...song, duet: undefined })).toBe(version);
+    const [first, ...rest] = song.notes;
+    for (const changed of [
+      [{ ...first, pitch: first.pitch + 1 }, ...rest],
+      // One tick later, at 480 ticks per beat.
+      [{ ...first, start: first.start + 0.75 / 480 }, ...rest],
+      rest,
+    ])
+      expect(songVersion({ ...song, notes: changed })).not.toBe(version);
+  });
 });
