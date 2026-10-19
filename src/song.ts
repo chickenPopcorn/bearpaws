@@ -57,7 +57,8 @@ export interface Song {
   pedals?: PedalSpan[];
   /**
    * A teacher part that plays along with Duet on. It is kept apart from
-   * `notes` and `tracks`, so it is never scored, waited for, drawn or fingered.
+   * `notes` and `tracks`, so it is never scored, waited for or fingered; the
+   * waterfall shows it faintly behind them.
    */
   duet?: {
     notes: Note[];

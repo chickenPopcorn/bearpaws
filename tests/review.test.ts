@@ -5,6 +5,8 @@ import { PIANO_REGIONS, selectPianoRegion } from "../src/piano";
 import { MidiState, Practice, Transport } from "../src/engine";
 import {
   draw,
+  DUET_ALPHA,
+  duetColor,
   KEYBOARD_HEIGHT,
   keyLayout,
   leftColor,
@@ -156,6 +158,53 @@ function drawingCanvas(width = 880) {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe("teacher duet in the waterfall", () => {
+  it("draws the duet yellow at quarter opacity behind both hands, widening the keys", () => {
+    vi.stubGlobal("window", { devicePixelRatio: 1 });
+    const student = note("student", 72, 1, 2);
+    const fixture = {
+      ...song([student]),
+      duet: { octaves: 1, notes: [note("teacher", 36, 1, 2, 2)] },
+    };
+    const selected = [student];
+    const { canvas, noteFills } = drawingCanvas();
+    // Duet off: the teacher part is not drawn, and the keys fit the student.
+    draw(
+      canvas,
+      fixture,
+      selected,
+      0,
+      new MidiState(),
+      new Practice(selected),
+      false,
+      false,
+      false,
+    );
+    expect(noteFills.map(({ color }) => color)).toEqual([rightColor]);
+    expect(range(fixture)).toEqual([48, 84]);
+    noteFills.length = 0;
+    draw(
+      canvas,
+      fixture,
+      selected,
+      0,
+      new MidiState(),
+      new Practice(selected),
+      false,
+      false,
+      false,
+      fixture.duet.notes,
+    );
+    expect(noteFills.map(({ color, alpha }) => ({ color, alpha }))).toEqual([
+      { color: duetColor, alpha: DUET_ALPHA },
+      { color: rightColor, alpha: 1 },
+    ]);
+    expect(DUET_ALPHA).toBe(0.25);
+    // C2 is now on the keyboard, so the teacher's bass is visible.
+    expect(range(fixture, true)).toEqual([36, 84]);
+  });
 });
 
 describe("review regressions", () => {

@@ -113,6 +113,7 @@ const Piano = memo(function Piano() {
         studio.settings.names,
         studio.settings.mode === "wait" && studio.transport.playing,
         studio.settings.mode === "listen",
+        studio.duetNotes,
       ),
     );
   }, []);
@@ -120,7 +121,13 @@ const Piano = memo(function Piano() {
     const rect = e.currentTarget.getBoundingClientRect(),
       x = (e.clientX - rect.left) / rect.width,
       y = e.clientY - rect.top;
-    const pitch = pianoKeyAt(studio.song, x, y, rect.height);
+    const pitch = pianoKeyAt(
+      studio.song,
+      x,
+      y,
+      rect.height,
+      studio.duetNotes.length > 0,
+    );
     if (pitch !== undefined) {
       e.currentTarget.setPointerCapture(e.pointerId);
       pointers.current.set(e.pointerId, pitch);
