@@ -1,4 +1,5 @@
 import { georgeClassesOrder } from "./classPieces";
+import { lessonBookOrder } from "./lessonPieces";
 import type { Song } from "./song";
 
 /** The whole library: George’s piano classes. */
@@ -18,7 +19,7 @@ export const books = [
     series: "Music for Little Mozarts",
     title: "Music Lesson Book 3",
     icon: "📖",
-    songs: [],
+    songs: lessonBookOrder,
   },
 ] as const satisfies readonly {
   id: string;

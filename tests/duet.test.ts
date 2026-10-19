@@ -72,6 +72,15 @@ describe("teacher duet notation", () => {
     ).toEqual([1, 1.667, 2, 3, 3.667, 4]);
   });
 
+  it("keeps written triplets on the triplet when the eighths swing", () => {
+    expect(
+      notes(
+        [["C3/0.5 D3/0.5 E3/0.333333 F3/0.333333 G3/0.333334 A3/2"]],
+        true,
+      ).map((note) => Math.round(note.start * 1000) / 1000),
+    ).toEqual([1, 1.667, 2, 2.333, 2.667, 3]);
+  });
+
   it("rejects unknown tokens", () => {
     expect(() => notes([["C3 4"]])).toThrow(/Unknown duet token/);
   });

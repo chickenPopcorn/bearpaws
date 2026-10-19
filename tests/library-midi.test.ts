@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseMidi } from "midi-file";
 import { builtInSongs } from "../src/lessons";
 import { classPieces } from "../src/classPieces";
+import { lessonPieces } from "../src/lessonPieces";
 import { buildScore } from "../src/notation";
 import { parseSong, type Song } from "../src/song";
 
@@ -25,7 +26,7 @@ describe("downloadable beginner MIDI collection", () => {
       const midi = parseMidi(new Uint8Array(file));
       expect(midi.header.format).toBe(1);
       expect(midi.header.ticksPerBeat).toBe(song.ppq);
-      // Recital Book 3 pieces add the teacher duet as a third track.
+      // Recital and Lesson Book 3 pieces add the teacher duet as a third track.
       expect(midi.tracks).toHaveLength(song.duet ? 3 : 2);
       midi.tracks.forEach((track, index) => {
         let tick = 0;
@@ -86,6 +87,7 @@ describe("downloadable beginner MIDI collection", () => {
                   tick: 0,
                   text: `Paw Pal teacher duet: the student plays ${
                     {
+                      [-1]: "one octave lower",
                       0: "as written",
                       1: "one octave higher",
                       2: "two octaves higher",
@@ -142,8 +144,9 @@ describe("downloadable beginner MIDI collection", () => {
       );
       expect(imported.warnings).toEqual([]);
       // The teacher duet comes back as a third track; compare the student's.
+      // Some Lesson Book 3 pieces are for one hand, leaving the other empty.
       expect(imported.tracks.filter((track) => track.count)).toHaveLength(
-        song.duet ? 3 : 2,
+        song.tracks.filter((track) => track.count).length + (song.duet ? 1 : 0),
       );
       imported.notes = imported.notes.filter((note) => note.track < 2);
       const original = buildScore(song);
@@ -202,17 +205,17 @@ describe("downloadable beginner MIDI collection", () => {
         }),
       })),
     );
-    // Every Recital Book 3 download carries its teacher duet.
+    // Every Recital and Lesson Book 3 download carries its teacher duet.
     expect(
       catalog.filter((entry: { duet?: unknown }) => entry.duet),
-    ).toHaveLength(21);
+    ).toHaveLength(21 + 42);
   });
 
   it("downloads each George Bear’s Classes piece in its printed meter after one silent bar", () => {
     const catalog = JSON.parse(
       readFileSync("public/midi/catalog.json", "utf8"),
     ) as { id: string; beatsPerBar: number; countInBeats: number }[];
-    for (const piece of classPieces) {
+    for (const piece of [...classPieces, ...lessonPieces]) {
       const midi = parseMidi(
         new Uint8Array(readFileSync(`public/midi/${piece.id}.mid`)),
       );
@@ -254,7 +257,8 @@ describe("downloadable beginner MIDI collection", () => {
           "import base64,json,sys,zipfile\nwith zipfile.ZipFile(sys.argv[1]) as z:\n print(json.dumps({'badEntry':z.testzip(),'entries':[{'name':i.filename,'content':base64.b64encode(z.read(i)).decode('ascii')} for i in z.infolist()]}))",
           "public/midi/cadence-starter-library.zip",
         ],
-        { encoding: "utf8" },
+        // The catalog lists every duet note, so the archive outgrows 1 MB.
+        { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
       ),
     ) as {
       badEntry: string | null;
