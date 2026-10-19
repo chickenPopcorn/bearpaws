@@ -78,6 +78,21 @@ it("recovers corrupt or invalid storage shapes without crashing", () => {
   values.set("cadence:progress:broken", "null");
   expect(progress("broken", 5).position).toBe(0);
 });
+it("keeps the learner's name and a daily goal from the choices", () => {
+  expect(settings()).toMatchObject({ learnerName: "", dailyGoalMinutes: 5 });
+  write("settings", { learnerName: "George ", dailyGoalMinutes: 15 });
+  expect(settings()).toMatchObject({
+    learnerName: "George ",
+    dailyGoalMinutes: 15,
+  });
+  write("settings", { learnerName: "x".repeat(60), dailyGoalMinutes: 7 });
+  expect(settings()).toMatchObject({
+    learnerName: "x".repeat(40),
+    dailyGoalMinutes: 5,
+  });
+  write("settings", { learnerName: 4, dailyGoalMinutes: "10" });
+  expect(settings()).toMatchObject({ learnerName: "", dailyGoalMinutes: 5 });
+});
 it("keeps both hands off when that was the saved choice", () => {
   write("settings", { left: false, right: false });
   expect(settings()).toMatchObject({ left: false, right: false });

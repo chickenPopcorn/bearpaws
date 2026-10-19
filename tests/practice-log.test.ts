@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  DAILY_GOAL_SECONDS,
   HISTORY_DAYS,
   PracticeLog,
   addDays,
@@ -114,7 +113,7 @@ describe("practice log", () => {
   });
 
   it("counts a streak of days that met the goal", () => {
-    const goal = DAILY_GOAL_SECONDS;
+    const goal = 5 * 60;
     const totals = new Map([
       ["2026-10-14", goal],
       ["2026-10-15", goal + 60],
@@ -123,9 +122,12 @@ describe("practice log", () => {
       ["2026-10-13", goal - 1],
     ]);
     // Today not met yet: the streak runs through yesterday.
-    expect(streak(totals, "2026-10-18")).toBe(4);
+    expect(streak(totals, "2026-10-18", goal)).toBe(4);
     totals.set("2026-10-18", goal);
-    expect(streak(totals, "2026-10-18")).toBe(5);
-    expect(streak(totals, "2026-10-20")).toBe(0);
+    expect(streak(totals, "2026-10-18", goal)).toBe(5);
+    expect(streak(totals, "2026-10-20", goal)).toBe(0);
+    // A higher goal leaves only the longer day.
+    expect(streak(totals, "2026-10-18", goal + 60)).toBe(0);
+    expect(streak(totals, "2026-10-16", goal + 60)).toBe(1);
   });
 });

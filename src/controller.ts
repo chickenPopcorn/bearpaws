@@ -24,6 +24,8 @@ import {
   deleteSong,
   removeProgress,
   songId,
+  DAILY_GOAL_CHOICES,
+  LEARNER_NAME_MAX,
   type Progress,
 } from "./storage";
 import type { SyncHooks } from "./cloud";
@@ -340,6 +342,17 @@ export class Studio {
   }
   tolerance(value: number) {
     this.settings.tolerance = value;
+    this.persist();
+    this.emit();
+  }
+  learnerName(name: string) {
+    this.settings.learnerName = name.slice(0, LEARNER_NAME_MAX);
+    this.persist();
+    this.emit();
+  }
+  dailyGoal(minutes: number) {
+    if (!DAILY_GOAL_CHOICES.includes(minutes)) return;
+    this.settings.dailyGoalMinutes = minutes;
     this.persist();
     this.emit();
   }

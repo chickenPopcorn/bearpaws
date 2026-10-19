@@ -36,6 +36,8 @@ import "./style.css";
 let studio!: Studio;
 let cloud: CloudSync | null = null;
 const practiceDay = () => studio.practiceLog.today();
+const setLearnerName = (name: string) => studio.learnerName(name);
+const setDailyGoal = (minutes: number) => studio.dailyGoal(minutes);
 /** Storage serves `?download=` as an attachment, which cross-origin links need. */
 const downloadUrl = (midi: string, id: string) => {
   const url = new URL(midi);
@@ -631,7 +633,14 @@ function App({ email, onSignOut }: { email: string; onSignOut: () => void }) {
       )}
       <div className="body">
         <aside className="sidebar">
-          <PracticeCalendar totals={practiceTotals} today={today} />
+          <PracticeCalendar
+            totals={practiceTotals}
+            today={today}
+            learnerName={s.learnerName}
+            goalMinutes={s.dailyGoalMinutes}
+            onLearnerName={setLearnerName}
+            onGoalMinutes={setDailyGoal}
+          />
           <SongLibrary
             songs={studio.songs}
             selected={studio.song.id}
