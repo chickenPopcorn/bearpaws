@@ -194,6 +194,9 @@ export class EarGame {
     if (!example) return undefined;
     if (!this.chosen.has(this.at)) this.chosen.set(this.at, this.pick(this.at));
     this.keys = [];
+    // Hearing it again: no answer keys, and no echo until it has played.
+    this.asking = false;
+    this.quietUntil = Infinity;
     return example.options[this.chosen.get(this.at)!];
   }
   /** The example sounds until `until`; the echo begins after it. */
@@ -233,13 +236,18 @@ export class EarGame {
     return this.keys.length;
   }
   /**
-   * Whether the echo is complete: as many keys as the example has notes,
-   * and, where how they are held matters, all let go.
+   * Whether the echo is complete: as many keys as the longer option has
+   * notes, and, where how they are held matters, all let go. An echo of the
+   * shorter one ends when it goes quiet, as it may be the longer one's start.
    */
   get echoComplete() {
-    const option =
-      this.page.examples[this.at]?.options[this.chosen.get(this.at) ?? 0];
-    if (!option || this.keys.length < played(option).length) return false;
+    const example = this.page.examples[this.at];
+    if (
+      !example ||
+      this.keys.length <
+        Math.max(...example.options.map((o) => played(o).length))
+    )
+      return false;
     return (
       this.page.kind !== "articulation" ||
       this.keys.every((k) => k.up !== undefined)

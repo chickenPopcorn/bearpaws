@@ -67,6 +67,7 @@ import {
 } from "../src/workbookHands";
 import {
   CLAP_BEAT,
+  ECHO_IDLE_MS,
   EarGame,
   NOTE_BEAT,
   STACCATO_FRACTION,
@@ -816,9 +817,11 @@ describe("Ear Detective", () => {
     expect(game.listen()).toBe(p.examples[0].options[1]);
     game.playing(5_000);
     expect(game.down(60, 4_000)).toEqual({ kind: "playing" });
-    // Four quarters and a whole, tapped slowly.
+    // Four quarters and a whole, tapped slowly. The top one starts the same
+    // way, so the echo is judged once it goes quiet.
     tapBeats(game, [0, 1, 2, 3, 4], 700);
-    expect(game.echoComplete).toBe(true);
+    expect(game.echoComplete).toBe(false);
+    expect(game.echoEnds).toBe(10_000 + 4 * 700 + 100 + ECHO_IDLE_MS);
     const right = game.judge();
     expect(right).toEqual({ kind: "right", finished: false, echoed: true });
     expect(earFeedback(p, right, 1)).toBe(
@@ -826,6 +829,19 @@ describe("Ear Detective", () => {
     );
     expect(game.circled.get(0)).toBe(1);
     expect(game.current).toBe(1);
+  });
+
+  it("waits for the longer rhythm's taps before judging", () => {
+    const p = ear(18);
+    const game = new EarGame(p, () => 1);
+    game.listen();
+    game.playing(0);
+    // The top rhythm's seven claps, though the app clapped the bottom's five.
+    tapBeats(game, [0, 1, 2, 3, 4, 5], 700);
+    expect(game.echoComplete).toBe(false);
+    tapBeats(game, [6], 700);
+    expect(game.echoComplete).toBe(true);
+    expect(game.judge()).toEqual({ kind: "other" });
   });
 
   it("asks on the answer keys when an echo matches neither", () => {
@@ -847,6 +863,12 @@ describe("Ear Detective", () => {
     expect(earFeedback(p, game.answer(1), 1)).toBe(
       "Not that one. Listen again (C2) and try once more.",
     );
+    // Listening again leaves the answer keys; keys wait for the playing.
+    game.listen();
+    expect(game.asking).toBe(false);
+    expect(game.down(60, 99_000)).toEqual({ kind: "playing" });
+    game.playing(100_000);
+    expect(game.down(60, 100_500)).toEqual({ kind: "echoing" });
     expect(earFeedback(p, game.answer(0), 0)).toBe("Yes! It was the top one.");
   });
 

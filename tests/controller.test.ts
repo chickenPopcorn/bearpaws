@@ -2302,6 +2302,25 @@ describe("key listeners", () => {
     ]);
   });
 
+  it("drops an Ear Detective example stopped while its sound loads", async () => {
+    const studio = create();
+    Object.assign(studio.audio, {
+      context: { state: "running", currentTime: 0 },
+    });
+    const note = [{ pitch: 60, start: 0, duration: 0.5 }];
+    let loaded!: () => void;
+    env.unlockWait = new Promise<void>((resolve) => (loaded = resolve));
+    const first = studio.playExample(note, 0, 0.6);
+    // The page restarts before the sound has loaded.
+    studio.stopExample();
+    env.unlockWait = null;
+    loaded();
+    expect(await first).toBeNull();
+    expect(studio.audio.tone).not.toHaveBeenCalled();
+    expect(await studio.playExample(note, 0, 0.6)).not.toBeNull();
+    expect(studio.audio.tone).toHaveBeenCalledOnce();
+  });
+
   it("lets listeners hear keys come up when they are released together", () => {
     const studio = create();
     const keys: [number, boolean, boolean | undefined][] = [];

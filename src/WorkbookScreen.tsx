@@ -357,6 +357,7 @@ export const Workbook = memo(function Workbook({
         onLeave();
         return;
       case "restart":
+        stopListening();
         setGame(newGame(page));
         setFresh(false);
         setHint("Started over. " + START_HINT);
@@ -500,6 +501,8 @@ export const Workbook = memo(function Workbook({
   const listen = async (ear: EarGame) => {
     const option = ear.listen();
     if (!option) return;
+    clearTimeout(echoTimer.current);
+    const run = ++listening.current;
     const rhythm = ear.page.kind === "rhythm";
     const example = ear.page.examples[ear.current!];
     setHint(rhythm ? "Listen to the clapping…" : "Listen…");
@@ -509,6 +512,8 @@ export const Workbook = memo(function Workbook({
       rhythm ? example.meter : 0,
       rhythm ? CLAP_BEAT : NOTE_BEAT,
     );
+    // Another listen, a restart or leaving the page came while it loaded.
+    if (run !== listening.current) return;
     if (until === null) {
       setHint("The sound could not start. Press C2 to try again.");
       return;
@@ -526,6 +531,14 @@ export const Workbook = memo(function Workbook({
   const echoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  /** Counts listens: one still loading when another starts gives up. */
+  const listening = useRef(0);
+  /** Stop the example and the echo's timers, as the page restarts or closes. */
+  const stopListening = () => {
+    listening.current++;
+    clearTimeout(echoTimer.current);
+    studio.stopExample();
+  };
   /** Judge the echo once it is complete, or once it has gone quiet. */
   const watchEcho = (ear: EarGame) => {
     clearTimeout(echoTimer.current);
@@ -576,8 +589,7 @@ export const Workbook = memo(function Workbook({
       stop();
       keys.clear();
       controls.current = null;
-      clearTimeout(echoTimer.current);
-      studio.stopExample();
+      stopListening();
     };
   }, []);
   // The page's steps, its prompt now, and what its keys and picture show.

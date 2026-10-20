@@ -277,6 +277,28 @@ describe("workbook page", () => {
     vi.restoreAllMocks();
   });
 
+  it("stops an Ear Detective example when the page starts over", async () => {
+    vi.useFakeTimers();
+    const stop = vi.spyOn(fake.studio, "stopExample");
+    let played!: (until: number) => void;
+    vi.spyOn(fake.studio, "playExample").mockImplementationOnce(
+      () => new Promise((resolve) => (played = resolve)),
+    );
+    await render({ page: page(46) });
+    await tap(36);
+    expect(text(".workbook-hint")).toBe("Listen…");
+    await key(41, true);
+    await act(async () => vi.advanceTimersByTime(HOLD_MS));
+    await key(41, false);
+    expect(stop).toHaveBeenCalled();
+    // The sound loads after the restart: the new page is left alone.
+    await act(async () => played(0));
+    await act(async () => vi.advanceTimersByTime(100));
+    expect(text(".workbook-hint")).toBe("Started over. Play it on your piano.");
+    expect(text(".workbook-prompt")).toBe("Listen: press C2");
+    vi.restoreAllMocks();
+  });
+
   it("times a Hold It! note while its key is held", async () => {
     await render({ page: page(6) });
     expect(text("p")).toBe("Hold It! · Play each note on your piano.");

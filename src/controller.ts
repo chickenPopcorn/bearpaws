@@ -343,12 +343,14 @@ export class Studio {
   }
   /** The workbook's playing, to stop when another starts or a page closes. */
   private examplePlaying: { stop(): void } | null = null;
+  /** Counts examples started and stopped: a start still loading gives up. */
+  private exampleRun = 0;
   /**
    * Play an Ear Detective example: `countIn` metronome clicks a beat apart,
    * then each sound: a clap on the laptop where it has no pitch, else a note
    * in the piano's sound (on the piano's own output when one is chosen).
    * Resolves with when the playing ends, in performance-clock milliseconds,
-   * or null if it could not start.
+   * or null if it could not start or was stopped while its sound loaded.
    */
   async playExample(
     sounds: readonly { pitch?: number; start: number; duration: number }[],
@@ -357,6 +359,7 @@ export class Studio {
   ): Promise<number | null> {
     this.stopExample();
     this.pause();
+    const run = this.exampleRun;
     const notes = sounds.filter(
       (s): s is typeof s & { pitch: number } => s.pitch !== undefined,
     );
@@ -371,6 +374,8 @@ export class Studio {
     } catch {
       return null;
     }
+    // Another example, or the page closing, came while the sound loaded.
+    if (run !== this.exampleRun) return null;
     const context = this.audio.context;
     if (!context || context.state !== "running") return null;
     const lead = 0.15,
@@ -419,6 +424,7 @@ export class Studio {
   }
   /** Stop the workbook's playing, as a page closes. */
   stopExample() {
+    this.exampleRun++;
     this.examplePlaying?.stop();
     this.examplePlaying = null;
   }
