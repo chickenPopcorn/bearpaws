@@ -796,6 +796,8 @@ describe("Same and Different pages", () => {
     expect(intervalFeedback(p, second, p.areas[1])).toBe(
       "Same or different? Same is G5, Different is A5.",
     );
+    // The paw hops as the bottom card is played, not at the answer.
+    expect(game.lastHop).toEqual({ from: 60, to: 62, count: 2 });
     const wrong = game.answer("Same");
     expect(intervalFeedback(p, wrong, p.areas[1])).toBe(
       "Look again: count how far apart the notes on each card are.",
@@ -804,18 +806,22 @@ describe("Same and Different pages", () => {
     expect(intervalFeedback(p, right, p.areas[1])).toBe(
       "Yes! A 3rd and a 2nd: Mozart Mouse.",
     );
+    expect(game.lastHop?.count).toBe(2);
     expect(game.answers.get(1)).toBe("Different");
     play(game, 4000);
     play(game, 6000);
     expect(intervalFeedback(p, game.answer("Same"), p.areas[3])).toBe(
       "Yes! Both are 2nds: Beethoven Bear.",
     );
-    let time = 8000;
-    for (const answer of ["Same", "Different"]) {
-      play(game, (time += 2000));
-      play(game, (time += 2000));
-      game.answer(answer);
-    }
+    play(game, 10_000);
+    play(game, 12_000);
+    game.answer("Same");
+    play(game, 14_000);
+    play(game, 16_000);
+    // The last box's character, then the page is done.
+    expect(intervalFeedback(p, game.answer("Different"), p.areas[7])).toBe(
+      "Yes! A 2nd and a 3rd: Mozart Mouse. Page 28 is done. Next page: E2.",
+    );
     expect(game.finished).toBe(true);
   });
 });
@@ -871,7 +877,11 @@ describe("How far page", () => {
     expect(game.answer(4)).toMatchObject({ kind: "painted" });
     game.play(64, 3000, held(64));
     game.play(60, 3500, held(60));
-    expect(game.answer(3)).toEqual({ kind: "painted", finished: true });
+    const last = game.answer(3);
+    expect(last).toEqual({ kind: "painted", finished: true });
+    expect(intervalFeedback(p41, last, p41.areas[2])).toBe(
+      "Yes! 3: that is a 3rd. Page 41 is done. Next page: E2.",
+    );
     expect(game.step).toBe(1);
   });
 });
