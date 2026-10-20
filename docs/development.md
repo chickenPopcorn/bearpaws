@@ -70,6 +70,7 @@ check; it can also be run by hand from the Actions tab.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.
 - `src/workbook.ts`: Music Workbook 3's pages, the paint game, the piano's control keys and page stamps.
+- `src/workbookEar.ts`: the workbook's Ear Detective game: what the app plays, and matching the child's echo.
 - `src/workbookHands.ts`: the workbook's Left Hand and Right Hand pages: which hand, then the example, legato under a slur.
 - `src/workbookHold.ts`: the workbook's Hold It! game, timing held keys and rests by the laptop's metronome.
 - `src/WorkbookScreen.tsx`, `src/WorkbookPicture.tsx`, `src/workbookKeyboard.ts`: a workbook page, its Color by Note picture and its three-zone keyboard.

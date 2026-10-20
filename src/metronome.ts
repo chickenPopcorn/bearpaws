@@ -125,6 +125,24 @@ export function playClick(
   source.stop(when + CLICK_SECONDS);
   return { source, gain };
 }
+/** One hand clap at context time `when`, on the laptop: a short noise burst. */
+export function playClap(context: AudioContext, when: number) {
+  const length = Math.round(context.sampleRate * 0.09),
+    buffer = context.createBuffer(1, length, context.sampleRate),
+    data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++)
+    data[i] = (Math.random() * 2 - 1) * (1 - i / length) ** 3;
+  const source = context.createBufferSource(),
+    filter = context.createBiquadFilter(),
+    gain = context.createGain();
+  source.buffer = buffer;
+  filter.type = "bandpass";
+  filter.frequency.value = 1500;
+  gain.gain.value = 0.8;
+  source.connect(filter).connect(gain).connect(context.destination);
+  source.start(when);
+  return source;
+}
 /**
  * The metronome's clicks, always on the laptop, apart from the piano's room.
  * A piano on one MIDI channel has no percussion to play them, and a click

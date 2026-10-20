@@ -141,7 +141,8 @@ export type WorkbookGame =
   | "interval-twins"
   | "hold"
   | "note-snap"
-  | "hands";
+  | "hands"
+  | "ear";
 // Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
@@ -154,6 +155,7 @@ export const GAME_NAMES: Record<WorkbookGame, string> = {
   hold: "Hold It!",
   "note-snap": "Note Snap",
   hands: "Together or Apart",
+  ear: "Ear Detective",
 };
 interface PageInfo {
   page: number;
@@ -269,6 +271,40 @@ export interface HandsPage extends PageInfo {
   /** The examples are slurred: each key held until the next goes down. */
   slur: boolean;
 }
+/** One note or rest of an Ear Detective option, in beats. */
+export interface EarNote {
+  beats: number;
+  /** The note's pitch; none for a clapped rhythm or a rest. */
+  pitch?: number;
+  rest?: boolean;
+  staccato?: boolean;
+}
+/** One of an example's two choices, as printed: top, then bottom. */
+export interface EarOption {
+  notes: EarNote[];
+  /** A slur over the notes: played legato. */
+  slur?: boolean;
+}
+export interface EarExample {
+  /** Beats in a bar: 4 for 4/4, 3 for 3/4. */
+  meter: number;
+  clef?: Clef;
+  options: [EarOption, EarOption];
+}
+/**
+ * An Ear Detective page: for each example the app plays one of its two
+ * options; the child plays it back, or picks it on the answer keys, and it
+ * is circled.
+ */
+export interface EarPage extends PageInfo {
+  game: "ear";
+  /** What is heard: a clapped rhythm, a melody, or how it is played. */
+  kind: "rhythm" | "melody" | "articulation";
+  steps: [{ crayon: Crayon; words: string }];
+  examples: EarExample[];
+  /** Names for the two options, where the book has characters, not notes. */
+  labels?: [string, string];
+}
 export type WorkbookPage =
   | NotePage
   | IntervalPage
@@ -277,7 +313,8 @@ export type WorkbookPage =
   | NamePage
   | TwinsPage
   | HoldPage
-  | HandsPage;
+  | HandsPage
+  | EarPage;
 /** A page whose cards are answered on the answer keys after playing. */
 export type AnswerPage = NamePage | TwinsPage;
 /** The answer key whose sticker says Skip: G5. */
@@ -473,6 +510,54 @@ const bass = (...pitches: number[]) =>
   pitches.map((pitch) => ({ pitch, clef: "bass" as const }));
 const treble = (...pitches: number[]) =>
   pitches.map((pitch) => ({ pitch, clef: "treble" as const }));
+
+/** A rhythm, as the book prints it: "q q h | w", "q r q r", "h.". */
+const rhythm = (text: string): EarOption => ({
+  notes: text
+    .split(" ")
+    .filter((t) => t !== "|")
+    .map((t) => {
+      const beats = { q: 1, h: 2, "h.": 3, w: 4, r: 1, hr: 2 }[t]!;
+      return t === "r" || t === "hr" ? { beats, rest: true } : { beats };
+    }),
+});
+/**
+ * A melody: "C4 D4 E4:2 r", a number after a colon being beats (1 when left
+ * out). Staccato or slurred as a whole.
+ */
+const melody = (
+  text: string,
+  how: { staccato?: boolean; slur?: boolean } = {},
+): EarOption => ({
+  notes: text.split(" ").map((t) => {
+    const [name, length] = t.split(":"),
+      beats = Number(length ?? 1);
+    if (name === "r") return { beats, rest: true };
+    const pitch = noteNumber(name);
+    return how.staccato && beats === 1
+      ? { beats, pitch, staccato: true }
+      : { beats, pitch };
+  }),
+  ...(how.slur && { slur: true }),
+});
+/** "C4" → 60. Naturals only. */
+function noteNumber(name: string) {
+  const step = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[name[0]]!;
+  return (Number(name.slice(1)) + 1) * 12 + step;
+}
+/** Page 17's five notes, played staccato (Nannerl Mouse) or not (Haydn Hippo). */
+const fiveNotes = (text: string, clef: Clef): EarExample => ({
+  meter: 4,
+  clef,
+  options: [melody(text, { staccato: true }), melody(text, { slur: true })],
+});
+/** An example of two melodies in a clef. */
+const pair = (
+  clef: Clef,
+  meter: number,
+  top: EarOption,
+  bottom: EarOption,
+): EarExample => ({ meter, clef, options: [top, bottom] });
 
 export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
   {
@@ -739,6 +824,52 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     ],
   },
   {
+    page: 17,
+    title: "Staccato",
+    useWith: 17,
+    game: "ear",
+    kind: "articulation",
+    steps: [
+      {
+        crayon: "purple",
+        words:
+          "Your teacher will play five notes in the MIDDLE C POSITION. Circle Nannerl Mouse if the notes are played STACCATO. Circle Haydn Hippo if the notes are NOT played staccato.",
+      },
+    ],
+    labels: ["Nannerl Mouse", "Haydn Hippo"],
+    // Examples 1 and 2 in the right hand's Middle C Position, 3 and 4 in
+    // the left hand's, going up or down.
+    examples: [
+      fiveNotes("C4 D4 E4 F4 G4", "treble"),
+      fiveNotes("G4 F4 E4 D4 C4", "treble"),
+      fiveNotes("F3 G3 A3 B3 C4", "bass"),
+      fiveNotes("C4 B3 A3 G3 F3", "bass"),
+    ],
+  },
+  {
+    page: 18,
+    title: "Rhythm Patterns in 4/4 Time",
+    useWith: 18,
+    game: "ear",
+    kind: "rhythm",
+    steps: [
+      {
+        crayon: "purple",
+        words:
+          "Your teacher will clap a rhythm pattern. Circle the pattern that you hear.",
+      },
+    ],
+    examples: [
+      ["q q q q | q q q r", "q q q q | w"],
+      ["q r q r | w", "q q q q | w"],
+      ["q q q q | h h", "q q q q | w"],
+      ["q q q q | q q h", "q q h | q q h"],
+    ].map(([top, bottom]) => ({
+      meter: 4,
+      options: [rhythm(top), rhythm(bottom)],
+    })),
+  },
+  {
     page: 19,
     title: "2nds",
     useWith: 19,
@@ -803,6 +934,31 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     picture: { height: 330, scale: 0.8 },
   },
   {
+    page: 22,
+    title: "Rhythm Patterns",
+    useWith: 21,
+    game: "ear",
+    kind: "rhythm",
+    steps: [
+      {
+        crayon: "purple",
+        words:
+          "Your teacher will clap a rhythm pattern. Circle the pattern that you hear.",
+      },
+    ],
+    examples: (
+      [
+        [3, "h q | h q", "h q | h."],
+        [4, "q q h | q q h", "q q h | w"],
+        [4, "q q q q | w", "q q h | w"],
+        [3, "q q q | h.", "h q | h."],
+      ] as const
+    ).map(([meter, top, bottom]) => ({
+      meter,
+      options: [rhythm(top), rhythm(bottom)],
+    })),
+  },
+  {
     page: 23,
     title: "3rds",
     useWith: 22,
@@ -839,6 +995,36 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     [55, 52],
   ]),
   {
+    page: 25,
+    title: "Melodies with 2nds and 3rds",
+    useWith: 24,
+    game: "ear",
+    kind: "melody",
+    steps: [
+      {
+        crayon: "purple",
+        words:
+          "Your teacher will play melodies with 2nds and 3rds. Circle the melody that you hear.",
+      },
+    ],
+    examples: [
+      pair(
+        "treble",
+        4,
+        melody("C4 C4 E4 E4", { staccato: true }),
+        melody("E4 E4 C4 C4", { staccato: true }),
+      ),
+      pair("treble", 4, melody("G4 F4 E4 D4"), melody("D4 E4 F4 G4")),
+      pair("bass", 4, melody("C3 E3 G3 r"), melody("G3 E3 C3 r")),
+      pair(
+        "bass",
+        4,
+        melody("B3 B3 G3:2", { staccato: true }),
+        melody("G3 G3 B3:2", { staccato: true }),
+      ),
+    ],
+  },
+  {
     page: 26,
     title: "2nds and 3rds",
     useWith: 25,
@@ -855,6 +1041,46 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       melodic("cloud", 65, 67, 320, 215),
       melodic("blob", 59, 55, 530, 85),
       melodic("cloud", 60, 64, 530, 215),
+    ],
+  },
+  {
+    page: 27,
+    title: "Staccato and Legato Melodies",
+    useWith: 26,
+    game: "ear",
+    kind: "articulation",
+    steps: [
+      {
+        crayon: "purple",
+        words:
+          "Your teacher will play STACCATO or LEGATO melodies. Circle the melody that you hear.",
+      },
+    ],
+    examples: [
+      pair(
+        "treble",
+        4,
+        melody("C4 D4 C4 D4 E4:2 r:2", { staccato: true }),
+        melody("C4 D4 C4 D4 E4:2 r:2", { slur: true }),
+      ),
+      pair(
+        "treble",
+        4,
+        melody("C4 C4 E4 E4 G4 G4 E4:2", { staccato: true }),
+        melody("C4 D4 E4 F4 G4 F4 E4:2", { slur: true }),
+      ),
+      pair(
+        "bass",
+        4,
+        melody("C4 B3 C4 B3 A3:4", { staccato: true }),
+        melody("C4 B3 C4 B3 A3:4", { slur: true }),
+      ),
+      pair(
+        "bass",
+        4,
+        melody("G3 E3 G3 E3 C3 E3 G3 r", { staccato: true }),
+        melody("G3 E3 G3 E3 C3 E3 G3 r", { slur: true }),
+      ),
     ],
   },
   twinsPage(28, 27, "Beethoven Bear", "Mozart Mouse", [
@@ -1151,6 +1377,26 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       melodic("cloud", 55, 50, 530, 310),
     ],
     picture: { height: 380, scale: 0.9 },
+  },
+  {
+    page: 46,
+    title: "Melodies with 2nds, 3rds, 4ths and 5ths",
+    useWith: 45,
+    game: "ear",
+    kind: "melody",
+    steps: [
+      {
+        crayon: "purple",
+        words:
+          "Your teacher will play melodies with 2nds, 3rds, 4ths and 5ths. Circle the melody that you hear.",
+      },
+    ],
+    examples: [
+      pair("treble", 4, melody("C4 C4 G4:2"), melody("C4 C4 D4:2")),
+      pair("treble", 4, melody("D4 D4 G4:2"), melody("D4 D4 E4:2")),
+      pair("bass", 4, melody("G3 G3 D3 D3"), melody("G3 F3 E3 D3")),
+      pair("bass", 4, melody("F3 F3 A3 A3"), melody("F3 F3 C4 C4")),
+    ],
   },
   twinsPage(47, 46, "Haydn Hippo", "Clara Schumann-Cat", [
     [

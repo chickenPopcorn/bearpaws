@@ -12,6 +12,8 @@ const fake = vi.hoisted(() => {
     studio: {
       input: { down: new Set<number>() },
       beat: () => {},
+      playExample: async () => 0,
+      stopExample: () => {},
       subscribe: (listener: () => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
@@ -237,6 +239,30 @@ describe("workbook page", () => {
     expect(
       container.querySelector(".workbook-area.is-current title")!.textContent,
     ).toBe("BASS CLEF C");
+  });
+
+  it("plays an Ear Detective example on C2 and takes its echo", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.9);
+    await render({ page: page(46) });
+    expect(text(".workbook-prompt")).toBe("Listen: press C2");
+    await tap(60);
+    expect(text(".workbook-hint")).toBe("Listen first: press C2.");
+    await tap(36);
+    await act(async () => {});
+    expect(text(".workbook-prompt")).toBe("Play it back on the piano");
+    // The bottom melody, C4 C4 D4.
+    vi.useFakeTimers();
+    await tap(60);
+    await tap(60);
+    await tap(62);
+    await act(async () => vi.advanceTimersByTime(300));
+    expect(text(".workbook-hint")).toBe(
+      "You played it back: it was the bottom one!",
+    );
+    expect(
+      container.querySelector(".workbook-picture")!.getAttribute("aria-label"),
+    ).toBe("4 examples, 1 found");
+    vi.restoreAllMocks();
   });
 
   it("times a Hold It! note while its key is held", async () => {

@@ -42,6 +42,7 @@ import {
   type TwinsPage,
   type HoldPage,
   type HandsPage,
+  type EarPage,
   type HopPage,
   type IntervalPage,
   type NotePage,
@@ -62,6 +63,15 @@ import {
   handsFeedback,
   handsPrompt,
 } from "../src/workbookHands";
+import {
+  CLAP_BEAT,
+  EarGame,
+  NOTE_BEAT,
+  STACCATO_FRACTION,
+  earFeedback,
+  earPrompt,
+  sounds,
+} from "../src/workbookEar";
 
 const page = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
@@ -99,9 +109,9 @@ describe("workbook pages", () => {
     const pages = WORKBOOK_PAGES.map((p) => p.page);
     expect(pages).toEqual([...pages].sort((a, b) => a - b));
     expect(pages).toEqual([
-      4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 23, 24, 26, 28,
-      29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47,
-      48,
+      4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+      24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
+      42, 43, 44, 45, 46, 47, 48,
     ]);
   });
 
@@ -268,7 +278,7 @@ describe("workbook pages", () => {
     expect(pageBefore(page(10))?.page).toBe(9);
     expect(pageAfter(page(12))?.page).toBe(13);
     expect(pageBefore(page(48))?.page).toBe(47);
-    expect(pageAfter(page(21))?.page).toBe(23);
+    expect(pageAfter(page(21))?.page).toBe(22);
     expect(pageAfter(hop(19))?.page).toBe(20);
     expect(pageAfter(page(48))).toBeUndefined();
   });
@@ -714,6 +724,174 @@ describe("Together or Apart Find pages", () => {
     expect(intervalFeedback(p, both, p.areas[1])).toBe(
       "Yes! Hands together: yellow.",
     );
+  });
+});
+
+describe("Ear Detective", () => {
+  const ear = (number: number) =>
+    WORKBOOK_PAGES.find((p) => p.page === number) as EarPage;
+  const names = (option: EarPage["examples"][number]["options"][number]) =>
+    option.notes
+      .map((n) =>
+        n.rest
+          ? `r${n.beats}`
+          : n.pitch === undefined
+            ? `x${n.beats}`
+            : `${n.pitch}:${n.beats}${n.staccato ? "." : ""}`,
+      )
+      .join(" ");
+
+  it("covers every workbook page, 4 to 48", () => {
+    expect(WORKBOOK_PAGES).toHaveLength(45);
+  });
+
+  it("has each example as printed", () => {
+    expect(ear(18).examples.map((e) => e.options.map(names))).toEqual([
+      ["x1 x1 x1 x1 x1 x1 x1 r1", "x1 x1 x1 x1 x4"],
+      ["x1 r1 x1 r1 x4", "x1 x1 x1 x1 x4"],
+      ["x1 x1 x1 x1 x2 x2", "x1 x1 x1 x1 x4"],
+      ["x1 x1 x1 x1 x1 x1 x2", "x1 x1 x2 x1 x1 x2"],
+    ]);
+    expect(ear(22).examples.map((e) => e.meter)).toEqual([3, 4, 4, 3]);
+    expect(ear(22).examples.map((e) => e.options.map(names))).toEqual([
+      ["x2 x1 x2 x1", "x2 x1 x3"],
+      ["x1 x1 x2 x1 x1 x2", "x1 x1 x2 x4"],
+      ["x1 x1 x1 x1 x4", "x1 x1 x2 x4"],
+      ["x1 x1 x1 x3", "x2 x1 x3"],
+    ]);
+    expect(ear(25).examples.map((e) => e.options.map(names))).toEqual([
+      ["60:1. 60:1. 64:1. 64:1.", "64:1. 64:1. 60:1. 60:1."],
+      ["67:1 65:1 64:1 62:1", "62:1 64:1 65:1 67:1"],
+      ["48:1 52:1 55:1 r1", "55:1 52:1 48:1 r1"],
+      ["59:1. 59:1. 55:2", "55:1. 55:1. 59:2"],
+    ]);
+    expect(ear(46).examples.map((e) => e.options.map(names))).toEqual([
+      ["60:1 60:1 67:2", "60:1 60:1 62:2"],
+      ["62:1 62:1 67:2", "62:1 62:1 64:2"],
+      ["55:1 55:1 50:1 50:1", "55:1 53:1 52:1 50:1"],
+      ["53:1 53:1 57:1 57:1", "53:1 53:1 60:1 60:1"],
+    ]);
+    // Page 27: the top melodies staccato, the bottom ones slurred.
+    for (const { options } of ear(27).examples) {
+      expect(options[0].notes.some((n) => n.staccato)).toBe(true);
+      expect(options[1].slur).toBe(true);
+    }
+    expect(ear(27).examples.map((e) => names(e.options[1]))).toEqual([
+      "60:1 62:1 60:1 62:1 64:2 r2",
+      "60:1 62:1 64:1 65:1 67:1 65:1 64:2",
+      "60:1 59:1 60:1 59:1 57:4",
+      "55:1 52:1 55:1 52:1 48:1 52:1 55:1 r1",
+    ]);
+    expect(ear(17).labels).toEqual(["Nannerl Mouse", "Haydn Hippo"]);
+  });
+
+  it("plays a rhythm as claps and a melody as notes", () => {
+    const clapped = sounds(ear(18), ear(18).examples[1].options[0]);
+    expect(clapped.map((s) => s.start)).toEqual([
+      0,
+      2 * CLAP_BEAT,
+      4 * CLAP_BEAT,
+    ]);
+    expect(clapped.every((s) => s.pitch === undefined)).toBe(true);
+    const staccato = sounds(ear(17), ear(17).examples[0].options[0]);
+    expect(staccato.map((s) => s.pitch)).toEqual([60, 62, 64, 65, 67]);
+    expect(staccato[0].duration).toBeCloseTo(STACCATO_FRACTION * NOTE_BEAT);
+    const legato = sounds(ear(17), ear(17).examples[0].options[1]);
+    expect(legato[0].duration).toBeGreaterThan(NOTE_BEAT);
+  });
+
+  const tapBeats = (game: EarGame, beats: number[], beatMs: number) => {
+    for (const b of beats) {
+      game.down(60, 10_000 + b * beatMs);
+      game.up(60, 10_000 + b * beatMs + 100);
+    }
+  };
+
+  it("matches a tapped rhythm at the child's own tempo", () => {
+    const p = ear(18);
+    const game = new EarGame(p, () => 1);
+    expect(game.down(60, 0)).toEqual({ kind: "listen-first" });
+    expect(game.listen()).toBe(p.examples[0].options[1]);
+    game.playing(5_000);
+    expect(game.down(60, 4_000)).toEqual({ kind: "playing" });
+    // Four quarters and a whole, tapped slowly.
+    tapBeats(game, [0, 1, 2, 3, 4], 700);
+    expect(game.echoComplete).toBe(true);
+    const right = game.judge();
+    expect(right).toEqual({ kind: "right", finished: false, echoed: true });
+    expect(earFeedback(p, right, 1)).toBe(
+      "You played it back: it was the bottom one!",
+    );
+    expect(game.circled.get(0)).toBe(1);
+    expect(game.current).toBe(1);
+  });
+
+  it("asks on the answer keys when an echo matches neither", () => {
+    const p = ear(25);
+    const game = new EarGame(p, () => 0);
+    game.listen();
+    game.playing(0);
+    expect(earPrompt(game)).toBe("Play it back on the piano");
+    for (const [i, pitch] of [60, 62, 64, 65].entries()) {
+      game.down(pitch, 1000 + i * 600);
+      game.up(pitch, 1300 + i * 600);
+    }
+    const unclear = game.judge();
+    expect(earFeedback(p, unclear, undefined)).toBe(
+      "Which one did you hear? G5 is the top, A5 the bottom.",
+    );
+    expect(game.asking).toBe(true);
+    expect(earPrompt(game)).toBe("Which one? G5 is the top, A5 the bottom");
+    expect(earFeedback(p, game.answer(1), 1)).toBe(
+      "Not that one. Listen again (C2) and try once more.",
+    );
+    expect(earFeedback(p, game.answer(0), 0)).toBe("Yes! It was the top one.");
+  });
+
+  it("knows the other melody when it is played back", () => {
+    const p = ear(46);
+    const game = new EarGame(p, () => 0);
+    game.listen();
+    game.playing(0);
+    for (const [i, pitch] of [60, 60, 62].entries())
+      game.down(pitch, 1000 + i * 600);
+    expect(game.judge()).toEqual({ kind: "other" });
+    expect(game.current).toBe(0);
+  });
+
+  it("hears staccato and legato in the echo", () => {
+    const p = ear(17);
+    const game = new EarGame(p, () => 0);
+    game.listen();
+    game.playing(0);
+    // Short keys: staccato, Nannerl Mouse.
+    for (const [i, pitch] of [60, 62, 64, 65, 67].entries()) {
+      game.down(pitch, 1000 + i * 600);
+      game.up(pitch, 1150 + i * 600);
+    }
+    expect(game.echoComplete).toBe(true);
+    expect(earFeedback(p, game.judge(), 0)).toBe(
+      "You played it back: it was Nannerl Mouse!",
+    );
+    // Example 2, played legato: Haydn Hippo, but the app played staccato.
+    game.listen();
+    game.playing(0);
+    for (const [i, pitch] of [67, 65, 64, 62, 60].entries()) {
+      game.down(pitch, 9000 + i * 600);
+      game.up(pitch, 9000 + i * 600 + 620);
+    }
+    expect(game.judge()).toEqual({ kind: "other" });
+  });
+
+  it("finishes the page with its last example", () => {
+    const p = ear(22);
+    const game = new EarGame(p, () => 0);
+    for (let i = 0; i < 4; i++) {
+      game.listen();
+      game.playing(0);
+      expect(game.answer(0).kind).toBe("right");
+    }
+    expect(game.finished).toBe(true);
   });
 });
 

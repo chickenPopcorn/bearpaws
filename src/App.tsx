@@ -82,11 +82,16 @@ const setAmbience = (ambience: number) => studio.sound(ambience);
 const setPianoVoice = (voice: PianoVoice, enabled: boolean) =>
   studio.pianoVoice(voice, enabled);
 
-/** On a workbook page, the answer keys: Skip, or a How far page's answers. */
+/** On a workbook page, the answer keys and the control keys. */
 const ANSWER_SHORTCUTS: Record<string, number> = {
   l: ANSWER_KEYS[0],
   ";": ANSWER_KEYS[1],
   "'": ANSWER_KEYS[2],
+  // The control keys C2, D2, E2 and F2.
+  "1": 36,
+  "2": 38,
+  "3": 40,
+  "4": 41,
 };
 const shortcuts: Record<string, number> = {
   z: 48,
@@ -596,7 +601,7 @@ export function App({
         return;
       const key = e.key.toLowerCase(),
         // On a workbook page L ; and ', the keys after the play zone's K,
-        // are the answer keys G5, A5 and B5.
+        // are the answer keys G5, A5 and B5, and 1 to 4 the control keys.
         written =
           shortcuts[key] ??
           (pageOpen.current ? ANSWER_SHORTCUTS[key] : undefined);

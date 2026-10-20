@@ -29,6 +29,7 @@ import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
 import {
   createClickTrack,
   Metronome,
+  playClap,
   playClick,
   type ClickClock,
   type ClickTrack,
@@ -337,6 +338,87 @@ export class Studio {
           playClick(context, context.currentTime, accent);
       })
       .catch(() => {});
+  }
+  /** The workbook's playing, to stop when another starts or a page closes. */
+  private examplePlaying: { stop(): void } | null = null;
+  /**
+   * Play an Ear Detective example: `countIn` metronome clicks a beat apart,
+   * then each sound: a clap on the laptop where it has no pitch, else a note
+   * in the piano's sound (on the piano's own output when one is chosen).
+   * Resolves with when the playing ends, in performance-clock milliseconds,
+   * or null if it could not start.
+   */
+  async playExample(
+    sounds: readonly { pitch?: number; start: number; duration: number }[],
+    countIn: number,
+    beat: number,
+  ): Promise<number | null> {
+    this.stopExample();
+    this.pause();
+    const notes = sounds.filter(
+      (s): s is typeof s & { pitch: number } => s.pitch !== undefined,
+    );
+    const generation = this.playGeneration;
+    try {
+      if (this.midi.player.connected) await this.audio.unlock();
+      else
+        await this.prepareAudio(
+          notes.map(({ pitch }) => ({ pitch, velocity: KEY_VELOCITY })),
+          generation,
+        );
+    } catch {
+      return null;
+    }
+    const context = this.audio.context;
+    if (!context || context.state !== "running") return null;
+    const lead = 0.15,
+      start = context.currentTime + lead,
+      from = start + countIn * beat,
+      timers: ReturnType<typeof setTimeout>[] = [],
+      sources: AudioScheduledSourceNode[] = [];
+    for (let i = 0; i < countIn; i++)
+      sources.push(playClick(context, start + i * beat, i === 0).source);
+    for (const sound of sounds) {
+      const when = from + sound.start;
+      if (sound.pitch === undefined) sources.push(playClap(context, when));
+      else if (this.midi.player.connected) {
+        const pitch = sound.pitch,
+          delay = (when - context.currentTime) * 1000;
+        timers.push(
+          setTimeout(
+            () => this.midi.player.keyDown(pitch, KEY_VELOCITY),
+            delay,
+          ),
+          setTimeout(
+            () => this.midi.player.keyUp(pitch),
+            delay + sound.duration * 1000,
+          ),
+        );
+      } else this.audio.tone(sound.pitch, KEY_VELOCITY, when, sound.duration);
+    }
+    const end = Math.max(
+      from,
+      ...sounds.map((s) => from + s.start + s.duration),
+    );
+    this.examplePlaying = {
+      stop: () => {
+        for (const timer of timers) clearTimeout(timer);
+        for (const source of sources)
+          try {
+            source.stop();
+          } catch {
+            // Already stopped.
+          }
+        for (const note of notes) this.midi.player.keyUp(note.pitch);
+        this.audio.stop();
+      },
+    };
+    return performance.now() + (end - context.currentTime) * 1000;
+  }
+  /** Stop the workbook's playing, as a page closes. */
+  stopExample() {
+    this.examplePlaying?.stop();
+    this.examplePlaying = null;
   }
   onKey = (listener: KeyListener) => {
     this.keyListeners.add(listener);
