@@ -24,6 +24,7 @@ import {
   intervalSize,
   findPrompt,
   letterName,
+  namePrompt,
   prompt,
   stepColors,
   pageAfter,
@@ -34,6 +35,7 @@ import {
   zoneOf,
   type ControlAction,
   type FindPage,
+  type NamePage,
   type HopPage,
   type IntervalPage,
   type NotePage,
@@ -44,6 +46,8 @@ const page = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
 const intervals = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as IntervalPage;
+const named = (number: number) =>
+  WORKBOOK_PAGES.find((p) => p.page === number) as NamePage;
 const find = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as FindPage;
 const hop = (number: number) =>
@@ -60,12 +64,15 @@ const hopPages = WORKBOOK_PAGES.filter(
 const findPages = WORKBOOK_PAGES.filter(
   (p): p is FindPage => p.game === "interval-find",
 );
+const namePages = WORKBOOK_PAGES.filter(
+  (p): p is NamePage => p.game === "interval-name",
+);
 
 describe("workbook pages", () => {
   it("lists the built pages in book order", () => {
     expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([
       4, 7, 8, 9, 10, 11, 12, 13, 14, 19, 20, 21, 23, 24, 26, 33, 36, 37, 38,
-      39, 40, 42, 43, 44, 45, 48,
+      39, 40, 41, 42, 43, 44, 45, 48,
     ]);
   });
 
@@ -75,8 +82,8 @@ describe("workbook pages", () => {
         ...p.steps.flatMap((s) => s.pitches),
         ...(p.areas ?? []).map((a) => a.pitch),
       ]),
-      ...[...intervalPages, ...hopPages, ...findPages].flatMap((p) =>
-        p.areas.flatMap((a) => a.notes),
+      ...[...intervalPages, ...hopPages, ...findPages, ...namePages].flatMap(
+        (p) => p.areas.flatMap((a) => a.notes),
       ),
     ]) {
       expect(zoneOf(pitch)).toBe("play");
@@ -569,6 +576,62 @@ describe("Interval Hop Find pages", () => {
     ]);
     expect(findPrompt(find(20))).toBe("Is it a 2nd? Play it, or press Skip");
     expect(SKIP_KEY).toBe(79);
+  });
+});
+
+describe("How far page", () => {
+  const held = (...pitches: number[]) => new Set(pitches);
+  const p41 = named(41);
+
+  it("has each card as printed, one of each answer", () => {
+    expect(p41.areas.map((a) => a.notes.join(a.harmonic ? "+" : ">"))).toEqual([
+      "62>64",
+      "55+60",
+      "64>60",
+    ]);
+    expect(p41.areas.map((a) => intervalSize(a.notes))).toEqual([2, 4, 3]);
+    expect(p41.choices).toEqual([2, 3, 4]);
+    expect(intervalInstruction(p41.steps[0])).toBe(
+      "Identify each interval: circle 2 for the 2nd, 3 for the 3rd and 4 for the 4th.",
+    );
+  });
+
+  it("plays each card, then takes how far apart its notes are", () => {
+    const game = new IntervalGame(p41);
+    expect(game.order).toEqual([0, 1, 2]);
+    expect(game.answer(2)).toEqual({ kind: "play-first" });
+    expect(namePrompt(game, p41.areas[0])).toBe(
+      "Play the two notes, left then right",
+    );
+    game.play(62, 0, held(62));
+    const played = game.play(64, 500, held(64));
+    expect(intervalFeedback(p41, played, p41.areas[0])).toBe(
+      "How far apart? Press 2, 3 or 4.",
+    );
+    expect(namePrompt(game, p41.areas[0])).toBe(
+      "How far apart? Press 2, 3 or 4",
+    );
+    expect(
+      intervalFeedback(p41, game.play(62, 900, held(62)), p41.areas[0]),
+    ).toBe("Now press how far apart: 2, 3 or 4.");
+    const wrong = game.answer(3);
+    expect(intervalFeedback(p41, wrong, p41.areas[0])).toBe(
+      "Not 3. Count each line and space from one note to the other.",
+    );
+    const right = game.answer(2);
+    expect(intervalFeedback(p41, right, p41.areas[0])).toBe(
+      "Yes! 2: that is a 2nd.",
+    );
+    expect(game.answers.get(0)).toBe(2);
+    expect(game.painted.get(0)).toBe("purple");
+    // The harmonic 4th, together.
+    game.play(55, 2000, held(55));
+    game.play(60, 2050, held(55, 60));
+    expect(game.answer(4)).toMatchObject({ kind: "painted" });
+    game.play(64, 3000, held(64));
+    game.play(60, 3500, held(60));
+    expect(game.answer(3)).toEqual({ kind: "painted", finished: true });
+    expect(game.step).toBe(1);
   });
 });
 

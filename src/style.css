@@ -1828,6 +1828,13 @@ footer a {
     stroke-opacity: 0.45;
   }
 }
+/* How far pages: the answers printed under each card's staff. */
+.workbook-choice {
+  font-family: var(--score-font);
+  font-size: 16px;
+  font-weight: 700;
+  fill: var(--text);
+}
 /* A Find page's card passed over: no interval to circle. */
 .workbook-area.is-skipped {
   opacity: 0.4;

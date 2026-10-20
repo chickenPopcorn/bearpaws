@@ -222,6 +222,31 @@ describe("workbook page", () => {
     expect(text(".workbook-hint")).toBe("Yes! That is a 3rd: red.");
   });
 
+  it("takes a How far answer on the answer keys and circles it", async () => {
+    await render({ page: page(41) });
+    expect(text(".workbook-prompt")).toBe(
+      "Play the two notes, left then right",
+    );
+    await tap(SKIP_KEY);
+    expect(text(".workbook-hint")).toBe(
+      "Play the card first, then press how far apart.",
+    );
+    await tap(62);
+    await tap(64);
+    expect(text(".workbook-hint")).toBe("How far apart? Press 2, 3 or 4.");
+    // A5 is 3: not this one.
+    await tap(81);
+    expect(text(".workbook-hint")).toBe(
+      "Not 3. Count each line and space from one note to the other.",
+    );
+    await tap(79);
+    expect(text(".workbook-hint")).toBe("Yes! 2: that is a 2nd.");
+    expect(
+      container.querySelectorAll(".workbook-area title")[0].textContent,
+    ).toBe("TREBLE CLEF D then TREBLE CLEF E, 2 circled purple");
+    expect(container.querySelectorAll(".workbook-choice")).toHaveLength(9);
+  });
+
   it("plays an interval page one outlined area at a time", async () => {
     await render({ page: page(33) });
     const picture = () =>

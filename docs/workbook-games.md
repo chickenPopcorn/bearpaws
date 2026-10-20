@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app | 26/45 |
+| Game built in the app | 27/45 |
 
 By game, in the suggested build order:
 
@@ -35,8 +35,8 @@ covers 17 pages. Interval Hop adds the most pages of any single game.
 
 **Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and 42)
 all of Color by Note (pages 4, 8, 10, 12, 21 and 48, and the interval pages
-26, 33 and 45), and the Hop and Find pages of Interval Hop (13, 19, 20, 23, 24, 39, 40, 43
-and 44), in
+26, 33 and 45), and the Hop, Find and How far pages of Interval Hop (13, 19, 20, 23, 24,
+39, 40, 41, 43 and 44), in
 `src/workbook.ts` (pages, `PaintGame`, `IntervalGame`, `HopGame`,
 `ControlKeys`), `src/WorkbookScreen.tsx`,
 `src/WorkbookPicture.tsx` and `src/workbookKeyboard.ts`. Music Workbook 3 is the
@@ -236,7 +236,11 @@ color for up or down.
   first answer key, G5, and fades. Playing a card without the interval says
   what it is ("That is a 3rd, not a 2nd. Press Skip (G5)."); Skip on a card
   that holds it sends the child back ("Look again: that is a 2nd.").
-- **How far?** (41): play the card, then press the 2, 3 or 4 answer key.
+- **How far?** (41): built. The child plays each card as written (the 4th
+  together), then presses the answer key whose sticker says how far apart its
+  notes are: G5 is 2, A5 is 3, B5 is 4. The answer is circled under the card,
+  as in the book; a wrong one gets "Count each line and space". On the
+  computer keyboard L, ; and ' are G5, A5 and B5.
 - **Twins** (28, 47): play both intervals in the box, then press the Same or
   Different answer key (Beethoven Bear / Mozart Mouse on 28, Haydn Hippo /
   Clara Schumann-Cat on 47).
@@ -342,7 +346,7 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   38 | D and G                                 | Color D and G on keyboard and staff             | Crayon Keys       | Built  |
 |   39 | 4ths                                    | Color C, F, G; circle 4ths up and down          | Interval Hop      | Built  |
 |   40 | 4ths                                    | Circle each 4th                                 | Interval Hop      | Built  |
-|   41 | 2nds, 3rds and 4ths                     | Circle 2, 3 or 4 for each interval              | Interval Hop      | Idea   |
+|   41 | 2nds, 3rds and 4ths                     | Circle 2, 3 or 4 for each interval              | Interval Hop      | Built  |
 |   42 | F and G                                 | Color Treble F and Bass G on keyboard and staff | Crayon Keys       | Built  |
 |   43 | 5ths                                    | Color C and G; circle 5ths up and down          | Interval Hop      | Built  |
 |   44 | 5ths                                    | Circle each 5th                                 | Interval Hop      | Built  |
