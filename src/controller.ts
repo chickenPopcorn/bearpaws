@@ -47,9 +47,15 @@ const savedBeat = (beat: number) => Math.round(beat * 1e6) / 1e6;
 const NO_PEDALS: readonly PedalSpan[] = [];
 /**
  * A key went down or came up at `time`: milliseconds on the performance
- * clock, as MIDI event time stamps are.
+ * clock, as MIDI event time stamps are. `lost` marks a key-up that did not
+ * come from the key, as when the window loses focus.
  */
-export type KeyListener = (pitch: number, down: boolean, time: number) => void;
+export type KeyListener = (
+  pitch: number,
+  down: boolean,
+  time: number,
+  lost?: boolean,
+) => void;
 const NO_NOTES: Note[] = [];
 /** How long after Play the count-in's first click sounds, in seconds. */
 const COUNT_IN_DELAY = 0.1;
@@ -321,10 +327,6 @@ export class Studio {
   };
   snapshot = () => this.revision;
   /**
-   * Follow key presses and releases from the piano, the screen and
-   * shortcuts, each with when it happened.
-   */
-  /**
    * One metronome click now, on the laptop, as the workbook's Hold It! game
    * counts beats. A click that cannot play is left out.
    */
@@ -338,6 +340,10 @@ export class Studio {
       })
       .catch(() => {});
   }
+  /**
+   * Follow key presses and releases from the piano, the screen and
+   * shortcuts, each with when it happened.
+   */
   onKey = (listener: KeyListener) => {
     this.keyListeners.add(listener);
     return () => this.keyListeners.delete(listener);
@@ -1034,9 +1040,11 @@ export class Studio {
       time = performance.now();
     for (const pitch of down) this.midi.player.keyUp(pitch);
     this.input.clear();
-    // Followers of the keys hear them come up, as the keys can no longer.
+    // Followers of the keys hear them come up, as the keys can no longer,
+    // marked as lost rather than let go.
     for (const pitch of down)
-      for (const listener of this.keyListeners) listener(pitch, false, time);
+      for (const listener of this.keyListeners)
+        listener(pitch, false, time, true);
   }
   virtual(pitch: number, on: boolean) {
     const request = ++this.nextVirtualRequest;

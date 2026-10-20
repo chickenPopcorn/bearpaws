@@ -527,6 +527,10 @@ export function App({
     // The workbook and the song never sound together.
     studio.pause();
     story.stop();
+    // Start the laptop's sound while the click still counts as a gesture:
+    // Hold It!'s clicks and Ear's examples play later, from timers and
+    // piano keys, which do not.
+    void studio.audio.unlock().catch(() => {});
     setWorkbookPage(page);
   }, []);
   const chooseSong = useCallback((song: Song) => {

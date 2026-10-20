@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { watchCanvasRedraws } from "./canvasRedraw";
+import type { KeyListener } from "./controller";
 import { studio } from "./session";
 import { SongTitle } from "./SongTitle";
 import {
@@ -355,9 +356,11 @@ export const Workbook = memo(function Workbook({
         return;
     }
   });
-  const key = useEffectEvent((pitch: number, down: boolean, time: number) => {
+  const key = useEffectEvent<KeyListener>((pitch, down, time, lost) => {
     if (!down) {
-      if (controls.current?.up(pitch)) return;
+      // A hold cut short by the window losing focus does nothing.
+      if (lost ? controls.current?.cancel(pitch) : controls.current?.up(pitch))
+        return;
       // Hold It! times how long each key is held; a slur joins the keys.
       if (game instanceof HoldGame && inPlayZone(pitch))
         play(pitch, time, false);
@@ -456,7 +459,9 @@ export const Workbook = memo(function Workbook({
       (pitch) => studio.input.down.has(pitch),
     );
     controls.current = keys;
-    const stop = studio.onKey((pitch, down, time) => key(pitch, down, time));
+    const stop = studio.onKey((pitch, down, time, lost) =>
+      key(pitch, down, time, lost),
+    );
     return () => {
       stop();
       keys.clear();
