@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app | 34/45 |
+| Game built in the app | 39/45 |
 
 By game, in the suggested build order:
 
@@ -36,8 +36,8 @@ covers 17 pages. Interval Hop adds the most pages of any single game.
 **Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and
 42), all of Color by Note (4, 8, 10, 12, 21 and 48, and the interval pages
 26, 33 and 45), all of Interval Hop (13, 19, 20, 23, 24, 28, 39, 40, 41, 43,
-44 and 47), all of Hold It! (6, 15 and 16) and all of Note Snap (30 and
-34). The pages and the note and
+44 and 47), all of Hold It! (6, 15 and 16), all of Note Snap (30 and 34)
+and all of Together or Apart (5, 29, 31, 32 and 35). The pages and the note and
 interval games are in `src/workbook.ts` (`PaintGame`, `IntervalGame`,
 `HopGame`, `ControlKeys`), Hold It! in `src/workbookHold.ts`, and the screen
 in `src/WorkbookScreen.tsx`, `src/WorkbookPicture.tsx` and
@@ -275,16 +275,19 @@ the closer one, then replays the right answer.
 Paper task: circle harmonic intervals, melodic intervals, or examples played
 hands together; color the hand that plays.
 
-The child plays each example as written. Notes that start within about 80 ms
-count as together.
+Built.
 
-- Harmonic and melodic (31, 32): the example gets a "together" or "apart"
-  sticker. It is correct when the way the child played matches what is
-  written.
-- Hands together (35): both staves' notes must sound together.
-- Which hand (5, 29): the child presses the LH or RH glove
-  answer key, then plays the example. The slur checks legato: each note must
-  still be held when the next one starts.
+- Harmonic and melodic (31, 32): six cards each, read from the pages. Like
+  Interval Hop's Find pages, the cards go one at a time: a card the page
+  asks for (notes together on 31, apart on 32) is played as written and
+  circled; any other is passed over with Skip (G5, or L).
+- Hands together (35): six grand staff cards, three with a bass note and
+  three with a rest. Both hands' notes played together circle the card; a
+  card with one hand resting is skipped.
+- Which hand (5, 29): for each example the child presses LH (G5) or RH
+  (A5), then plays it. The hand is colored red. On page 29 the slur is
+  played legato: each key held until the next goes down (up to 0.12 s
+  apart); a gap starts the example again. Once played, the slur is traced.
 
 ### 6. Hold It!
 
@@ -322,7 +325,7 @@ built.
 | Page | Title                                   | Paper task                                      | Game              | Status |
 | ---: | --------------------------------------- | ----------------------------------------------- | ----------------- | ------ |
 |    4 | Middle C Position Review                | Color areas by note (A–G, Middle C Position)    | Color by Note     | Built  |
-|    5 | Left Hand and Right Hand                | Color the hand, play                            | Together or Apart | Idea   |
+|    5 | Left Hand and Right Hand                | Color the hand, play                            | Together or Apart | Built  |
 |    6 | Note Values                             | Line from note to counts (4/4 or 3/4)           | Hold It!          | Built  |
 |    7 | Bass Clef C                             | Color Middle C and Bass Clef C on keyboard      | Crayon Keys       | Built  |
 |    8 | Middle C and Bass Clef C                | Color areas by note                             | Color by Note     | Built  |
@@ -346,13 +349,13 @@ built.
 |   26 | 2nds and 3rds                           | Color areas by interval                         | Color by Note     | Built  |
 |   27 | Staccato and Legato Melodies            | Listen: circle the melody                       | Ear Detective     | Idea   |
 |   28 | Same and Different                      | Same or different intervals                     | Interval Hop      | Built  |
-|   29 | Left Hand and Right Hand                | Color the hand, trace the slur, play            | Together or Apart | Idea   |
+|   29 | Left Hand and Right Hand                | Color the hand, trace the slur, play            | Together or Apart | Built  |
 |   30 | C Position                              | Line from letter to staff note                  | Note Snap         | Built  |
-|   31 | Harmonic Intervals                      | Circle notes played together                    | Together or Apart | Idea   |
-|   32 | Melodic Intervals                       | Circle notes played separately                  | Together or Apart | Idea   |
+|   31 | Harmonic Intervals                      | Circle notes played together                    | Together or Apart | Built  |
+|   32 | Melodic Intervals                       | Circle notes played separately                  | Together or Apart | Built  |
 |   33 | Melodic and Harmonic Intervals          | Color areas by interval kind                    | Color by Note     | Built  |
 |   34 | Middle C Position                       | Line from letter to staff note                  | Note Snap         | Built  |
-|   35 | Hands Together                          | Circle examples played hands together           | Together or Apart | Idea   |
+|   35 | Hands Together                          | Circle examples played hands together           | Together or Apart | Built  |
 |   36 | C, D, E, F and G                        | Color Bass C–G on keyboard and staff            | Crayon Keys       | Built  |
 |   37 | C and E                                 | Color C and E on keyboard and staff             | Crayon Keys       | Built  |
 |   38 | D and G                                 | Color D and G on keyboard and staff             | Crayon Keys       | Built  |

@@ -140,7 +140,8 @@ export type WorkbookGame =
   | "interval-name"
   | "interval-twins"
   | "hold"
-  | "note-snap";
+  | "note-snap"
+  | "hands";
 // Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
@@ -152,6 +153,7 @@ export const GAME_NAMES: Record<WorkbookGame, string> = {
   "interval-twins": "Interval Hop",
   hold: "Hold It!",
   "note-snap": "Note Snap",
+  hands: "Together or Apart",
 };
 interface PageInfo {
   page: number;
@@ -247,6 +249,26 @@ export interface HoldPage extends PageInfo {
   steps: [{ crayon: Crayon; words: string }];
   cards: HoldCard[];
 }
+/** One example of a Left Hand and Right Hand page. */
+export interface HandExample {
+  clef: Clef;
+  /** Its notes, in order. */
+  notes: number[];
+  /** The hand that plays it, and the finger marked on its first note. */
+  hand: "left" | "right";
+  finger: number;
+}
+/**
+ * A Left Hand and Right Hand page: for each example, the child says which
+ * hand plays it on the answer keys, then plays it; with a slur, legato.
+ */
+export interface HandsPage extends PageInfo {
+  game: "hands";
+  steps: [{ crayon: Crayon; words: string }];
+  examples: HandExample[];
+  /** The examples are slurred: each key held until the next goes down. */
+  slur: boolean;
+}
 export type WorkbookPage =
   | NotePage
   | IntervalPage
@@ -254,7 +276,8 @@ export type WorkbookPage =
   | FindPage
   | NamePage
   | TwinsPage
-  | HoldPage;
+  | HoldPage
+  | HandsPage;
 /** A page whose cards are answered on the answer keys after playing. */
 export type AnswerPage = NamePage | TwinsPage;
 /** The answer key whose sticker says Skip: G5. */
@@ -496,6 +519,26 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       ],
     ]),
     picture: { height: 400, scale: 0.72 },
+  },
+  {
+    page: 5,
+    title: "Left Hand and Right Hand",
+    useWith: 5,
+    game: "hands",
+    steps: [
+      {
+        crayon: "red",
+        words:
+          "Using a red crayon, color the hand that plays the example. Then play the example on the keyboard.",
+      },
+    ],
+    slur: false,
+    examples: [
+      { clef: "treble", notes: [60, 64, 67], hand: "right", finger: 1 },
+      { clef: "bass", notes: [60, 57, 53], hand: "left", finger: 1 },
+      { clef: "bass", notes: [53, 55, 57], hand: "left", finger: 5 },
+      { clef: "treble", notes: [67, 65, 64], hand: "right", finger: 5 },
+    ],
   },
   {
     page: 6,
@@ -832,6 +875,26 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       [57, 60],
     ],
   ]),
+  {
+    page: 29,
+    title: "Left Hand and Right Hand",
+    useWith: 28,
+    game: "hands",
+    steps: [
+      {
+        crayon: "red",
+        words:
+          "Using a red crayon, color the hand that plays the example. Using a black crayon, trace the slur. Then play the example on the keyboard.",
+      },
+    ],
+    slur: true,
+    examples: [
+      { clef: "treble", notes: [60, 62, 64], hand: "right", finger: 1 },
+      { clef: "bass", notes: [55, 53, 52], hand: "left", finger: 1 },
+      { clef: "bass", notes: [48, 50, 52], hand: "left", finger: 5 },
+      { clef: "treble", notes: [67, 64, 60], hand: "right", finger: 5 },
+    ],
+  },
   snapPage(30, "C Position", 29, [
     {
       letters: LETTER_COLUMN,

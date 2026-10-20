@@ -1920,6 +1920,35 @@ footer a {
     stroke-dashoffset: 0;
   }
 }
+/* Left Hand and Right Hand: the finger, the slur and the hands. */
+.workbook-finger {
+  font-family: var(--score-font);
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.workbook-slur {
+  fill: none;
+  stroke: #51465f;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+.workbook-slur.is-traced {
+  stroke: #282635;
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+}
+.workbook-hand {
+  fill: #fff;
+  stroke: #8f88a0;
+  stroke-width: 1.5;
+}
+.workbook-hand-label {
+  font-family: var(--score-font);
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--text);
+}
 .workbook-brace {
   fill: none;
   stroke: #51465f;

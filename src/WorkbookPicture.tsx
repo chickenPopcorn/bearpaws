@@ -9,6 +9,7 @@ import {
   type NoteValue,
   type RestValue,
   type SnapColumn,
+  type HandExample,
   letterName,
 } from "./workbook";
 import { cardCounts } from "./workbookHold";
@@ -645,6 +646,179 @@ export function SnapBoard({
           ))}
         </g>
       ))}
+    </svg>
+  );
+}
+
+/**
+ * A Left Hand and Right Hand page's examples, two by two: each a staff of
+ * its notes, the finger marked on the first, the slur if the page has one,
+ * and the two hands to choose from below. The example to play is outlined;
+ * its hand is colored in the page's crayon once chosen, and a done
+ * example's slur is traced solid.
+ */
+export function HandsCards({
+  examples,
+  current,
+  chosen,
+  done,
+  slur,
+  crayon,
+}: {
+  examples: readonly HandExample[];
+  current?: number;
+  chosen: ReadonlyMap<number, "left" | "right">;
+  done: ReadonlySet<number>;
+  slur: boolean;
+  crayon: Crayon;
+}) {
+  const half = 4.5,
+    staffBottom = -4;
+  return (
+    <svg
+      className="workbook-picture"
+      viewBox="0 0 640 360"
+      role="img"
+      aria-label={`${examples.length} examples, ${done.size} played`}
+    >
+      {examples.map((example, i) => {
+        const x = 165 + (i % 2) * 310,
+          y = 95 + Math.floor(i / 2) * 175,
+          y0 = (step: number) =>
+            staffBottom - (step - BOTTOM_LINE_STEP[example.clef]) * half,
+          heads = example.notes.map((pitch, n) => ({
+            x: -48 + n * 42,
+            y: y0(
+              pitchPosition(pitch, example.clef === "treble" ? "right" : "left")
+                .step,
+            ),
+            step: pitchPosition(
+              pitch,
+              example.clef === "treble" ? "right" : "left",
+            ).step,
+          })),
+          hand = chosen.get(i);
+        return (
+          <g
+            key={i}
+            className={`workbook-area${i === current ? " is-current" : ""}`}
+            transform={`translate(${x} ${y})`}
+          >
+            <title>
+              {`${example.notes.map(bookName).join(", ")}${hand ? `, ${hand} hand` : ""}${done.has(i) ? ", played" : ""}`}
+            </title>
+            <path d="M -140 -67 Q -140 -75 -132 -75 L 132 -75 Q 140 -75 140 -67 L 140 67 Q 140 75 132 75 L -132 75 Q -140 75 -140 67 Z" />
+            <g className="sheet-staff-line">
+              {[0, 1, 2, 3, 4].map((line) => (
+                <line
+                  key={line}
+                  x1={-120}
+                  x2={120}
+                  y1={staffBottom - line * 2 * half}
+                  y2={staffBottom - line * 2 * half}
+                />
+              ))}
+              {heads.flatMap(({ x: hx, step }) => {
+                const ledgers: number[] = [];
+                for (
+                  let s = BOTTOM_LINE_STEP[example.clef] - 2;
+                  s >= step;
+                  s -= 2
+                )
+                  ledgers.push(s);
+                for (
+                  let s = BOTTOM_LINE_STEP[example.clef] + 10;
+                  s <= step;
+                  s += 2
+                )
+                  ledgers.push(s);
+                return ledgers.map((s) => (
+                  <line
+                    key={`${hx}:${s}`}
+                    x1={hx - 6}
+                    x2={hx + 18}
+                    y1={y0(s)}
+                    y2={y0(s)}
+                  />
+                ));
+              })}
+            </g>
+            <text
+              className="sheet-clef"
+              x={-118}
+              y={
+                example.clef === "treble"
+                  ? staffBottom - 2 * half
+                  : staffBottom - 6 * half
+              }
+              fontSize={8 * half}
+            >
+              {example.clef === "treble" ? "" : ""}
+            </text>
+            {heads.map(({ x: hx, y: hy }, n) => (
+              <text
+                key={n}
+                className="workbook-note"
+                x={hx}
+                y={hy}
+                fontSize={8 * half}
+              >
+                {""}
+              </text>
+            ))}
+            <text
+              className="workbook-note"
+              x={84}
+              y={staffBottom - 4 * half}
+              fontSize={8 * half}
+            >
+              {""}
+            </text>
+            <text
+              className="workbook-finger"
+              textAnchor="middle"
+              x={heads[0].x + 6}
+              y={
+                example.clef === "treble"
+                  ? staffBottom - 10 * half - 4
+                  : staffBottom + 16
+              }
+            >
+              {example.finger}
+            </text>
+            {slur && (
+              // Below the notes on a treble staff, above them on a bass one,
+              // as the book draws it.
+              <g>
+                <path
+                  className={`workbook-slur${done.has(i) ? " is-traced" : ""}`}
+                  d={
+                    example.clef === "treble"
+                      ? `M ${heads[0].x + 4} ${staffBottom + 8} Q ${(heads[0].x + heads.at(-1)!.x) / 2 + 6} ${staffBottom + 26} ${heads.at(-1)!.x + 10} ${staffBottom + 8}`
+                      : `M ${heads[0].x + 4} ${staffBottom - 10 * half - 4} Q ${(heads[0].x + heads.at(-1)!.x) / 2 + 6} ${staffBottom - 10 * half - 22} ${heads.at(-1)!.x + 10} ${staffBottom - 10 * half - 4}`
+                  }
+                />
+              </g>
+            )}
+            {(["left", "right"] as const).map((h, n) => (
+              <g key={h} transform={`translate(${-48 + n * 96} 48)`}>
+                <rect
+                  className="workbook-hand"
+                  x={-30}
+                  y={-15}
+                  width={60}
+                  height={30}
+                  rx={15}
+                  style={{ fill: hand === h ? CRAYONS[crayon] : undefined }}
+                />
+                <text className="workbook-hand-label" textAnchor="middle" y={5}>
+                  {h === "left" ? "LH" : "RH"}
+                </text>
+              </g>
+            ))}
+          </g>
+        );
+      })}
     </svg>
   );
 }

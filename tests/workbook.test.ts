@@ -41,6 +41,7 @@ import {
   type NamePage,
   type TwinsPage,
   type HoldPage,
+  type HandsPage,
   type HopPage,
   type IntervalPage,
   type NotePage,
@@ -55,6 +56,12 @@ import {
   holdFeedback,
   holdPrompt,
 } from "../src/workbookHold";
+import {
+  HandsGame,
+  LEGATO_GAP_MS,
+  handsFeedback,
+  handsPrompt,
+} from "../src/workbookHands";
 
 const page = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
@@ -92,8 +99,9 @@ describe("workbook pages", () => {
     const pages = WORKBOOK_PAGES.map((p) => p.page);
     expect(pages).toEqual([...pages].sort((a, b) => a - b));
     expect(pages).toEqual([
-      4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 23, 24, 26, 28, 30,
-      31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47, 48,
+      4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 23, 24, 26, 28,
+      29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47,
+      48,
     ]);
   });
 
@@ -706,6 +714,88 @@ describe("Together or Apart Find pages", () => {
     expect(intervalFeedback(p, both, p.areas[1])).toBe(
       "Yes! Hands together: yellow.",
     );
+  });
+});
+
+describe("Left Hand and Right Hand", () => {
+  const hands = (number: number) =>
+    WORKBOOK_PAGES.find((p) => p.page === number) as HandsPage;
+
+  it("has each example as printed", () => {
+    expect(
+      hands(5).examples.map((e) => `${e.hand} ${e.notes.join(" ")}`),
+    ).toEqual([
+      "right 60 64 67",
+      "left 60 57 53",
+      "left 53 55 57",
+      "right 67 65 64",
+    ]);
+    expect(
+      hands(29).examples.map((e) => `${e.hand} ${e.notes.join(" ")}`),
+    ).toEqual([
+      "right 60 62 64",
+      "left 55 53 52",
+      "left 48 50 52",
+      "right 67 64 60",
+    ]);
+    expect([hands(5).slur, hands(29).slur]).toEqual([false, true]);
+    // The right hand reads the treble clef here, the left hand the bass.
+    for (const p of [hands(5), hands(29)])
+      for (const e of p.examples)
+        expect(e.clef).toBe(e.hand === "right" ? "treble" : "bass");
+  });
+
+  it("takes the hand, then the example's notes in order", () => {
+    const p = hands(5);
+    const game = new HandsGame(p);
+    expect(handsPrompt(game)).toBe("Which hand plays it? LH is G5, RH is A5");
+    const early = game.down(60, 0);
+    expect(handsFeedback(p, early, p.examples[0])).toBe(
+      "First say which hand plays it: LH is G5, RH is A5.",
+    );
+    expect(handsFeedback(p, game.answer("left"), p.examples[0])).toBe(
+      "Look again: this one is in the treble clef, for the right hand.",
+    );
+    expect(handsFeedback(p, game.answer("right"), p.examples[0])).toBe(
+      "Yes! The right hand plays it. Now play it.",
+    );
+    expect(game.answer("left")).toEqual({ kind: "ignored" });
+    expect(handsPrompt(game)).toBe("Play the example on the keyboard");
+    expect(game.down(60, 0)).toEqual({ kind: "next-note" });
+    game.up(60, 400);
+    expect(handsFeedback(p, game.down(65, 900), p.examples[0])).toBe(
+      "That is F. Look at the next note.",
+    );
+    // Without a slur, a gap between notes is fine.
+    game.down(64, 1500);
+    expect(handsFeedback(p, game.down(67, 3000), p.examples[0])).toBe(
+      "Yes! Played with the right hand.",
+    );
+    expect([...game.done]).toEqual([0]);
+    expect(game.current).toBe(1);
+  });
+
+  it("starts a slurred example again when the keys are not joined", () => {
+    const p = hands(29);
+    const game = new HandsGame(p);
+    game.answer("right");
+    game.down(60, 0);
+    game.up(60, 500);
+    // D4 long after C4 was let go: not legato.
+    const gap = game.down(62, 500 + LEGATO_GAP_MS + 1);
+    expect(handsFeedback(p, gap, p.examples[0])).toBe(
+      "Keep the notes joined: hold each key until the next one goes down. Start again.",
+    );
+    expect(game.progress).toBe(0);
+    // Joined: each key down before (or just after) the one before comes up.
+    game.down(60, 2000);
+    game.down(62, 2400);
+    game.up(60, 2410);
+    game.up(62, 2800);
+    expect(game.down(64, 2800 + LEGATO_GAP_MS)).toEqual({
+      kind: "done",
+      finished: false,
+    });
   });
 });
 
