@@ -640,7 +640,13 @@ describe("Note Snap", () => {
     const c4 = game.current;
     expect(feedback(p, game.play(60), c4)).toBe("Yes! That is C: line drawn.");
     for (const pitch of [59, 53, 62]) game.play(pitch);
-    // The treble staff's middle C: a new card, not one already joined.
+    // The treble staff's middle C: a new card, not one already joined. A C
+    // in the wrong octave still points to it.
+    expect(game.play(72)).toMatchObject({ kind: "octave", direction: "lower" });
+    expect(game.play(48)).toMatchObject({
+      kind: "octave",
+      direction: "higher",
+    });
     expect(game.play(60)).toMatchObject({ kind: "painted" });
     for (const pitch of [65, 67]) game.play(pitch);
     const last = game.current;

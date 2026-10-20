@@ -234,6 +234,11 @@ describe("workbook page", () => {
     const title = (i: number) =>
       container.querySelectorAll(".workbook-area title")[i].textContent;
     expect(title(0)).toBe("BASS CLEF D");
+    const board = () =>
+      container.querySelector(".workbook-picture")!.getAttribute("aria-label");
+    expect(board()).toBe(
+      "Letters and notes to join, 0 of 10 joined. Bright card: BASS CLEF D",
+    );
     await tap(50);
     expect(text(".workbook-hint")).toBe("Yes! That is D: line drawn.");
     expect(title(0)).toBe("BASS CLEF D, joined to D");
@@ -241,6 +246,9 @@ describe("workbook page", () => {
     expect(
       container.querySelector(".workbook-area.is-current title")!.textContent,
     ).toBe("BASS CLEF C");
+    expect(board()).toBe(
+      "Letters and notes to join, 1 of 10 joined. Bright card: BASS CLEF C",
+    );
   });
 
   it("times a Hold It! note while its key is held", async () => {

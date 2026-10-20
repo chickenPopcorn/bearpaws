@@ -1155,8 +1155,10 @@ export class PaintGame {
     this.misses++;
     const lettersShown = !this.letters && this.misses >= LETTER_MISSES;
     if (lettersShown) this.letters = true;
-    // The nearest note still to find with this letter, if any.
-    const [nearest] = this.left
+    // The nearest note still to find with this letter, if any. A one-note
+    // step's note is still to find even if an earlier step painted it.
+    const looking = target.pitches.length > 1 ? this.left : target.pitches;
+    const [nearest] = looking
       .filter((p) => letterName(p) === letterName(pitch) && !isBlack(pitch))
       .sort((a, b) => Math.abs(a - pitch) - Math.abs(b - pitch));
     if (nearest !== undefined)
@@ -1174,13 +1176,13 @@ export class PaintGame {
   }
 }
 
-/** The hint under the prompt after `outcome`, for a grown-up to read aloud. */
 /** What a finished page says. */
 export const doneText = (page: WorkbookPage) =>
   `Page ${page.page} is done. ${pageAfter(page) ? "Next page: E2." : "This is the last page so far."}`;
 const lettersText = (outcome: { lettersShown?: boolean }) =>
   outcome.lettersShown ? " The letters are on the keys now." : "";
 
+/** The hint under the prompt after `outcome`, for a grown-up to read aloud. */
 export function feedback(
   page: NotePage,
   outcome: Outcome,
