@@ -1767,6 +1767,21 @@ footer a {
   color: var(--muted);
   font-size: var(--text-sm);
 }
+.workbook-keyboard-wrap {
+  position: relative;
+}
+/* A lane over the keys for the Interval Hop paw. */
+.workbook-keyboard-wrap.has-hopper {
+  padding-top: 44px;
+}
+.workbook-hopper {
+  position: absolute;
+  top: 6px;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, 0);
+  pointer-events: none;
+}
 .workbook-keyboard {
   display: block;
   width: 100%;
@@ -1811,6 +1826,22 @@ footer a {
 @keyframes workbook-area-glow {
   50% {
     stroke-opacity: 0.45;
+  }
+}
+/* A card circled in its step's crayon, drawn in like a crayon stroke. */
+.workbook-ring {
+  fill: none;
+  stroke-width: 5;
+  /* A little over the length, so the finished ring has no seam. */
+  stroke-dasharray: 1.05;
+  animation: workbook-ring-draw 0.6s ease-out both;
+}
+@keyframes workbook-ring-draw {
+  from {
+    stroke-dashoffset: 1.05;
+  }
+  to {
+    stroke-dashoffset: 0;
   }
 }
 .workbook-note {
@@ -1866,7 +1897,8 @@ footer a {
   .workbook-area path {
     transition: none;
   }
-  .workbook-area.is-current path {
+  .workbook-area.is-current path,
+  .workbook-ring {
     animation: none;
   }
   .practice-ring-done {
