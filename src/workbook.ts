@@ -114,13 +114,18 @@ export interface ColorStep {
   letter: string;
 }
 export type WorkbookGame =
-  "crayon-keys" | "color-by-note" | "color-by-interval" | "interval-hop";
+  | "crayon-keys"
+  | "color-by-note"
+  | "color-by-interval"
+  | "interval-hop"
+  | "interval-find";
 // Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
   "color-by-note": "Color by Note",
   "color-by-interval": "Color by Note",
   "interval-hop": "Interval Hop",
+  "interval-find": "Interval Hop",
 };
 interface PageInfo {
   page: number;
@@ -147,9 +152,22 @@ export interface HopPage extends PageInfo {
   /** The cards, all melodic. */
   areas: IntervalArea[];
 }
+/**
+ * An Interval Hop page that finds one interval among mixed cards: the child
+ * plays the cards that hold it and skips the others with the Skip key.
+ */
+export interface FindPage extends PageInfo {
+  game: "interval-find";
+  /** The one step: the interval to circle, and its crayon. */
+  steps: [IntervalStep];
+  /** The cards, all melodic. */
+  areas: IntervalArea[];
+}
 /** A page whose areas hold two notes. */
-export type IntervalsPage = IntervalPage | HopPage;
-export type WorkbookPage = NotePage | IntervalPage | HopPage;
+export type IntervalsPage = IntervalPage | HopPage | FindPage;
+export type WorkbookPage = NotePage | IntervalPage | HopPage | FindPage;
+/** The answer key whose sticker says Skip: G5. */
+export const SKIP_KEY: number = ANSWER_ZONE[0];
 /** A page of single notes: Crayon Keys, and Color by Note by notes. */
 export interface NotePage extends PageInfo {
   game: "crayon-keys" | "color-by-note";
@@ -194,6 +212,32 @@ const harmonic = (
 /** An Interval Hop card: two notes, one after the other. */
 const card = (first: number, second: number, x: number, y: number) =>
   melodic("card", first, second, x, y);
+/** Six cards, three by two. */
+const sixCards = (notes: [number, number][]) =>
+  notes.map(([first, second], i) =>
+    card(first, second, 110 + (i % 3) * 210, 75 + Math.floor(i / 3) * 140),
+  );
+/** A Find page: circle the cards of one interval, skip the others. */
+const findPage = (
+  page: number,
+  useWith: number,
+  crayon: Crayon,
+  size: number,
+  notes: [number, number][],
+): FindPage => ({
+  page,
+  title: `${intervalName(size)}s`,
+  useWith,
+  game: "interval-find",
+  steps: [
+    {
+      crayon,
+      match: { size },
+      words: `Using a ${crayon} crayon, circle each ${intervalName(size)}.`,
+    },
+  ],
+  areas: sixCards(notes),
+});
 /** Four cards, two by two. */
 const fourCards = (notes: [number, number][]) =>
   notes.map(([first, second], i) =>
@@ -368,14 +412,14 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
         words: "Using a purple crayon, circle each repeat (same note).",
       },
     ],
-    areas: [
-      card(50, 50, 110, 75),
-      card(64, 67, 320, 75),
-      card(48, 50, 530, 75),
-      card(52, 48, 110, 215),
-      card(62, 60, 320, 215),
-      card(64, 64, 530, 215),
-    ],
+    areas: sixCards([
+      [50, 50],
+      [64, 67],
+      [48, 50],
+      [52, 48],
+      [62, 60],
+      [64, 64],
+    ]),
   },
   {
     page: 14,
@@ -422,6 +466,14 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       [55, 53],
     ]),
   },
+  findPage(20, 19, "blue", 2, [
+    [52, 50],
+    [60, 64],
+    [62, 64],
+    [67, 65],
+    [48, 50],
+    [55, 52],
+  ]),
   {
     page: 21,
     title: "C Position",
@@ -478,6 +530,14 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       [52, 55],
     ]),
   },
+  findPage(24, 23, "red", 3, [
+    [60, 62],
+    [48, 52],
+    [64, 60],
+    [52, 53],
+    [64, 67],
+    [55, 52],
+  ]),
   {
     page: 26,
     title: "2nds and 3rds",
@@ -584,6 +644,14 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       [60, 55],
     ]),
   },
+  findPage(40, 39, "purple", 4, [
+    [64, 67],
+    [53, 55],
+    [55, 50],
+    [65, 64],
+    [62, 67],
+    [52, 48],
+  ]),
   {
     page: 42,
     title: "F and G",
@@ -623,6 +691,14 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       [48, 55],
     ]),
   },
+  findPage(44, 43, "green", 5, [
+    [53, 60],
+    [64, 67],
+    [53, 57],
+    [67, 65],
+    [55, 60],
+    [67, 60],
+  ]),
   {
     page: 45,
     title: "4ths and 5ths",
@@ -869,9 +945,13 @@ const staffStep = (pitch: number) =>
 /** An interval's size: 2 for a 2nd, 3 for a 3rd. */
 export const intervalSize = ([a, b]: readonly [number, number]) =>
   Math.abs(staffStep(a) - staffStep(b)) + 1;
-const ORDINALS: Record<number, string> = { 2: "2nd", 3: "3rd" };
-/** "2nd", "3rd", "4th", "5th". */
-export const intervalName = (size: number) => ORDINALS[size] ?? `${size}th`;
+/**
+ * "2nd", "3rd", "4th", "5th". A function, so the page list above can name
+ * its pages with it.
+ */
+export function intervalName(size: number) {
+  return size === 2 ? "2nd" : size === 3 ? "3rd" : `${size}th`;
+}
 /** Whether `step` colors `area`. */
 export const stepColors = (step: IntervalStep, area: IntervalArea) =>
   "size" in step.match
@@ -914,6 +994,12 @@ export type IntervalOutcome =
       lettersShown: boolean;
     }
   | { kind: "wrong"; pitch: number; lettersShown: boolean }
+  /** Find pages: a card's notes, played, that do not hold the interval. */
+  | { kind: "not-it"; size: number }
+  /** Find pages: Skip on a card that holds the interval. */
+  | { kind: "look-again"; size: number }
+  /** Find pages: a card without the interval, skipped. */
+  | { kind: "skipped"; finished: boolean }
   | { kind: "finished" };
 
 /**
@@ -930,12 +1016,27 @@ export class IntervalGame {
   private misses = 0;
   /** Each painted area's crayon, by its index on the page. */
   readonly painted = new Map<number, Crayon>();
+  /** Find pages: the cards skipped, by their index on the page. */
+  readonly skipped = new Set<number>();
+  /** The last area painted, for a hop between its notes. */
+  lastHop: { from: number; to: number; count: number } | null = null;
   /** When each of the current area's notes was pressed. */
   private pressed = new Map<number, number>();
   constructor(readonly page: IntervalsPage) {
-    this.order = page.steps.flatMap((step) =>
-      page.areas.flatMap((area, i) => (stepColors(step, area) ? [i] : [])),
-    );
+    // A Find page goes through every card, in order; the others go through
+    // each step's areas in turn.
+    this.order =
+      page.game === "interval-find"
+        ? page.areas.map((_, i) => i)
+        : page.steps.flatMap((step) =>
+            page.areas.flatMap((area, i) =>
+              stepColors(step, area) ? [i] : [],
+            ),
+          );
+  }
+  /** Whether a step colors `area`: on a Find page, whether to play it. */
+  private wanted(area: IntervalArea) {
+    return this.page.steps.some((s) => stepColors(s, area));
   }
   get finished() {
     return this.at >= this.order.length;
@@ -947,9 +1048,12 @@ export class IntervalGame {
   /** The step whose crayon the current area gets. */
   get step() {
     const index = this.current;
-    return index === undefined
-      ? this.page.steps.length
-      : this.page.steps.findIndex((s) => stepColors(s, this.page.areas[index]));
+    if (index === undefined) return this.page.steps.length;
+    // A Find page's cards to skip still belong to its one step.
+    return Math.max(
+      0,
+      this.page.steps.findIndex((s) => stepColors(s, this.page.areas[index])),
+    );
   }
   /**
    * The key `pitch` went down at `time` (ms); `down` holds every key down
@@ -991,7 +1095,25 @@ export class IntervalGame {
       this.pressed.clear();
       return { kind: "together" };
     }
+    if (!this.wanted(area)) {
+      this.pressed.clear();
+      return { kind: "not-it", size: intervalSize(area.notes) };
+    }
     return this.paint(index);
+  }
+  /**
+   * The Skip key, on a Find page: passes over a card without the interval,
+   * and sends the child back to one that holds it.
+   */
+  skip(): IntervalOutcome {
+    const index = this.current;
+    if (index === undefined) return { kind: "finished" };
+    const area = this.page.areas[index];
+    if (this.wanted(area))
+      return { kind: "look-again", size: intervalSize(area.notes) };
+    this.skipped.add(index);
+    this.next();
+    return { kind: "skipped", finished: this.finished };
   }
   /** The hint key shows the letter names until the area is done. */
   hint() {
@@ -999,11 +1121,16 @@ export class IntervalGame {
   }
   private paint(index: number): IntervalOutcome {
     this.painted.set(index, this.page.steps[this.step].crayon);
+    const [from, to] = this.page.areas[index].notes;
+    this.lastHop = { from, to, count: (this.lastHop?.count ?? 0) + 1 };
+    this.next();
+    return { kind: "painted", finished: this.finished };
+  }
+  private next() {
     this.at++;
     this.pressed.clear();
     this.misses = 0;
     this.letters = false;
-    return { kind: "painted", finished: this.finished };
   }
   private miss(pitch: number, area: IntervalArea): IntervalOutcome {
     this.pressed.clear();
@@ -1023,6 +1150,15 @@ export class IntervalGame {
     return { kind: "wrong", pitch, lettersShown };
   }
 }
+
+/** The interval a Find page looks for. */
+const findSize = (page: IntervalsPage) => {
+  const { match } = page.steps[0];
+  return "size" in match ? match.size : 0;
+};
+/** What the child does with the outlined card on a Find page. */
+export const findPrompt = (page: FindPage) =>
+  `Is it a ${intervalName(findSize(page))}? Play it, or press Skip`;
 
 /**
  * The hint after an interval page's `outcome`, or null to keep the one
@@ -1044,6 +1180,16 @@ export function intervalFeedback(
         ? `Yes! That is a ${intervalName(step.match.size)}: ${step.crayon}.`
         : `Yes! ${area.harmonic ? "Together, so it is harmonic" : "One after the other, so it is melodic"}: ${step.crayon}.`;
     }
+    case "not-it": {
+      const want = intervalName(findSize(page));
+      return `That is a ${intervalName(outcome.size)}, not a ${want}. Press Skip (G5).`;
+    }
+    case "look-again":
+      return `Look again: that is a ${intervalName(outcome.size)}. Play it, left then right.`;
+    case "skipped":
+      return outcome.finished
+        ? doneText(page)
+        : `Right: no ${intervalName(findSize(page))} there. Next card.`;
     case "next":
       return area && area.notes[0] === area.notes[1]
         ? "Now the same note again."
@@ -1088,8 +1234,6 @@ export class HopGame {
   readonly colors: PaintGame;
   /** The circle steps. */
   readonly cards: IntervalGame;
-  /** The last card circled, for the hop between its notes. */
-  lastHop: { from: number; to: number; count: number } | null = null;
   constructor(readonly page: HopPage) {
     const notes = [...new Set(page.areas.flatMap((a) => a.notes))].sort(
       (a, b) => a - b,
@@ -1109,6 +1253,10 @@ export class HopGame {
   }
   get coloring() {
     return !this.colors.finished;
+  }
+  /** The last card circled, for the hop between its notes. */
+  get lastHop() {
+    return this.cards.lastHop;
   }
   get finished() {
     return this.colors.finished && this.cards.finished;
@@ -1138,12 +1286,6 @@ export class HopGame {
     const index = this.cards.current;
     const area = index === undefined ? undefined : this.page.areas[index];
     const outcome = this.cards.play(pitch, time, down);
-    if (outcome.kind === "painted" && area)
-      this.lastHop = {
-        from: area.notes[0],
-        to: area.notes[1],
-        count: (this.lastHop?.count ?? 0) + 1,
-      };
     return { phase: "circle", outcome, area };
   }
 }

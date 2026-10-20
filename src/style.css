@@ -1828,6 +1828,10 @@ footer a {
     stroke-opacity: 0.45;
   }
 }
+/* A Find page's card passed over: no interval to circle. */
+.workbook-area.is-skipped {
+  opacity: 0.4;
+}
 /* A card circled in its step's crayon, drawn in like a crayon stroke. */
 .workbook-ring {
   fill: none;

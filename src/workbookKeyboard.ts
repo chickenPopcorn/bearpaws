@@ -22,7 +22,7 @@ import {
 } from "./workbook";
 
 /** Each control key's mark and word, drawn on the key. */
-export const CONTROL_LABELS: Record<number, { mark: string; word: string }> = {
+export const CONTROL_LABELS: Record<number, KeyLabel> = {
   [CONTROL_KEYS.hint]: { mark: "?", word: "Hint" },
   [CONTROL_KEYS.back]: { mark: "←", word: "Back" },
   [CONTROL_KEYS.next]: { mark: "→", word: "Next" },
@@ -64,6 +64,11 @@ export function workbookKeys() {
 }
 const layout = workbookKeys();
 
+/** A mark and a word drawn on a control key or an answer key's sticker. */
+export interface KeyLabel {
+  mark: string;
+  word: string;
+}
 export interface WorkbookKeyboardScene {
   /** Keys held down now. */
   down: ReadonlySet<number>;
@@ -71,11 +76,13 @@ export interface WorkbookKeyboardScene {
   painted: ReadonlyMap<number, Crayon>;
   /** Letter names on the play zone's white keys. */
   letters: boolean;
+  /** The answer keys a question needs, with their stickers. */
+  stickers?: ReadonlyMap<number, KeyLabel>;
 }
 
 export function drawWorkbookKeyboard(
   canvas: HTMLCanvasElement,
-  { down, painted, letters }: WorkbookKeyboardScene,
+  { down, painted, letters, stickers }: WorkbookKeyboardScene,
 ) {
   const rect = canvas.getBoundingClientRect(),
     dpr = window.devicePixelRatio || 1,
@@ -148,8 +155,13 @@ export function drawWorkbookKeyboard(
     if (k.black) return;
     c.textAlign = "center";
     const ink = pressed ? "#fff" : crayon ? "#282635" : labelColor;
-    const control = CONTROL_LABELS[k.pitch];
-    if (k.zone === "control" && control) {
+    const control =
+      k.zone === "control"
+        ? CONTROL_LABELS[k.pitch]
+        : k.zone === "answer"
+          ? stickers?.get(k.pitch)
+          : undefined;
+    if (control) {
       // Below the black keys, which cover the top of the white ones.
       const markSize = fittedSize(c, control.mark, 16, 700, w - 6),
         wordSize = fittedSize(c, control.word, 11, 400, w - 4);
@@ -179,13 +191,8 @@ export function drawWorkbookKeyboard(
   layout.filter((k) => !k.black).forEach(drawKey);
   layout.filter((k) => k.black).forEach(drawKey);
   // The answer keys wait, faded, for a question that needs them.
-  const answers = layout.filter((k) => k.zone === "answer"),
-    last = answers.filter((k) => !k.black).at(-1)!;
   c.fillStyle = "#eeedf5b3";
-  c.fillRect(
-    answers[0].x * width,
-    top,
-    (last.x + last.width - answers[0].x) * width,
-    KEYBOARD_HEIGHT,
-  );
+  for (const k of layout)
+    if (k.zone === "answer" && !k.black && !stickers?.has(k.pitch))
+      c.fillRect(k.x * width, top, k.width * width, KEYBOARD_HEIGHT);
 }

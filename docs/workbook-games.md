@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app | 22/45 |
+| Game built in the app | 26/45 |
 
 By game, in the suggested build order:
 
@@ -35,7 +35,8 @@ covers 17 pages. Interval Hop adds the most pages of any single game.
 
 **Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and 42)
 all of Color by Note (pages 4, 8, 10, 12, 21 and 48, and the interval pages
-26, 33 and 45), and the Hop pages of Interval Hop (13, 19, 23, 39 and 43), in
+26, 33 and 45), and the Hop and Find pages of Interval Hop (13, 19, 20, 23, 24, 39, 40, 43
+and 44), in
 `src/workbook.ts` (pages, `PaintGame`, `IntervalGame`, `HopGame`,
 `ControlKeys`), `src/WorkbookScreen.tsx`,
 `src/WorkbookPicture.tsx` and `src/workbookKeyboard.ts`. Music Workbook 3 is the
@@ -228,8 +229,13 @@ color for up or down.
   same key twice); the card is circled in its step's crayon, the hint names it
   ("Yes! A 2nd going up: green."), and a paw over the keyboard hops from the
   first key to the second, higher for wider intervals.
-- **Find the 2nds** (20, 24, 40, 44): cards with mixed intervals. Play the
-  cards with the target interval; press the skip answer key for the others.
+- **Find the 2nds** (20, 24, 40, 44): built. The cards go one at a time,
+  in order, outlined. The child decides: a card that holds the page's
+  interval is played left then right and circled in the page's crayon (and
+  the paw hops); any other card is passed over with the Skip sticker on the
+  first answer key, G5, and fades. Playing a card without the interval says
+  what it is ("That is a 3rd, not a 2nd. Press Skip (G5)."); Skip on a card
+  that holds it sends the child back ("Look again: that is a 2nd.").
 - **How far?** (41): play the card, then press the 2, 3 or 4 answer key.
 - **Twins** (28, 47): play both intervals in the box, then press the Same or
   Different answer key (Beethoven Bear / Mozart Mouse on 28, Haydn Hippo /
@@ -315,11 +321,11 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   17 | Staccato                                | Listen: staccato or not                         | Ear Detective     | Idea   |
 |   18 | Rhythm Patterns in 4/4 Time             | Listen: circle the clapped rhythm               | Ear Detective     | Idea   |
 |   19 | 2nds                                    | Color G and F; circle 2nds up and down          | Interval Hop      | Built  |
-|   20 | 2nds                                    | Circle each 2nd                                 | Interval Hop      | Idea   |
+|   20 | 2nds                                    | Circle each 2nd                                 | Interval Hop      | Built  |
 |   21 | C Position                              | Color areas C–G (Talent Show)                   | Color by Note     | Built  |
 |   22 | Rhythm Patterns                         | Listen: circle the clapped rhythm (3/4 and 4/4) | Ear Detective     | Idea   |
 |   23 | 3rds                                    | Color G and E; circle 3rds up and down          | Interval Hop      | Built  |
-|   24 | 3rds                                    | Circle each 3rd                                 | Interval Hop      | Idea   |
+|   24 | 3rds                                    | Circle each 3rd                                 | Interval Hop      | Built  |
 |   25 | Melodies with 2nds and 3rds             | Listen: circle the melody                       | Ear Detective     | Idea   |
 |   26 | 2nds and 3rds                           | Color areas by interval                         | Color by Note     | Built  |
 |   27 | Staccato and Legato Melodies            | Listen: circle the melody                       | Ear Detective     | Idea   |
@@ -335,11 +341,11 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   37 | C and E                                 | Color C and E on keyboard and staff             | Crayon Keys       | Built  |
 |   38 | D and G                                 | Color D and G on keyboard and staff             | Crayon Keys       | Built  |
 |   39 | 4ths                                    | Color C, F, G; circle 4ths up and down          | Interval Hop      | Built  |
-|   40 | 4ths                                    | Circle each 4th                                 | Interval Hop      | Idea   |
+|   40 | 4ths                                    | Circle each 4th                                 | Interval Hop      | Built  |
 |   41 | 2nds, 3rds and 4ths                     | Circle 2, 3 or 4 for each interval              | Interval Hop      | Idea   |
 |   42 | F and G                                 | Color Treble F and Bass G on keyboard and staff | Crayon Keys       | Built  |
 |   43 | 5ths                                    | Color C and G; circle 5ths up and down          | Interval Hop      | Built  |
-|   44 | 5ths                                    | Circle each 5th                                 | Interval Hop      | Idea   |
+|   44 | 5ths                                    | Circle each 5th                                 | Interval Hop      | Built  |
 |   45 | 4ths and 5ths                           | Color areas by interval                         | Color by Note     | Built  |
 |   46 | Melodies with 2nds, 3rds, 4ths and 5ths | Listen: circle the melody                       | Ear Detective     | Idea   |
 |   47 | Same and Different                      | Same or different intervals                     | Interval Hop      | Idea   |

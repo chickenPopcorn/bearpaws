@@ -51,6 +51,9 @@ Each page is a game played on the piano:
   right. The card is circled in its step's crayon (2nds going up, going
   down; steps, skips and repeats), and a paw hops over the keyboard from the
   first key to the second.
+- **Interval Hop Find pages** (20, 24, 40 and 44) ask for one interval among
+  mixed cards. The child plays a card that holds it, and passes over any
+  other card with **G5**, the answer key whose sticker says Skip.
 
 The steps go in the book's order; a wrong key gets a hint, and after two
 misses the letter names appear on the keys. A finished page gets a date
