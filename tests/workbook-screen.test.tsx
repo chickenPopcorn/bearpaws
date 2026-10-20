@@ -155,6 +155,45 @@ describe("workbook page", () => {
     expect(container.querySelector("h1 .song-title-initial")).toBeNull();
   });
 
+  it("colors note heads, then circles each card and hops the paw", async () => {
+    await render({ page: page(19) });
+    expect(text("p")).toBe(
+      "Interval Hop · Play each card's two notes on your piano.",
+    );
+    expect(
+      Array.from(
+        container.querySelectorAll(".workbook-steps li"),
+        (li) => li.textContent,
+      ),
+    ).toEqual([
+      "Color each G orange.",
+      "Color each F pink.",
+      "With a green crayon, circle each 2nd going UP.",
+      "With a blue crayon, circle each 2nd going DOWN.",
+    ]);
+    expect(text(".workbook-prompt")).toBe("Play every G");
+    expect(container.querySelector(".workbook-hopper")).not.toBeNull();
+    for (const pitch of [55, 67, 53, 65]) await tap(pitch);
+    expect(text(".workbook-hint")).toBe(
+      "Yes! Now play each card, left then right.",
+    );
+    const title = (i: number) =>
+      container.querySelectorAll(".workbook-area title")[i].textContent;
+    expect(title(0)).toBe("TREBLE CLEF G then TREBLE CLEF F");
+    expect(container.querySelectorAll(".workbook-staff-paint")).toHaveLength(8);
+    expect(text(".workbook-prompt")).toBe(
+      "Play the two notes, left then right",
+    );
+    expect(
+      container.querySelector(".workbook-area.is-current title")!.textContent,
+    ).toBe("TREBLE CLEF F then TREBLE CLEF G");
+    await tap(65);
+    await tap(67);
+    expect(text(".workbook-hint")).toBe("Yes! A 2nd going up: green.");
+    expect(title(1)).toBe("TREBLE CLEF F then TREBLE CLEF G, circled green");
+    expect(container.querySelectorAll(".workbook-ring")).toHaveLength(1);
+  });
+
   it("plays an interval page one outlined area at a time", async () => {
     await render({ page: page(33) });
     const picture = () =>

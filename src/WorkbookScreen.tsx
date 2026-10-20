@@ -13,11 +13,14 @@ import {
   CRAYONS,
   ControlKeys,
   GAME_NAMES,
+  HopGame,
   IntervalGame,
   PaintGame,
   WORKBOOK_TITLE,
   feedback,
+  hopFeedback,
   instruction,
+  intervalSize,
   intervalFeedback,
   intervalInstruction,
   intervalPrompt,
@@ -30,7 +33,7 @@ import {
   type Crayon,
   type WorkbookPage,
 } from "./workbook";
-import { drawWorkbookKeyboard } from "./workbookKeyboard";
+import { drawWorkbookKeyboard, workbookKeys } from "./workbookKeyboard";
 import {
   WorkbookPicture,
   WorkbookStaff,
@@ -40,19 +43,75 @@ import {
 
 const START_HINT = "Play it on your piano.";
 const NO_KEYS = new Map<number, Crayon>();
-/** The game a page plays: by intervals, or by single notes. */
+/** The game a page plays: by single notes, intervals or cards. */
 const newGame = (page: WorkbookPage) =>
   page.game === "color-by-interval"
     ? new IntervalGame(page)
-    : new PaintGame(page);
+    : page.game === "interval-hop"
+      ? new HopGame(page)
+      : new PaintGame(page);
+type Hop = { from: number; to: number; count: number };
+const KEYS = workbookKeys();
+/** A key's centre, as a percentage of the keyboard's width. */
+const keyCentre = (pitch: number) => {
+  const key = KEYS.find((k) => k.pitch === pitch)!;
+  return (key.x + key.width / 2) * 100;
+};
+
+/**
+ * The Interval Hop paw over the keyboard: it hops from a card's first key to
+ * its second, a little for a step and further for wider intervals, and
+ * bounces in place for a repeat.
+ */
+function Hopper({ hop }: { hop: Hop }) {
+  const paw = useRef<HTMLImageElement>(null);
+  const from = keyCentre(hop.from),
+    to = keyCentre(hop.to);
+  useLayoutEffect(() => {
+    const element = paw.current;
+    if (
+      !element ||
+      !hop.count ||
+      typeof element.animate !== "function" ||
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    const height = 8 + intervalSize([hop.from, hop.to]) * 7;
+    element.animate(
+      [
+        { left: `${from}%`, transform: "translate(-50%, 0)" },
+        {
+          left: `${(from + to) / 2}%`,
+          transform: `translate(-50%, -${height}px)`,
+        },
+        { left: `${to}%`, transform: "translate(-50%, 0)" },
+      ],
+      { duration: 600, easing: "ease-in-out" },
+    );
+    // Each new hop, once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hop.count]);
+  return (
+    <img
+      ref={paw}
+      className="workbook-hopper"
+      src={`${import.meta.env.BASE_URL}bearpaws.svg?v=3`}
+      alt=""
+      style={{ left: `${to}%` }}
+    />
+  );
+}
 
 /** The page's keyboard: control keys, play zone and answer keys. */
 const WorkbookKeyboard = memo(function WorkbookKeyboard({
   painted,
   letters,
+  hop,
 }: {
   painted: ReadonlyMap<number, Crayon>;
   letters: boolean;
+  /** Interval Hop pages: where the paw is, and its last hop. */
+  hop?: Hop;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const scene = useRef({ painted, letters });
@@ -79,12 +138,15 @@ const WorkbookKeyboard = memo(function WorkbookKeyboard({
     );
   }, []);
   return (
-    <canvas
-      ref={canvas}
-      className="workbook-keyboard"
-      role="img"
-      aria-label="Your piano. Left: control keys C2 hint, D2 back, E2 next, F2 hold to start over. Middle: C3 to C5 for the page's notes. Right: answer keys G5 to C6."
-    />
+    <div className={`workbook-keyboard-wrap${hop ? " has-hopper" : ""}`}>
+      {hop && <Hopper hop={hop} />}
+      <canvas
+        ref={canvas}
+        className="workbook-keyboard"
+        role="img"
+        aria-label="Your piano. Left: control keys C2 hint, D2 back, E2 next, F2 hold to start over. Middle: C3 to C5 for the page's notes. Right: answer keys G5 to C6."
+      />
+    </div>
   );
 });
 
@@ -181,10 +243,13 @@ export const Workbook = memo(function Workbook({
       return;
     }
     if (controls.current?.down(pitch) || zoneOf(pitch) === "answer") return;
-    let outcome;
-    if (game instanceof IntervalGame) {
+    const wasFinished = game.finished;
+    if (game instanceof HopGame) {
+      const text = hopFeedback(game, game.play(pitch, time, studio.input.down));
+      if (text !== null) setHint(text);
+    } else if (game instanceof IntervalGame) {
       const index = game.current;
-      outcome = game.play(pitch, time, studio.input.down);
+      const outcome = game.play(pitch, time, studio.input.down);
       const text = intervalFeedback(
         game.page,
         outcome,
@@ -193,11 +258,10 @@ export const Workbook = memo(function Workbook({
       if (text !== null) setHint(text);
     } else {
       const target = game.current;
-      outcome = game.play(pitch);
-      setHint(feedback(game.page, outcome, target));
+      setHint(feedback(game.page, game.play(pitch), target));
     }
     setRevision((r) => r + 1);
-    if (outcome.kind === "painted" && outcome.finished) {
+    if (!wasFinished && game.finished) {
       setFresh(true);
       onFinish(page.page);
     }
@@ -220,8 +284,35 @@ export const Workbook = memo(function Workbook({
     now: string | undefined,
     keys: ReadonlyMap<number, Crayon>,
     areas: PictureArea[] | undefined,
-    current: number | undefined;
-  if (game instanceof IntervalGame) {
+    current: number | undefined,
+    hop: Hop | undefined;
+  if (game instanceof HopGame) {
+    const { page } = game;
+    lines = [
+      ...page.colors.map(({ crayon, letter }) => ({
+        crayon,
+        text: `Color each ${letter} ${crayon}.`,
+      })),
+      ...page.steps.map((step) => ({
+        crayon: step.crayon,
+        text: intervalInstruction(step),
+      })),
+    ];
+    current = game.current;
+    now = game.coloring
+      ? game.colors.current && prompt(game.colors.page, game.colors.current)
+      : current === undefined
+        ? undefined
+        : intervalPrompt(page.areas[current]);
+    keys = new Map(game.colors.painted);
+    areas = page.areas.map((area, i) => ({
+      ...area,
+      clef: areaClef(area.notes, area.clef),
+      ring: game.cards.painted.get(i),
+      dots: area.notes.map((pitch) => game.colors.painted.get(pitch)),
+    }));
+    hop = game.lastHop ?? { from: 60, to: 60, count: 0 };
+  } else if (game instanceof IntervalGame) {
     const { page } = game;
     lines = page.steps.map((step) => ({
       crayon: step.crayon,
@@ -266,7 +357,9 @@ export const Workbook = memo(function Workbook({
             {GAME_NAMES[page.game]} ·{" "}
             {page.game === "color-by-interval"
               ? "Play each pair of notes on your piano."
-              : "Play each note on your piano."}
+              : page.game === "interval-hop"
+                ? "Play each card's two notes on your piano."
+                : "Play each note on your piano."}
           </p>
         </div>
         <div className="song-tools">
@@ -301,11 +394,12 @@ export const Workbook = memo(function Workbook({
           </li>
         ))}
       </ol>
-      {page.game !== "color-by-interval" && page.staff && (
-        <section className="panel workbook-staff-panel" aria-label="Staff">
-          <WorkbookStaff notes={page.staff} painted={keys} />
-        </section>
-      )}
+      {(page.game === "crayon-keys" || page.game === "color-by-note") &&
+        page.staff && (
+          <section className="panel workbook-staff-panel" aria-label="Staff">
+            <WorkbookStaff notes={page.staff} painted={keys} />
+          </section>
+        )}
       {areas && (
         <section className="panel workbook-picture-panel" aria-label="Picture">
           <WorkbookPicture areas={areas} current={current} {...page.picture} />
@@ -336,7 +430,7 @@ export const Workbook = memo(function Workbook({
         <p className="workbook-hint" role="status">
           {hint}
         </p>
-        <WorkbookKeyboard painted={keys} letters={game.letters} />
+        <WorkbookKeyboard painted={keys} letters={game.letters} hop={hop} />
       </div>
       <p className="small workbook-keys-help">
         Piano control keys: C2 hint · D2 back (hold to leave) · E2 next · F2

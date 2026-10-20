@@ -64,7 +64,7 @@ export interface Step {
   /** The book's own words, for a step the usual wording cannot say. */
   words?: { instruction: string; prompt: string };
 }
-export type AreaShape = "star" | "cloud" | "heart" | "blob";
+export type AreaShape = "star" | "cloud" | "heart" | "blob" | "card";
 export type Clef = "treble" | "bass";
 /** One area of a Color by Note picture, holding one note on a small staff. */
 export interface Area {
@@ -98,16 +98,29 @@ export interface IntervalArea {
 /** One numbered step on an interval page: which intervals get its crayon. */
 export interface IntervalStep {
   crayon: Crayon;
-  /** Intervals of a size (2 for 2nds), or played together or not. */
-  match: { size: number } | { harmonic: boolean };
+  /**
+   * Intervals of a size (2 for 2nds, 1 for a repeat), played together or
+   * not, or going up or not.
+   */
+  match: { size: number } | { harmonic: boolean } | { up: boolean };
+  /** What the book calls these intervals, if not their size: "step". */
+  name?: string;
+  /** The book's own words for the step, where they differ. */
+  words?: string;
+}
+/** An Interval Hop step that colors note heads: "Color each G orange." */
+export interface ColorStep {
+  crayon: Crayon;
+  letter: string;
 }
 export type WorkbookGame =
-  "crayon-keys" | "color-by-note" | "color-by-interval";
+  "crayon-keys" | "color-by-note" | "color-by-interval" | "interval-hop";
 // Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
   "color-by-note": "Color by Note",
   "color-by-interval": "Color by Note",
+  "interval-hop": "Interval Hop",
 };
 interface PageInfo {
   page: number;
@@ -123,7 +136,20 @@ export interface IntervalPage extends PageInfo {
   steps: IntervalStep[];
   areas: IntervalArea[];
 }
-export type WorkbookPage = NotePage | IntervalPage;
+/**
+ * An Interval Hop page: cards of two notes, played one after the other.
+ * Its color steps color note heads first; then its steps circle the cards.
+ */
+export interface HopPage extends PageInfo {
+  game: "interval-hop";
+  colors: ColorStep[];
+  steps: IntervalStep[];
+  /** The cards, all melodic. */
+  areas: IntervalArea[];
+}
+/** A page whose areas hold two notes. */
+export type IntervalsPage = IntervalPage | HopPage;
+export type WorkbookPage = NotePage | IntervalPage | HopPage;
 /** A page of single notes: Crayon Keys, and Color by Note by notes. */
 export interface NotePage extends PageInfo {
   game: "crayon-keys" | "color-by-note";
@@ -165,6 +191,14 @@ const harmonic = (
   x: number,
   y: number,
 ): IntervalArea => ({ shape, notes: [low, high], harmonic: true, x, y });
+/** An Interval Hop card: two notes, one after the other. */
+const card = (first: number, second: number, x: number, y: number) =>
+  melodic("card", first, second, x, y);
+/** Four cards, two by two. */
+const fourCards = (notes: [number, number][]) =>
+  notes.map(([first, second], i) =>
+    card(first, second, 170 + (i % 2) * 300, 75 + Math.floor(i / 2) * 140),
+  );
 const bass = (...pitches: number[]) =>
   pitches.map((pitch) => ({ pitch, clef: "bass" as const }));
 const treble = (...pitches: number[]) =>
@@ -309,6 +343,41 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     picture: { height: 300, scale: 0.85 },
   },
   {
+    page: 13,
+    title: "Steps, Skips and Repeats",
+    useWith: 13,
+    game: "interval-hop",
+    colors: [],
+    steps: [
+      {
+        crayon: "pink",
+        match: { size: 2 },
+        name: "step",
+        words: "Using a pink crayon, circle each step.",
+      },
+      {
+        crayon: "green",
+        match: { size: 3 },
+        name: "skip",
+        words: "Using a green crayon, circle each skip.",
+      },
+      {
+        crayon: "purple",
+        match: { size: 1 },
+        name: "repeat",
+        words: "Using a purple crayon, circle each repeat (same note).",
+      },
+    ],
+    areas: [
+      card(50, 50, 110, 75),
+      card(64, 67, 320, 75),
+      card(48, 50, 530, 75),
+      card(52, 48, 110, 215),
+      card(62, 60, 320, 215),
+      card(64, 64, 530, 215),
+    ],
+  },
+  {
     page: 14,
     title: "C Position for the Left Hand",
     useWith: 14,
@@ -324,6 +393,34 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
         },
       },
     ],
+  },
+  {
+    page: 19,
+    title: "2nds",
+    useWith: 19,
+    game: "interval-hop",
+    colors: [
+      { crayon: "orange", letter: "G" },
+      { crayon: "pink", letter: "F" },
+    ],
+    steps: [
+      {
+        crayon: "green",
+        match: { up: true },
+        words: "With a green crayon, circle each 2nd going UP.",
+      },
+      {
+        crayon: "blue",
+        match: { up: false },
+        words: "With a blue crayon, circle each 2nd going DOWN.",
+      },
+    ],
+    areas: fourCards([
+      [67, 65],
+      [65, 67],
+      [53, 55],
+      [55, 53],
+    ]),
   },
   {
     page: 21,
@@ -352,6 +449,34 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       area("star", 52, 570, 70),
     ],
     picture: { height: 330, scale: 0.8 },
+  },
+  {
+    page: 23,
+    title: "3rds",
+    useWith: 22,
+    game: "interval-hop",
+    colors: [
+      { crayon: "orange", letter: "G" },
+      { crayon: "red", letter: "E" },
+    ],
+    steps: [
+      {
+        crayon: "green",
+        match: { up: true },
+        words: "With a green crayon, circle each 3rd going UP.",
+      },
+      {
+        crayon: "pink",
+        match: { up: false },
+        words: "With a pink crayon, circle each 3rd going DOWN.",
+      },
+    ],
+    areas: fourCards([
+      [64, 67],
+      [67, 64],
+      [55, 52],
+      [52, 55],
+    ]),
   },
   {
     page: 26,
@@ -431,6 +556,35 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     staff: [...treble(62), ...bass(55)],
   },
   {
+    page: 39,
+    title: "4ths",
+    useWith: 38,
+    game: "interval-hop",
+    colors: [
+      { crayon: "green", letter: "C" },
+      { crayon: "pink", letter: "F" },
+      { crayon: "orange", letter: "G" },
+    ],
+    steps: [
+      {
+        crayon: "red",
+        match: { up: true },
+        words: "Using a red crayon, circle each 4th going UP.",
+      },
+      {
+        crayon: "blue",
+        match: { up: false },
+        words: "Using a blue crayon, circle each 4th going DOWN.",
+      },
+    ],
+    areas: fourCards([
+      [65, 60],
+      [60, 65],
+      [55, 60],
+      [60, 55],
+    ]),
+  },
+  {
     page: 42,
     title: "F and G",
     useWith: 41,
@@ -440,6 +594,34 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       { crayon: "orange", pitches: [55] },
     ],
     staff: [...treble(65), ...bass(55)],
+  },
+  {
+    page: 43,
+    title: "5ths",
+    useWith: 42,
+    game: "interval-hop",
+    colors: [
+      { crayon: "green", letter: "C" },
+      { crayon: "orange", letter: "G" },
+    ],
+    steps: [
+      {
+        crayon: "red",
+        match: { up: true },
+        words: "Using a red crayon, circle each 5th going UP.",
+      },
+      {
+        crayon: "blue",
+        match: { up: false },
+        words: "Using a blue crayon, circle each 5th going DOWN.",
+      },
+    ],
+    areas: fourCards([
+      [60, 67],
+      [67, 60],
+      [55, 48],
+      [48, 55],
+    ]),
   },
   {
     page: 45,
@@ -694,9 +876,14 @@ export const intervalName = (size: number) => ORDINALS[size] ?? `${size}th`;
 export const stepColors = (step: IntervalStep, area: IntervalArea) =>
   "size" in step.match
     ? intervalSize(area.notes) === step.match.size
-    : area.harmonic === step.match.harmonic;
+    : "up" in step.match
+      ? area.notes[1] > area.notes[0] === step.match.up
+      : area.harmonic === step.match.harmonic;
 /** A step's line on an interval page, in the book's words. */
 export function intervalInstruction(step: IntervalStep) {
+  if (step.words) return step.words;
+  if ("up" in step.match)
+    return `Circle each interval going ${step.match.up ? "UP" : "DOWN"} ${step.crayon}.`;
   return "size" in step.match
     ? `Color the areas containing ${intervalName(step.match.size)}s ${step.crayon}.`
     : `Color the areas containing a ${step.match.harmonic ? "harmonic" : "melodic"} interval ${step.crayon}.`;
@@ -745,7 +932,7 @@ export class IntervalGame {
   readonly painted = new Map<number, Crayon>();
   /** When each of the current area's notes was pressed. */
   private pressed = new Map<number, number>();
-  constructor(readonly page: IntervalPage) {
+  constructor(readonly page: IntervalsPage) {
     this.order = page.steps.flatMap((step) =>
       page.areas.flatMap((area, i) => (stepColors(step, area) ? [i] : [])),
     );
@@ -792,13 +979,15 @@ export class IntervalGame {
       this.pressed.clear();
       return { kind: "apart" };
     }
-    if (pitch === first) {
+    // A repeat's second note is its first one again.
+    const repeat = first === second;
+    if (pitch === first && !(repeat && this.pressed.has(first))) {
       this.pressed.set(first, time);
       return { kind: "next" };
     }
     const then = this.pressed.get(first);
     if (then === undefined) return { kind: "order" };
-    if (time - then < TOGETHER_MS) {
+    if (!repeat && time - then < TOGETHER_MS) {
       this.pressed.clear();
       return { kind: "together" };
     }
@@ -840,7 +1029,7 @@ export class IntervalGame {
  * shown (one note of a harmonic interval is half of a try, not a mistake).
  */
 export function intervalFeedback(
-  page: IntervalPage,
+  page: IntervalsPage,
   outcome: IntervalOutcome,
   area: IntervalArea | undefined,
 ): string | null {
@@ -848,12 +1037,17 @@ export function intervalFeedback(
     case "painted": {
       if (outcome.finished || !area) return doneText(page);
       const step = page.steps.find((s) => stepColors(s, area))!;
+      if (step.name) return `Yes! That is a ${step.name}: ${step.crayon}.`;
+      if ("up" in step.match)
+        return `Yes! A ${intervalName(intervalSize(area.notes))} going ${step.match.up ? "up" : "down"}: ${step.crayon}.`;
       return "size" in step.match
         ? `Yes! That is a ${intervalName(step.match.size)}: ${step.crayon}.`
         : `Yes! ${area.harmonic ? "Together, so it is harmonic" : "One after the other, so it is melodic"}: ${step.crayon}.`;
     }
     case "next":
-      return "Now the note on the right.";
+      return area && area.notes[0] === area.notes[1]
+        ? "Now the same note again."
+        : "Now the note on the right.";
     case "waiting":
       return null;
     case "order":
@@ -871,6 +1065,98 @@ export function intervalFeedback(
     case "finished":
       return doneText(page);
   }
+}
+
+/** What one key press on an Interval Hop page did, in which part of it. */
+export type HopOutcome =
+  | { phase: "color"; outcome: Outcome; target: Step | undefined }
+  | {
+      phase: "circle";
+      outcome: IntervalOutcome;
+      area: IntervalArea | undefined;
+    };
+
+/**
+ * An Interval Hop page being played. First its color steps, by letter, as on
+ * a Color by Note page: every G on the cards, then every F. Then its circle
+ * steps, one card at a time, as on an interval page: the child plays the
+ * card's two notes, left then right, and the card is circled in its step's
+ * crayon.
+ */
+export class HopGame {
+  /** The color steps, as a page of note heads to color by letter. */
+  readonly colors: PaintGame;
+  /** The circle steps. */
+  readonly cards: IntervalGame;
+  /** The last card circled, for the hop between its notes. */
+  lastHop: { from: number; to: number; count: number } | null = null;
+  constructor(readonly page: HopPage) {
+    const notes = [...new Set(page.areas.flatMap((a) => a.notes))].sort(
+      (a, b) => a - b,
+    );
+    this.colors = new PaintGame({
+      page: page.page,
+      title: page.title,
+      useWith: page.useWith,
+      game: "color-by-note",
+      byLetter: true,
+      steps: page.colors.map(({ crayon, letter }) => ({
+        crayon,
+        pitches: notes.filter((p) => letterName(p) === letter),
+      })),
+    });
+    this.cards = new IntervalGame(page);
+  }
+  get coloring() {
+    return !this.colors.finished;
+  }
+  get finished() {
+    return this.colors.finished && this.cards.finished;
+  }
+  /** The step now, counting the color steps first. */
+  get step() {
+    return this.coloring
+      ? this.colors.step
+      : this.page.colors.length + this.cards.step;
+  }
+  get letters() {
+    return this.coloring ? this.colors.letters : this.cards.letters;
+  }
+  hint() {
+    if (this.coloring) this.colors.hint();
+    else this.cards.hint();
+  }
+  /** The card to play now, once coloring is done. */
+  get current() {
+    return this.coloring ? undefined : this.cards.current;
+  }
+  play(pitch: number, time: number, down: ReadonlySet<number>): HopOutcome {
+    if (this.coloring) {
+      const target = this.colors.current;
+      return { phase: "color", outcome: this.colors.play(pitch), target };
+    }
+    const index = this.cards.current;
+    const area = index === undefined ? undefined : this.page.areas[index];
+    const outcome = this.cards.play(pitch, time, down);
+    if (outcome.kind === "painted" && area)
+      this.lastHop = {
+        from: area.notes[0],
+        to: area.notes[1],
+        count: (this.lastHop?.count ?? 0) + 1,
+      };
+    return { phase: "circle", outcome, area };
+  }
+}
+
+/** The hint after an Interval Hop page's `played`, or null to keep the one shown. */
+export function hopFeedback(game: HopGame, played: HopOutcome): string | null {
+  if (played.phase === "circle")
+    return intervalFeedback(game.page, played.outcome, played.area);
+  const { outcome, target } = played;
+  // The last color step leads on to the cards, not to the next page.
+  if (outcome.kind === "painted" && outcome.finished)
+    return "Yes! Now play each card, left then right.";
+  return feedback(game.colors.page, outcome, target);
 }
 
 export type ControlAction =

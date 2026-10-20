@@ -40,6 +40,8 @@ const SHAPES: Record<AreaShape, string> = {
   heart:
     "M 0 48 C -34 24 -66 4 -62 -22 C -58 -44 -26 -50 0 -26 C 26 -50 58 -44 62 -22 C 66 4 34 24 0 48 Z",
   blob: "M -60 -30 Q -60 -46 -44 -46 L 44 -46 Q 60 -46 60 -30 L 60 30 Q 60 46 44 46 L -44 46 Q -60 46 -60 30 Z",
+  // An Interval Hop card, like the book's chalkboards.
+  card: "M -70 -42 Q -70 -50 -62 -50 L 62 -50 Q 70 -50 70 -42 L 70 42 Q 70 50 62 50 L -62 50 Q -70 50 -70 42 Z",
 };
 
 /** Where a note's head starts on an area's staff, and its ledger lines. */
@@ -75,10 +77,13 @@ function StaffNotes({
   notes,
   clef,
   harmonic = false,
+  dots,
 }: {
   notes: readonly number[];
   clef: Clef;
   harmonic?: boolean;
+  /** A crayon over each note head that has one, as a child colors it. */
+  dots?: readonly (Crayon | undefined)[];
 }) {
   const bottom = 4 * HALF,
     left = -40,
@@ -117,17 +122,32 @@ function StaffNotes({
       >
         {clef === "treble" ? "\uE050" : "\uE062"}
       </text>
-      {placed.map(({ x, step }, i) => (
-        <text
-          key={i}
-          className="workbook-note"
-          x={x}
-          y={y(step)}
-          fontSize={8 * HALF}
-        >
-          {"\uE0A2"}
-        </text>
-      ))}
+      {placed.map(({ x, step }, i) => {
+        const dot = dots?.[i];
+        return (
+          <g key={i}>
+            {dot && (
+              <ellipse
+                className="workbook-staff-paint"
+                // A whole note's head is 1.69 staff spaces wide.
+                cx={x + 1.69 * HALF}
+                cy={y(step)}
+                rx={2.8 * HALF}
+                ry={2.2 * HALF}
+                style={{ fill: CRAYONS[dot] }}
+              />
+            )}
+            <text
+              className="workbook-note"
+              x={x}
+              y={y(step)}
+              fontSize={8 * HALF}
+            >
+              {"\uE0A2"}
+            </text>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -144,6 +164,10 @@ export interface PictureArea {
   harmonic?: boolean;
   /** Its paint, once painted. */
   crayon?: Crayon;
+  /** The crayon circling it, once circled. */
+  ring?: Crayon;
+  /** Each note head's crayon, once colored. */
+  dots?: readonly (Crayon | undefined)[];
 }
 /** An area's clef: treble when all its notes are middle C or up. */
 export const areaClef = (notes: readonly number[], clef?: Clef): Clef =>
@@ -168,7 +192,7 @@ export function WorkbookPicture({
   height?: number;
   scale?: number;
 }) {
-  const done = areas.filter((area) => area.crayon).length;
+  const done = areas.filter((area) => area.crayon || area.ring).length;
   return (
     <svg
       className="workbook-picture"
@@ -185,6 +209,7 @@ export function WorkbookPicture({
           <title>
             {area.notes.map(bookName).join(area.harmonic ? " with " : " then ")}
             {area.crayon ? `, ${area.crayon}` : ""}
+            {area.ring ? `, circled ${area.ring}` : ""}
           </title>
           <path
             d={SHAPES[area.shape]}
@@ -194,7 +219,17 @@ export function WorkbookPicture({
             notes={area.notes}
             clef={area.clef}
             harmonic={area.harmonic}
+            dots={area.dots}
           />
+          {area.ring && (
+            <ellipse
+              className="workbook-ring"
+              rx={86}
+              ry={64}
+              pathLength={1}
+              style={{ stroke: CRAYONS[area.ring] }}
+            />
+          )}
         </g>
       ))}
     </svg>

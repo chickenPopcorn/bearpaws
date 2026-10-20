@@ -5,6 +5,7 @@ import {
   CONTROL_ZONE,
   ControlKeys,
   HOLD_MS,
+  HopGame,
   IntervalGame,
   PLAY_ZONE,
   PaintGame,
@@ -13,13 +14,16 @@ import {
   WORKBOOK_PAGES,
   bookName,
   feedback,
+  hopFeedback,
   instruction,
   intervalFeedback,
   intervalInstruction,
   intervalName,
   intervalPrompt,
   intervalSize,
+  letterName,
   prompt,
+  stepColors,
   pageAfter,
   pageBefore,
   readStamps,
@@ -27,6 +31,7 @@ import {
   stampText,
   zoneOf,
   type ControlAction,
+  type HopPage,
   type IntervalPage,
   type NotePage,
 } from "../src/workbook";
@@ -36,17 +41,23 @@ const page = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
 const intervals = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as IntervalPage;
+const hop = (number: number) =>
+  WORKBOOK_PAGES.find((p) => p.page === number) as HopPage;
 const notePages = WORKBOOK_PAGES.filter(
-  (p): p is NotePage => p.game !== "color-by-interval",
+  (p): p is NotePage => p.game === "crayon-keys" || p.game === "color-by-note",
 );
 const intervalPages = WORKBOOK_PAGES.filter(
   (p): p is IntervalPage => p.game === "color-by-interval",
+);
+const hopPages = WORKBOOK_PAGES.filter(
+  (p): p is HopPage => p.game === "interval-hop",
 );
 
 describe("workbook pages", () => {
   it("lists the built pages in book order", () => {
     expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([
-      4, 7, 8, 9, 10, 11, 12, 14, 21, 26, 33, 36, 37, 38, 42, 45, 48,
+      4, 7, 8, 9, 10, 11, 12, 13, 14, 19, 21, 23, 26, 33, 36, 37, 38, 39, 42,
+      43, 45, 48,
     ]);
   });
 
@@ -56,7 +67,9 @@ describe("workbook pages", () => {
         ...p.steps.flatMap((s) => s.pitches),
         ...(p.areas ?? []).map((a) => a.pitch),
       ]),
-      ...intervalPages.flatMap((p) => p.areas.flatMap((a) => a.notes)),
+      ...[...intervalPages, ...hopPages].flatMap((p) =>
+        p.areas.flatMap((a) => a.notes),
+      ),
     ]) {
       expect(zoneOf(pitch)).toBe("play");
       expect(pitch).toBeGreaterThanOrEqual(PLAY_ZONE[0]);
@@ -205,9 +218,9 @@ describe("workbook pages", () => {
     expect(pageBefore(page(4))).toBeUndefined();
     expect(pageAfter(page(7))?.page).toBe(8);
     expect(pageBefore(page(10))?.page).toBe(9);
-    expect(pageAfter(page(12))?.page).toBe(14);
+    expect(pageAfter(page(12))?.page).toBe(13);
     expect(pageBefore(page(48))?.page).toBe(45);
-    expect(pageAfter(page(21))?.page).toBe(26);
+    expect(pageAfter(page(21))?.page).toBe(23);
     expect(pageAfter(page(48))).toBeUndefined();
   });
 
@@ -252,11 +265,7 @@ describe("interval pages", () => {
   it("gives every area exactly one step", () => {
     for (const p of intervalPages)
       for (const area of p.areas) {
-        const steps = p.steps.filter((step) =>
-          "size" in step.match
-            ? intervalSize(area.notes) === step.match.size
-            : area.harmonic === step.match.harmonic,
-        );
+        const steps = p.steps.filter((step) => stepColors(step, area));
         expect(steps).toHaveLength(1);
       }
   });
@@ -447,6 +456,130 @@ describe("IntervalGame", () => {
         undefined,
       ),
     ).toBe("Page 45 is done. Next page: E2.");
+  });
+});
+
+describe("Interval Hop pages", () => {
+  const printed = (number: number) =>
+    hop(number).areas.map((a) => a.notes.join(">"));
+
+  it("has each card's two notes as printed", () => {
+    expect(printed(13)).toEqual([
+      "50>50",
+      "64>67",
+      "48>50",
+      "52>48",
+      "62>60",
+      "64>64",
+    ]);
+    expect(printed(19)).toEqual(["67>65", "65>67", "53>55", "55>53"]);
+    expect(printed(23)).toEqual(["64>67", "67>64", "55>52", "52>55"]);
+    expect(printed(39)).toEqual(["65>60", "60>65", "55>60", "60>55"]);
+    expect(printed(43)).toEqual(["60>67", "67>60", "55>48", "48>55"]);
+    for (const p of hopPages)
+      expect(p.areas.every((a) => !a.harmonic)).toBe(true);
+  });
+
+  it("puts every card in exactly one circle step", () => {
+    for (const p of hopPages)
+      for (const area of p.areas)
+        expect(p.steps.filter((s) => stepColors(s, area))).toHaveLength(1);
+    // Pages 19 to 43 practise one interval each.
+    expect(
+      [19, 23, 39, 43].map((n) => [
+        ...new Set(hop(n).areas.map((a) => intervalSize(a.notes))),
+      ]),
+    ).toEqual([[2], [3], [4], [5]]);
+  });
+
+  it("colors only letters the cards hold", () => {
+    for (const p of hopPages)
+      for (const { letter } of p.colors)
+        expect(
+          p.areas.some((a) => a.notes.some((n) => letterName(n) === letter)),
+        ).toBe(true);
+  });
+});
+
+describe("HopGame", () => {
+  const held = (...pitches: number[]) => new Set(pitches);
+  const playCard = (game: HopGame, time: number) => {
+    const [first, second] = game.page.areas[game.current!].notes;
+    game.play(first, time, held(first));
+    return game.play(second, time + 500, held(second));
+  };
+
+  it("colors the note heads by letter, then circles the cards", () => {
+    const game = new HopGame(hop(19));
+    expect(game.coloring).toBe(true);
+    expect(game.colors.page.steps).toEqual([
+      { crayon: "orange", pitches: [55, 67] },
+      { crayon: "pink", pitches: [53, 65] },
+    ]);
+    expect(game.current).toBeUndefined();
+    // A card's note before its step: not yet.
+    expect(game.play(65, 0, held(65))).toMatchObject({
+      phase: "color",
+      outcome: { kind: "wrong" },
+    });
+    for (const pitch of [55, 67, 53]) game.play(pitch, 0, held(pitch));
+    expect(game.step).toBe(1);
+    const last = game.play(65, 0, held(65));
+    expect(hopFeedback(game, last)).toBe(
+      "Yes! Now play each card, left then right.",
+    );
+    expect(game.coloring).toBe(false);
+    expect(game.step).toBe(2);
+    // Up first: cards 1 and 2 (F4 to G4, F3 to G3), then down.
+    expect(game.cards.order).toEqual([1, 2, 0, 3]);
+    const circled = playCard(game, 1000);
+    expect(hopFeedback(game, circled)).toBe("Yes! A 2nd going up: green.");
+    expect(game.lastHop).toEqual({ from: 65, to: 67, count: 1 });
+    let time = 2000;
+    while (!game.finished) playCard(game, (time += 1000));
+    expect([...game.cards.painted.values()]).toEqual([
+      "green",
+      "green",
+      "blue",
+      "blue",
+    ]);
+    expect(game.lastHop?.count).toBe(4);
+  });
+
+  it("plays a repeat as the same key twice", () => {
+    const game = new HopGame(hop(13));
+    expect(game.coloring).toBe(false);
+    // Steps first, then skips, then repeats.
+    expect(game.cards.order).toEqual([2, 4, 1, 3, 0, 5]);
+    let time = 0;
+    for (let i = 0; i < 4; i++) playCard(game, (time += 1000));
+    expect(game.current).toBe(0);
+    const first = game.play(50, 9000, held(50));
+    expect(hopFeedback(game, first)).toBe("Now the same note again.");
+    // Even quickly: one key cannot sound twice at once.
+    const again = game.play(50, 9050, held(50));
+    expect(hopFeedback(game, again)).toBe("Yes! That is a repeat: purple.");
+    expect(game.lastHop).toMatchObject({ from: 50, to: 50 });
+  });
+
+  it("names steps and skips on page 13", () => {
+    const game = new HopGame(hop(13));
+    expect(hopFeedback(game, playCard(game, 0))).toBe(
+      "Yes! That is a step: pink.",
+    );
+    playCard(game, 2000);
+    expect(hopFeedback(game, playCard(game, 4000))).toBe(
+      "Yes! That is a skip: green.",
+    );
+  });
+
+  it("finishes the page with its last card", () => {
+    const game = new HopGame(hop(43));
+    for (const pitch of [48, 60, 55, 67]) game.play(pitch, 0, held(pitch));
+    let time = 0,
+      last;
+    while (!game.finished) last = playCard(game, (time += 1000));
+    expect(hopFeedback(game, last!)).toBe("Page 43 is done. Next page: E2.");
   });
 });
 

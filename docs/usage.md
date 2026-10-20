@@ -46,6 +46,11 @@ Each page is a game played on the piano:
 - **Color by Note with intervals** (pages 26, 33 and 45) outlines one area at
   a time. The child plays its two notes as written, together or left then
   right, and the area takes its interval's crayon.
+- **Interval Hop** (pages 13, 19, 23, 39 and 43) first colors the note heads
+  the book names by letter, then plays each card's two notes, left then
+  right. The card is circled in its step's crayon (2nds going up, going
+  down; steps, skips and repeats), and a paw hops over the keyboard from the
+  first key to the second.
 
 The steps go in the book's order; a wrong key gets a hint, and after two
 misses the letter names appear on the keys. A finished page gets a date
