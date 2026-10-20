@@ -4,8 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HOLD_MS, SKIP_KEY, WORKBOOK_PAGES } from "../src/workbook";
 
+type KeyListener = (
+  pitch: number,
+  down: boolean,
+  time: number,
+  lost?: boolean,
+) => void;
 const fake = vi.hoisted(() => {
-  const keys = new Set<(pitch: number, down: boolean, time: number) => void>();
+  const keys = new Set<KeyListener>();
   const listeners = new Set<() => void>();
   return {
     keys,
@@ -16,14 +22,7 @@ const fake = vi.hoisted(() => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-      onKey: (
-        listener: (
-          pitch: number,
-          down: boolean,
-          time: number,
-          lost?: boolean,
-        ) => void,
-      ) => {
+      onKey: (listener: KeyListener) => {
         keys.add(listener);
         return () => keys.delete(listener);
       },
