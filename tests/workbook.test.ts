@@ -34,6 +34,7 @@ import {
   stampPage,
   stampText,
   zoneOf,
+  SNAP_WORDS,
   type ControlAction,
   type FindPage,
   type NamePage,
@@ -90,8 +91,8 @@ describe("workbook pages", () => {
     const pages = WORKBOOK_PAGES.map((p) => p.page);
     expect(pages).toEqual([...pages].sort((a, b) => a - b));
     expect(pages).toEqual([
-      4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 23, 24, 26, 28, 33,
-      36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47, 48,
+      4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 23, 24, 26, 28, 30,
+      33, 34, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47, 48,
     ]);
   });
 
@@ -599,6 +600,52 @@ describe("Interval Hop Find pages", () => {
     ]);
     expect(findPrompt(find(20))).toBe("Is it a 2nd? Play it, or press Skip");
     expect(SKIP_KEY).toBe(79);
+  });
+});
+
+describe("Note Snap", () => {
+  const snap = (number: number) => page(number).snap!;
+
+  it("has each page's cards as printed", () => {
+    expect(snap(30).map((c) => c.notes.map((n) => n.pitch))).toEqual([
+      [50, 48, 55, 53, 52],
+      [62, 60, 65, 67, 64],
+    ]);
+    expect(snap(34).map((c) => c.letters)).toEqual([
+      ["F", "G", "A", "B", "C"],
+      ["C", "D", "E", "F", "G"],
+    ]);
+    expect(snap(34)[0].notes).toEqual([
+      { pitch: 55, clef: "bass" },
+      { pitch: 57, clef: "bass" },
+      { pitch: 60, clef: "bass" },
+      { pitch: 59, clef: "bass" },
+      { pitch: 53, clef: "bass" },
+    ]);
+    // Every staff card's letter is in its column.
+    for (const number of [30, 34])
+      for (const column of snap(number))
+        for (const { pitch } of column.notes)
+          expect(column.letters).toContain(letterName(pitch));
+  });
+
+  it("joins each card in turn, middle C in both clefs", () => {
+    const p = page(34);
+    const game = new PaintGame(p);
+    expect(prompt(p, game.current!)).toBe("Play the note on the bright card");
+    expect(instruction(p, game.current!)).toBe(SNAP_WORDS);
+    for (const pitch of [55, 57]) game.play(pitch);
+    const c4 = game.current;
+    expect(feedback(p, game.play(60), c4)).toBe("Yes! That is C: line drawn.");
+    for (const pitch of [59, 53, 62]) game.play(pitch);
+    // The treble staff's middle C: a new card, not one already joined.
+    expect(game.play(60)).toMatchObject({ kind: "painted" });
+    for (const pitch of [65, 67]) game.play(pitch);
+    const last = game.current;
+    expect(feedback(p, game.play(64), last)).toBe(
+      "Yes! That is E: line drawn. Page 34 is done. Next page: E2.",
+    );
+    expect(game.step).toBe(10);
   });
 });
 

@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app | 32/45 |
+| Game built in the app | 34/45 |
 
 By game, in the suggested build order:
 
@@ -36,7 +36,8 @@ covers 17 pages. Interval Hop adds the most pages of any single game.
 **Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and
 42), all of Color by Note (4, 8, 10, 12, 21 and 48, and the interval pages
 26, 33 and 45), all of Interval Hop (13, 19, 20, 23, 24, 28, 39, 40, 41, 43,
-44 and 47) and all of Hold It! (6, 15 and 16). The pages and the note and
+44 and 47), all of Hold It! (6, 15 and 16) and all of Note Snap (30 and
+34). The pages and the note and
 interval games are in `src/workbook.ts` (`PaintGame`, `IntervalGame`,
 `HopGame`, `ControlKeys`), Hold It! in `src/workbookHold.ts`, and the screen
 in `src/WorkbookScreen.tsx`, `src/WorkbookPicture.tsx` and
@@ -307,11 +308,14 @@ one per count, fills as the counts pass.
 
 Paper task: draw lines from letter names to staff notes.
 
-Letter cards on one side, staff cards on the other, shuffled. A staff card
-lights up; the child plays that note and a line draws itself to the matching
-letter. The reverse round lights a letter, and the child plays it in the
-page's position (C Position: bass C–G; Middle C Position: left hand F–C, right
-hand C–G). No timer: the page is done when every line is drawn.
+Built. The page's two columns, as printed: letter cards with a dot, and
+staff cards with a dot (page 30: C Position, bass C3–G3 and treble C4–G4;
+page 34: Middle C Position, bass F3–C4 and treble C4–G4). The staff cards
+light one at a time, top to bottom, left column first; the child plays the
+note and a line draws itself to the matching letter. Wrong keys get the
+usual hints, and the letters appear after two misses. No timer. The reverse
+round (a letter lights, the child plays it in the page's position) is not
+built.
 
 ## Page by page
 
@@ -343,11 +347,11 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   27 | Staccato and Legato Melodies            | Listen: circle the melody                       | Ear Detective     | Idea   |
 |   28 | Same and Different                      | Same or different intervals                     | Interval Hop      | Built  |
 |   29 | Left Hand and Right Hand                | Color the hand, trace the slur, play            | Together or Apart | Idea   |
-|   30 | C Position                              | Line from letter to staff note                  | Note Snap         | Idea   |
+|   30 | C Position                              | Line from letter to staff note                  | Note Snap         | Built  |
 |   31 | Harmonic Intervals                      | Circle notes played together                    | Together or Apart | Idea   |
 |   32 | Melodic Intervals                       | Circle notes played separately                  | Together or Apart | Idea   |
 |   33 | Melodic and Harmonic Intervals          | Color areas by interval kind                    | Color by Note     | Built  |
-|   34 | Middle C Position                       | Line from letter to staff note                  | Note Snap         | Idea   |
+|   34 | Middle C Position                       | Line from letter to staff note                  | Note Snap         | Built  |
 |   35 | Hands Together                          | Circle examples played hands together           | Together or Apart | Idea   |
 |   36 | C, D, E, F and G                        | Color Bass C–G on keyboard and staff            | Crayon Keys       | Built  |
 |   37 | C and E                                 | Color C and E on keyboard and staff             | Crayon Keys       | Built  |

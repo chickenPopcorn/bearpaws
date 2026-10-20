@@ -1829,6 +1829,32 @@ footer a {
   }
 }
 /* How far pages: the answers printed under each card's staff. */
+/* Note Snap: letter cards, their dots and the lines drawn. */
+.workbook-snap-card {
+  fill: #fff;
+  stroke: #8f88a0;
+  stroke-width: 1.5;
+}
+.workbook-snap-letter {
+  font-family: var(--score-font);
+  font-size: 24px;
+  font-weight: 700;
+  fill: var(--text);
+}
+.workbook-snap-dot {
+  fill: var(--text);
+}
+.workbook-snap-line {
+  stroke: #5b9be0;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 1.05;
+  animation: workbook-ring-draw 0.6s ease-out both;
+}
+.workbook-snap-divider {
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
 /* Hold It!'s note and rest glyphs on their cards. */
 .workbook-glyph {
   font-family: "Bravura";
@@ -1948,7 +1974,8 @@ footer a {
     transition: none;
   }
   .workbook-area.is-current path,
-  .workbook-ring {
+  .workbook-ring,
+  .workbook-snap-line {
     animation: none;
   }
   .practice-ring-done {

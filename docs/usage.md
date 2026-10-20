@@ -62,6 +62,8 @@ Each page is a game played on the piano:
   counts: hold each note for its counts, play short where there is a
   staccato dot and a full count where there is not, and rest for each
   rest's counts between two notes.
+- **Note Snap** (30 and 34) lights each staff card in turn; playing its note
+  draws a line to the matching letter.
 - **Interval Hop Same and Different** (28 and 47): the child plays each box's
   top card, then its bottom card, then presses **G5** for Same or **A5** for
   Different (on the computer keyboard L and ;).
