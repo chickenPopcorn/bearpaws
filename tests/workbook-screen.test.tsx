@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HOLD_MS, WORKBOOK_PAGES } from "../src/workbook";
 
 const fake = vi.hoisted(() => {
-  const keys = new Set<(pitch: number, down: boolean) => void>();
+  const keys = new Set<(pitch: number, down: boolean, time: number) => void>();
   const listeners = new Set<() => void>();
   return {
     keys,
@@ -15,7 +15,9 @@ const fake = vi.hoisted(() => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-      onKey: (listener: (pitch: number, down: boolean) => void) => {
+      onKey: (
+        listener: (pitch: number, down: boolean, time: number) => void,
+      ) => {
         keys.add(listener);
         return () => keys.delete(listener);
       },
@@ -36,11 +38,14 @@ async function render(overrides: Partial<Props> = {}) {
     root.render(<Workbook key={props.page.page} {...props} />),
   );
 }
+/** The keys' clock, in ms: each key is played 1 s after the last. */
+let clock = 0;
 async function key(pitch: number, down: boolean) {
+  clock += 1000;
   await act(async () => {
     if (down) fake.studio.input.down.add(pitch);
     else fake.studio.input.down.delete(pitch);
-    for (const listener of fake.keys) listener(pitch, down);
+    for (const listener of fake.keys) listener(pitch, down, clock);
   });
 }
 async function tap(pitch: number) {
@@ -142,6 +147,39 @@ describe("workbook page", () => {
     expect(text(".workbook-prompt")).toBe("Play the C on the staff");
     await tap(60);
     expect(staff()).toBe("Staff: TREBLE CLEF E, MIDDLE C (green)");
+  });
+
+  it("gives a title that starts with a number no initial", async () => {
+    await render({ page: page(26) });
+    expect(text("h1")).toBe("2nds and 3rds");
+    expect(container.querySelector("h1 .song-title-initial")).toBeNull();
+  });
+
+  it("plays an interval page one outlined area at a time", async () => {
+    await render({ page: page(33) });
+    const picture = () =>
+      container.querySelector(".workbook-picture")!.getAttribute("aria-label");
+    const outlined = () =>
+      container.querySelector(".workbook-area.is-current title")!.textContent;
+    expect(text("p")).toBe(
+      "Color by Note · Play each pair of notes on your piano.",
+    );
+    expect(text(".workbook-steps li")).toBe(
+      "Color the areas containing a melodic interval green.",
+    );
+    // The melodic ones first: E4, then F4.
+    expect(outlined()).toBe("TREBLE CLEF E then TREBLE CLEF F");
+    expect(text(".workbook-prompt")).toBe(
+      "Play the two notes, left then right",
+    );
+    await tap(64);
+    expect(text(".workbook-hint")).toBe("Now the note on the right.");
+    await tap(65);
+    expect(text(".workbook-hint")).toBe(
+      "Yes! One after the other, so it is melodic: green.",
+    );
+    expect(picture()).toBe("Picture with 5 areas, 1 painted");
+    expect(outlined()).toBe("TREBLE CLEF G then TREBLE CLEF F");
   });
 
   it("paints every area holding the note on a Color by Note page", async () => {

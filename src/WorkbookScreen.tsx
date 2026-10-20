@@ -13,10 +13,14 @@ import {
   CRAYONS,
   ControlKeys,
   GAME_NAMES,
+  IntervalGame,
   PaintGame,
   WORKBOOK_TITLE,
   feedback,
   instruction,
+  intervalFeedback,
+  intervalInstruction,
+  intervalPrompt,
   prompt,
   pageAfter,
   pageBefore,
@@ -27,9 +31,20 @@ import {
   type WorkbookPage,
 } from "./workbook";
 import { drawWorkbookKeyboard } from "./workbookKeyboard";
-import { WorkbookPicture, WorkbookStaff } from "./WorkbookPicture";
+import {
+  WorkbookPicture,
+  WorkbookStaff,
+  areaClef,
+  type PictureArea,
+} from "./WorkbookPicture";
 
 const START_HINT = "Play it on your piano.";
+const NO_KEYS = new Map<number, Crayon>();
+/** The game a page plays: by intervals, or by single notes. */
+const newGame = (page: WorkbookPage) =>
+  page.game === "color-by-interval"
+    ? new IntervalGame(page)
+    : new PaintGame(page);
 
 /** The page's keyboard: control keys, play zone and answer keys. */
 const WorkbookKeyboard = memo(function WorkbookKeyboard({
@@ -117,7 +132,7 @@ export const Workbook = memo(function Workbook({
   /** Account sync trouble. */
   syncError?: string;
 }) {
-  const [game, setGame] = useState(() => new PaintGame(page));
+  const [game, setGame] = useState(() => newGame(page));
   // The game changes in place; a new revision redraws it.
   const [, setRevision] = useState(0);
   const [hint, setHint] = useState(START_HINT);
@@ -145,7 +160,7 @@ export const Workbook = memo(function Workbook({
         onLeave();
         return;
       case "restart":
-        setGame(new PaintGame(page));
+        setGame(newGame(page));
         setFresh(false);
         setHint("Started over. " + START_HINT);
         return;
@@ -160,16 +175,28 @@ export const Workbook = memo(function Workbook({
         return;
     }
   });
-  const key = useEffectEvent((pitch: number, down: boolean) => {
+  const key = useEffectEvent((pitch: number, down: boolean, time: number) => {
     if (!down) {
       controls.current?.up(pitch);
       return;
     }
     if (controls.current?.down(pitch) || zoneOf(pitch) === "answer") return;
-    const target = game.current;
-    const outcome = game.play(pitch);
+    let outcome;
+    if (game instanceof IntervalGame) {
+      const index = game.current;
+      outcome = game.play(pitch, time, studio.input.down);
+      const text = intervalFeedback(
+        game.page,
+        outcome,
+        index === undefined ? undefined : game.page.areas[index],
+      );
+      if (text !== null) setHint(text);
+    } else {
+      const target = game.current;
+      outcome = game.play(pitch);
+      setHint(feedback(game.page, outcome, target));
+    }
     setRevision((r) => r + 1);
-    setHint(feedback(page, outcome, target));
     if (outcome.kind === "painted" && outcome.finished) {
       setFresh(true);
       onFinish(page.page);
@@ -181,15 +208,50 @@ export const Workbook = memo(function Workbook({
       (pitch) => studio.input.down.has(pitch),
     );
     controls.current = keys;
-    const stop = studio.onKey((pitch, down) => key(pitch, down));
+    const stop = studio.onKey((pitch, down, time) => key(pitch, down, time));
     return () => {
       stop();
       keys.clear();
       controls.current = null;
     };
   }, []);
-  const current = game.current;
-  const painted = new Map(game.painted);
+  // The page's steps, its prompt now, and what its keys and picture show.
+  let lines: { crayon: Crayon; text: string }[],
+    now: string | undefined,
+    keys: ReadonlyMap<number, Crayon>,
+    areas: PictureArea[] | undefined,
+    current: number | undefined;
+  if (game instanceof IntervalGame) {
+    const { page } = game;
+    lines = page.steps.map((step) => ({
+      crayon: step.crayon,
+      text: intervalInstruction(step),
+    }));
+    current = game.current;
+    now =
+      current === undefined ? undefined : intervalPrompt(page.areas[current]);
+    keys = NO_KEYS;
+    areas = page.areas.map((area, i) => ({
+      ...area,
+      clef: areaClef(area.notes, area.clef),
+      crayon: game.painted.get(i),
+    }));
+  } else {
+    const { page } = game;
+    lines = page.steps.map((step) => ({
+      crayon: step.crayon,
+      text: instruction(page, step),
+    }));
+    now = game.current && prompt(page, game.current);
+    keys = new Map(game.painted);
+    areas = page.areas?.map((area) => ({
+      ...area,
+      notes: [area.pitch],
+      clef: areaClef([area.pitch], area.clef),
+      crayon: game.painted.get(area.pitch),
+    }));
+  }
+  const crayonNow = game.finished ? undefined : lines[game.step]?.crayon;
   return (
     <>
       <div className="song-head">
@@ -200,7 +262,12 @@ export const Workbook = memo(function Workbook({
           <h1>
             <SongTitle title={page.title} />
           </h1>
-          <p>{GAME_NAMES[page.game]} · Play each note on your piano.</p>
+          <p>
+            {GAME_NAMES[page.game]} ·{" "}
+            {page.game === "color-by-interval"
+              ? "Play each pair of notes on your piano."
+              : "Play each note on your piano."}
+          </p>
         </div>
         <div className="song-tools">
           <span className="chip">Use with page {page.useWith}</span>
@@ -218,7 +285,7 @@ export const Workbook = memo(function Workbook({
         </p>
       )}
       <ol className="workbook-steps" aria-label="Steps">
-        {page.steps.map((step, i) => (
+        {lines.map((line, i) => (
           <li
             key={i}
             aria-current={i === game.step ? "step" : undefined}
@@ -226,44 +293,40 @@ export const Workbook = memo(function Workbook({
           >
             <span
               className="workbook-crayon"
-              style={{ background: CRAYONS[step.crayon] }}
+              style={{ background: CRAYONS[line.crayon] }}
               aria-hidden="true"
             />
-            {instruction(page, step)}
+            {line.text}
             {i < game.step && <span className="sr-only"> Done.</span>}
           </li>
         ))}
       </ol>
-      {page.staff && (
+      {page.game !== "color-by-interval" && page.staff && (
         <section className="panel workbook-staff-panel" aria-label="Staff">
-          <WorkbookStaff notes={page.staff} painted={painted} />
+          <WorkbookStaff notes={page.staff} painted={keys} />
         </section>
       )}
-      {page.areas && (
+      {areas && (
         <section className="panel workbook-picture-panel" aria-label="Picture">
-          <WorkbookPicture
-            areas={page.areas}
-            painted={painted}
-            {...page.picture}
-          />
+          <WorkbookPicture areas={areas} current={current} {...page.picture} />
         </section>
       )}
       <div className="roll workbook-roll">
         <div className="roll-caption">
           <span className="workbook-prompt">
-            {current && (
+            {crayonNow && (
               <span
                 className="workbook-crayon"
-                style={{ background: CRAYONS[current.crayon] }}
+                style={{ background: CRAYONS[crayonNow] }}
                 aria-hidden="true"
               />
             )}
-            {current ? prompt(page, current) : `Page ${page.page} is done`}
+            {now ?? `Page ${page.page} is done`}
           </span>
           <div className="roll-actions">
             <span>
-              {current
-                ? `Step ${game.step + 1} of ${page.steps.length}`
+              {!game.finished
+                ? `Step ${game.step + 1} of ${lines.length}`
                 : next
                   ? `Next: page ${next.page} (E2)`
                   : "Last page so far"}
@@ -273,7 +336,7 @@ export const Workbook = memo(function Workbook({
         <p className="workbook-hint" role="status">
           {hint}
         </p>
-        <WorkbookKeyboard painted={painted} letters={game.letters} />
+        <WorkbookKeyboard painted={keys} letters={game.letters} />
       </div>
       <p className="small workbook-keys-help">
         Piano control keys: C2 hint · D2 back (hold to leave) · E2 next · F2

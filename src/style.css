@@ -1802,6 +1802,17 @@ footer a {
   stroke-linejoin: round;
   transition: fill 0.4s;
 }
+/* The area to play now, on an interval page. */
+.workbook-area.is-current path {
+  stroke: var(--accent);
+  stroke-width: 4;
+  animation: workbook-area-glow 1.6s ease-in-out infinite;
+}
+@keyframes workbook-area-glow {
+  50% {
+    stroke-opacity: 0.45;
+  }
+}
 .workbook-note {
   font-family: "Bravura";
   fill: var(--text);
@@ -1854,6 +1865,9 @@ footer a {
   }
   .workbook-area path {
     transition: none;
+  }
+  .workbook-area.is-current path {
+    animation: none;
   }
   .practice-ring-done {
     transition: none;

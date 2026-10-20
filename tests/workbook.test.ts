@@ -5,12 +5,20 @@ import {
   CONTROL_ZONE,
   ControlKeys,
   HOLD_MS,
+  IntervalGame,
   PLAY_ZONE,
   PaintGame,
+  RETRY_MS,
+  TOGETHER_MS,
   WORKBOOK_PAGES,
   bookName,
   feedback,
   instruction,
+  intervalFeedback,
+  intervalInstruction,
+  intervalName,
+  intervalPrompt,
+  intervalSize,
   prompt,
   pageAfter,
   pageBefore,
@@ -19,33 +27,46 @@ import {
   stampText,
   zoneOf,
   type ControlAction,
+  type IntervalPage,
+  type NotePage,
 } from "../src/workbook";
 import { workbookKeys } from "../src/workbookKeyboard";
 
-const page = (number: number) => WORKBOOK_PAGES.find((p) => p.page === number)!;
+const page = (number: number) =>
+  WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
+const intervals = (number: number) =>
+  WORKBOOK_PAGES.find((p) => p.page === number) as IntervalPage;
+const notePages = WORKBOOK_PAGES.filter(
+  (p): p is NotePage => p.game !== "color-by-interval",
+);
+const intervalPages = WORKBOOK_PAGES.filter(
+  (p): p is IntervalPage => p.game === "color-by-interval",
+);
 
 describe("workbook pages", () => {
   it("lists the built pages in book order", () => {
     expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([
-      4, 7, 8, 9, 10, 11, 12, 14, 21, 36, 37, 38, 42, 48,
+      4, 7, 8, 9, 10, 11, 12, 14, 21, 26, 33, 36, 37, 38, 42, 45, 48,
     ]);
   });
 
   it("keeps every printed note in the play zone, on a white key", () => {
-    for (const p of WORKBOOK_PAGES)
-      for (const pitch of [
+    for (const pitch of [
+      ...notePages.flatMap((p) => [
         ...p.steps.flatMap((s) => s.pitches),
         ...(p.areas ?? []).map((a) => a.pitch),
-      ]) {
-        expect(zoneOf(pitch)).toBe("play");
-        expect(pitch).toBeGreaterThanOrEqual(PLAY_ZONE[0]);
-        expect(pitch).toBeLessThanOrEqual(PLAY_ZONE[1]);
-        expect([0, 2, 4, 5, 7, 9, 11]).toContain(pitch % 12);
-      }
+      ]),
+      ...intervalPages.flatMap((p) => p.areas.flatMap((a) => a.notes)),
+    ]) {
+      expect(zoneOf(pitch)).toBe("play");
+      expect(pitch).toBeGreaterThanOrEqual(PLAY_ZONE[0]);
+      expect(pitch).toBeLessThanOrEqual(PLAY_ZONE[1]);
+      expect([0, 2, 4, 5, 7, 9, 11]).toContain(pitch % 12);
+    }
   });
 
   it("gives every Color by Note note an area, and every area one step", () => {
-    for (const p of WORKBOOK_PAGES.filter((p) => p.game === "color-by-note")) {
+    for (const p of notePages.filter((p) => p.game === "color-by-note")) {
       const steps = p.steps.flatMap((s) => s.pitches);
       expect(new Set(steps).size).toBe(steps.length);
       expect(new Set(p.areas!.map((a) => a.pitch))).toEqual(new Set(steps));
@@ -53,7 +74,7 @@ describe("workbook pages", () => {
   });
 
   it("puts exactly the steps' notes on a Crayon Keys staff", () => {
-    for (const p of WORKBOOK_PAGES.filter((p) => p.staff)) {
+    for (const p of notePages.filter((p) => p.staff)) {
       const steps = p.steps.flatMap((s) => s.pitches);
       expect(p.staff!.map((n) => n.pitch).sort()).toEqual(steps.sort());
     }
@@ -123,7 +144,8 @@ describe("workbook pages", () => {
   });
 
   it("keeps every area inside its picture", () => {
-    for (const p of WORKBOOK_PAGES.filter((p) => p.areas)) {
+    for (const p of WORKBOOK_PAGES) {
+      if (!p.areas) continue;
       const height = p.picture?.height ?? 300;
       for (const a of p.areas!) {
         expect(a.x).toBeGreaterThan(0);
@@ -184,7 +206,8 @@ describe("workbook pages", () => {
     expect(pageAfter(page(7))?.page).toBe(8);
     expect(pageBefore(page(10))?.page).toBe(9);
     expect(pageAfter(page(12))?.page).toBe(14);
-    expect(pageBefore(page(48))?.page).toBe(42);
+    expect(pageBefore(page(48))?.page).toBe(45);
+    expect(pageAfter(page(21))?.page).toBe(26);
     expect(pageAfter(page(48))).toBeUndefined();
   });
 
@@ -194,6 +217,236 @@ describe("workbook pages", () => {
     expect(bookName(52)).toBe("BASS CLEF E");
     expect(bookName(62)).toBe("TREBLE CLEF D");
     expect(bookName(38)).toBe("D");
+  });
+});
+
+describe("interval pages", () => {
+  // Each area's notes, as read from the printed pages.
+  const printed = (number: number) =>
+    intervals(number).areas.map(
+      (a) => `${a.notes.join(a.harmonic ? "+" : ">")}`,
+    );
+
+  it("has each area's two notes as printed", () => {
+    expect(printed(26)).toEqual([
+      "65>62",
+      "60>59",
+      "53>55",
+      "65>67",
+      "59>55",
+      "60>64",
+    ]);
+    expect(printed(33)).toEqual(["53+55", "64>65", "52+55", "67>65", "60>62"]);
+    expect(printed(45)).toEqual([
+      "60>65",
+      "53>60",
+      "62>67",
+      "60+67",
+      "60+65",
+      "55+60",
+      "48>55",
+      "55>50",
+    ]);
+  });
+
+  it("gives every area exactly one step", () => {
+    for (const p of intervalPages)
+      for (const area of p.areas) {
+        const steps = p.steps.filter((step) =>
+          "size" in step.match
+            ? intervalSize(area.notes) === step.match.size
+            : area.harmonic === step.match.harmonic,
+        );
+        expect(steps).toHaveLength(1);
+      }
+  });
+
+  it("measures intervals on the staff", () => {
+    expect(intervalSize([60, 62])).toBe(2);
+    expect(intervalSize([65, 62])).toBe(3);
+    expect(intervalSize([60, 65])).toBe(4);
+    expect(intervalSize([48, 55])).toBe(5);
+    expect([2, 3, 4, 5].map(intervalName)).toEqual([
+      "2nd",
+      "3rd",
+      "4th",
+      "5th",
+    ]);
+  });
+
+  it("words each step as the book does", () => {
+    expect(intervals(26).steps.map(intervalInstruction)).toEqual([
+      "Color the areas containing 2nds pink.",
+      "Color the areas containing 3rds purple.",
+    ]);
+    expect(intervals(33).steps.map(intervalInstruction)).toEqual([
+      "Color the areas containing a melodic interval green.",
+      "Color the areas containing a harmonic interval blue.",
+    ]);
+    expect(intervals(45).steps.map(intervalInstruction)).toEqual([
+      "Color the areas containing 4ths green.",
+      "Color the areas containing 5ths yellow.",
+    ]);
+    expect(intervalPrompt(intervals(33).areas[0])).toBe(
+      "Play the two notes together",
+    );
+    expect(intervalPrompt(intervals(33).areas[1])).toBe(
+      "Play the two notes, left then right",
+    );
+  });
+});
+
+describe("IntervalGame", () => {
+  const held = (...pitches: number[]) => new Set(pitches);
+
+  it("plays the areas in step order and paints each in its step's crayon", () => {
+    const game = new IntervalGame(intervals(26));
+    // The 2nds (areas 1, 2, 3), then the 3rds (0, 4, 5).
+    expect(game.order).toEqual([1, 2, 3, 0, 4, 5]);
+    expect(game.current).toBe(1);
+    expect(game.step).toBe(0);
+    expect(game.play(60, 0, held(60))).toEqual({ kind: "next" });
+    expect(game.play(59, 500, held(59))).toEqual({
+      kind: "painted",
+      finished: false,
+    });
+    expect([...game.painted]).toEqual([[1, "pink"]]);
+    expect(game.current).toBe(2);
+    let time = 1000;
+    for (const index of [2, 3, 0, 4, 5]) {
+      const [first, second] = intervals(26).areas[index].notes;
+      game.play(first, (time += 500), held(first));
+      game.play(second, (time += 500), held(second));
+    }
+    expect(game.finished).toBe(true);
+    expect(game.step).toBe(2);
+    expect([...game.painted.values()]).toEqual([
+      "pink",
+      "pink",
+      "pink",
+      "purple",
+      "purple",
+      "purple",
+    ]);
+    expect(game.play(60, 9000, held(60))).toEqual({ kind: "finished" });
+  });
+
+  it("wants a melodic interval's notes in order, one after the other", () => {
+    const game = new IntervalGame(intervals(26));
+    // Area 1: C4, then B3.
+    expect(game.play(59, 0, held(59))).toEqual({ kind: "order" });
+    expect(game.play(60, 100, held(60))).toEqual({ kind: "next" });
+    expect(game.play(59, 100 + TOGETHER_MS - 1, held(60, 59))).toEqual({
+      kind: "together",
+    });
+    // A together try starts over from the left note.
+    expect(game.play(59, 1000, held(59))).toEqual({ kind: "order" });
+    game.play(60, 2000, held(60));
+    expect(game.play(59, 2400, held(60, 59))).toMatchObject({
+      kind: "painted",
+    });
+  });
+
+  it("wants a harmonic interval's notes together", () => {
+    const game = new IntervalGame(intervals(33));
+    // The melodic ones come first; skip to the harmonic F3 + G3.
+    let time = 0;
+    for (const index of [1, 3, 4]) {
+      const [first, second] = intervals(33).areas[index].notes;
+      game.play(first, (time += 500), held(first));
+      game.play(second, (time += 500), held(second));
+    }
+    expect(game.current).toBe(0);
+    expect(game.step).toBe(1);
+    // One note is half a try; the other, long after with the first held, is apart.
+    expect(game.play(53, 5000, held(53))).toEqual({ kind: "waiting" });
+    expect(game.play(55, 5600, held(53, 55))).toEqual({ kind: "apart" });
+    // Both within the window paints, in either order.
+    expect(game.play(55, 7000, held(55))).toEqual({ kind: "waiting" });
+    expect(game.play(53, 7000 + TOGETHER_MS, held(55, 53))).toMatchObject({
+      kind: "painted",
+    });
+    expect(game.painted.get(0)).toBe("blue");
+  });
+
+  it("starts a new try when a harmonic note comes long after the other", () => {
+    const game = new IntervalGame(intervals(45));
+    // Area 3, C4 + G4, is the third 4th... the first harmonic is area 4.
+    const harmonicIndex = game.order.find(
+      (i) => intervals(45).areas[i].harmonic,
+    )!;
+    let time = 0;
+    while (game.current !== harmonicIndex) {
+      const [first, second] = intervals(45).areas[game.current!].notes;
+      game.play(first, (time += 500), held(first));
+      game.play(second, (time += 500), held(second));
+    }
+    const [low, high] = intervals(45).areas[harmonicIndex].notes;
+    game.play(low, 10_000, held(low));
+    // Let go, and much later the other note alone: a new try, not a mistake.
+    expect(game.play(high, 10_000 + RETRY_MS + 1, held(high))).toEqual({
+      kind: "waiting",
+    });
+    expect(
+      game.play(low, 10_000 + RETRY_MS + 50, held(high, low)),
+    ).toMatchObject({ kind: "painted" });
+  });
+
+  it("hints at a wrong key, then shows the letters", () => {
+    const game = new IntervalGame(intervals(26));
+    expect(game.play(57, 0, held(57))).toEqual({
+      kind: "wrong",
+      pitch: 57,
+      lettersShown: false,
+    });
+    expect(game.play(72, 100, held(72))).toEqual({
+      kind: "octave",
+      pitch: 72,
+      direction: "lower",
+      lettersShown: true,
+    });
+    expect(game.letters).toBe(true);
+    game.play(60, 1000, held(60));
+    game.play(59, 1500, held(59));
+    expect(game.letters).toBe(false);
+    game.hint();
+    expect(game.letters).toBe(true);
+  });
+
+  it("names the interval painted, in the page's words", () => {
+    const p26 = intervals(26),
+      p33 = intervals(33);
+    const painted = { kind: "painted", finished: false } as const;
+    expect(intervalFeedback(p26, painted, p26.areas[0])).toBe(
+      "Yes! That is a 3rd: purple.",
+    );
+    expect(intervalFeedback(p33, painted, p33.areas[0])).toBe(
+      "Yes! Together, so it is harmonic: blue.",
+    );
+    expect(intervalFeedback(p33, painted, p33.areas[1])).toBe(
+      "Yes! One after the other, so it is melodic: green.",
+    );
+    expect(intervalFeedback(p33, { kind: "waiting" }, p33.areas[0])).toBeNull();
+    expect(intervalFeedback(p33, { kind: "apart" }, p33.areas[0])).toBe(
+      "These notes are stacked: play them at the same time.",
+    );
+    expect(intervalFeedback(p26, { kind: "order" }, p26.areas[1])).toBe(
+      "Start with the note on the left.",
+    );
+    expect(
+      intervalFeedback(
+        p26,
+        { kind: "wrong", pitch: 61, lettersShown: false },
+        p26.areas[1],
+      ),
+    ).toBe("That is a black key. Both notes are on white keys.");
+    expect(
+      intervalFeedback(
+        intervals(45),
+        { kind: "painted", finished: true },
+        undefined,
+      ),
+    ).toBe("Page 45 is done. Next page: E2.");
   });
 });
 

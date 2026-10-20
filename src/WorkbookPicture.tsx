@@ -2,7 +2,6 @@ import { pitchPosition } from "./notation";
 import {
   CRAYONS,
   bookName,
-  type Area,
   type AreaShape,
   type Clef,
   type Crayon,
@@ -43,19 +42,49 @@ const SHAPES: Record<AreaShape, string> = {
   blob: "M -60 -30 Q -60 -46 -44 -46 L 44 -46 Q 60 -46 60 -30 L 60 30 Q 60 46 44 46 L -44 46 Q -60 46 -60 30 Z",
 };
 
-/** A small staff with one whole note, centred on (0, 0). */
-function StaffNote({ pitch, clef }: { pitch: number; clef: Clef }) {
-  const { step } = pitchPosition(pitch, clef === "treble" ? "right" : "left");
+/** Where a note's head starts on an area's staff, and its ledger lines. */
+function placeNotes(notes: readonly number[], clef: Clef, harmonic: boolean) {
+  const steps = notes.map(
+    (pitch) => pitchPosition(pitch, clef === "treble" ? "right" : "left").step,
+  );
+  // One note sits where the book puts it; two one after the other side by
+  // side; two together on one line, a 2nd's upper head beside the lower.
+  const xs =
+    notes.length === 1
+      ? [19]
+      : !harmonic
+        ? [-4, 20]
+        : Math.abs(steps[0] - steps[1]) === 1
+          ? [2, 14.5]
+          : [8, 8];
+  return steps.map((step, i) => {
+    const ledgers: number[] = [];
+    for (let s = BOTTOM_LINE_STEP[clef] - 2; s >= step; s -= 2) ledgers.push(s);
+    for (let s = BOTTOM_LINE_STEP[clef] + 10; s <= step; s += 2)
+      ledgers.push(s);
+    return {
+      x: xs[steps[0] > steps[1] && harmonic ? 1 - i : i],
+      step,
+      ledgers,
+    };
+  });
+}
+
+/** A small staff with one or two whole notes, centred on (0, 0). */
+function StaffNotes({
+  notes,
+  clef,
+  harmonic = false,
+}: {
+  notes: readonly number[];
+  clef: Clef;
+  harmonic?: boolean;
+}) {
   const bottom = 4 * HALF,
     left = -40,
     right = 40,
-    y = bottom - (step - BOTTOM_LINE_STEP[clef]) * HALF;
-  // Ledger lines for a note below or above the staff.
-  const ledgers: number[] = [];
-  for (let s = BOTTOM_LINE_STEP[clef] - 2; s >= step; s -= 2)
-    ledgers.push(bottom - (s - BOTTOM_LINE_STEP[clef]) * HALF);
-  for (let s = BOTTOM_LINE_STEP[clef] + 10; s <= step; s += 2)
-    ledgers.push(bottom - (s - BOTTOM_LINE_STEP[clef]) * HALF);
+    y = (step: number) => bottom - (step - BOTTOM_LINE_STEP[clef]) * HALF;
+  const placed = placeNotes(notes, clef, harmonic);
   return (
     <g>
       <g className="sheet-staff-line">
@@ -68,9 +97,17 @@ function StaffNote({ pitch, clef }: { pitch: number; clef: Clef }) {
             y2={bottom - line * 2 * HALF}
           />
         ))}
-        {ledgers.map((ledger) => (
-          <line key={ledger} x1={14} x2={37} y1={ledger} y2={ledger} />
-        ))}
+        {placed.flatMap(({ x, ledgers }) =>
+          ledgers.map((ledger) => (
+            <line
+              key={`${x}:${ledger}`}
+              x1={x - 5}
+              x2={x + 18}
+              y1={y(ledger)}
+              y2={y(ledger)}
+            />
+          )),
+        )}
       </g>
       <text
         className="sheet-clef"
@@ -78,32 +115,60 @@ function StaffNote({ pitch, clef }: { pitch: number; clef: Clef }) {
         y={clef === "treble" ? bottom - 2 * HALF : bottom - 6 * HALF}
         fontSize={8 * HALF}
       >
-        {clef === "treble" ? "" : ""}
+        {clef === "treble" ? "\uE050" : "\uE062"}
       </text>
-      <text className="workbook-note" x={19} y={y} fontSize={8 * HALF}>
-        {""}
-      </text>
+      {placed.map(({ x, step }, i) => (
+        <text
+          key={i}
+          className="workbook-note"
+          x={x}
+          y={y(step)}
+          fontSize={8 * HALF}
+        >
+          {"\uE0A2"}
+        </text>
+      ))}
     </g>
   );
 }
 
+/** One area of a picture, as drawn. */
+export interface PictureArea {
+  shape: AreaShape;
+  x: number;
+  y: number;
+  clef: Clef;
+  /** One note, or an interval's two. */
+  notes: readonly number[];
+  /** Two notes written one above the other. */
+  harmonic?: boolean;
+  /** Its paint, once painted. */
+  crayon?: Crayon;
+}
+/** An area's clef: treble when all its notes are middle C or up. */
+export const areaClef = (notes: readonly number[], clef?: Clef): Clef =>
+  clef ?? (Math.min(...notes) >= 60 ? "treble" : "bass");
+
 /**
- * A Color by Note picture: simple shapes, each holding one note on a small
- * staff. Painted areas take their step's crayon. The picture is 640 wide and
- * `height` high; a page with many areas draws them at a smaller `scale`.
+ * A Color by Note picture: simple shapes, each holding one note, or an
+ * interval's two, on a small staff. Painted areas take their step's crayon,
+ * and on interval pages the area to play now is outlined. The picture is
+ * 640 wide and `height` high; a page with many areas draws them at a smaller
+ * `scale`.
  */
 export function WorkbookPicture({
   areas,
-  painted,
+  current,
   height = 300,
   scale = 1,
 }: {
-  areas: readonly Area[];
-  painted: ReadonlyMap<number, Crayon>;
+  areas: readonly PictureArea[];
+  /** The area to play now, by index. */
+  current?: number;
   height?: number;
   scale?: number;
 }) {
-  const done = areas.filter((area) => painted.has(area.pitch)).length;
+  const done = areas.filter((area) => area.crayon).length;
   return (
     <svg
       className="workbook-picture"
@@ -111,29 +176,27 @@ export function WorkbookPicture({
       role="img"
       aria-label={`Picture with ${areas.length} areas, ${done} painted`}
     >
-      {areas.map((area, i) => {
-        const crayon = painted.get(area.pitch);
-        return (
-          <g
-            key={i}
-            className="workbook-area"
-            transform={`translate(${area.x} ${area.y}) scale(${scale})`}
-          >
-            <title>
-              {bookName(area.pitch)}
-              {crayon ? `, ${crayon}` : ""}
-            </title>
-            <path
-              d={SHAPES[area.shape]}
-              style={{ fill: crayon ? CRAYONS[crayon] : undefined }}
-            />
-            <StaffNote
-              pitch={area.pitch}
-              clef={area.clef ?? (area.pitch >= 60 ? "treble" : "bass")}
-            />
-          </g>
-        );
-      })}
+      {areas.map((area, i) => (
+        <g
+          key={i}
+          className={`workbook-area${i === current ? " is-current" : ""}`}
+          transform={`translate(${area.x} ${area.y}) scale(${scale})`}
+        >
+          <title>
+            {area.notes.map(bookName).join(area.harmonic ? " with " : " then ")}
+            {area.crayon ? `, ${area.crayon}` : ""}
+          </title>
+          <path
+            d={SHAPES[area.shape]}
+            style={{ fill: area.crayon ? CRAYONS[area.crayon] : undefined }}
+          />
+          <StaffNotes
+            notes={area.notes}
+            clef={area.clef}
+            harmonic={area.harmonic}
+          />
+        </g>
+      ))}
     </svg>
   );
 }
