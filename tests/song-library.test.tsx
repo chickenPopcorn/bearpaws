@@ -6,6 +6,7 @@ import { SongLibrary } from "../src/SongLibrary";
 import type { LibraryBook } from "../src/library";
 import type { Song } from "../src/song";
 import { fixtureLibrary } from "./fixtures/library";
+import { WORKBOOK_PAGES } from "../src/workbook";
 
 type LibraryProps = ComponentProps<typeof SongLibrary>;
 const base = fixtureLibrary()[0];
@@ -304,5 +305,68 @@ describe("song library", () => {
         (element) => element.textContent,
       ),
     ).toEqual(Array(2).fill("No songs in this book yet."));
+  });
+});
+
+describe("Music Workbook 3", () => {
+  const workbook = (selected: number | null = null) => ({
+    pages: WORKBOOK_PAGES,
+    selected,
+    stamps: { 9: "2026-10-20" },
+    onSelect: vi.fn(),
+  });
+
+  it("lists its pages after the class books, folded, with their stamps", async () => {
+    const book = workbook();
+    await render({ workbook: book });
+    expect(
+      Array.from(
+        container.querySelectorAll(".library-section-title"),
+        (title) => title.textContent,
+      ).at(-1),
+    ).toBe("Music for Little MozartsMusic Workbook 3");
+    expect(groupContent("workbook-3").hidden).toBe(true);
+    await click(groupToggle("workbook-3"));
+    const pages = Array.from(
+      groupContent("workbook-3").querySelectorAll<HTMLButtonElement>(".song"),
+    );
+    expect(pages.map((page) => page.firstChild!.textContent)).toEqual([
+      "Page 7 · Bass Clef C",
+      "Page 9 · Bass Clef D",
+      "Page 10 · Treble Clef D and Bass Clef D",
+      "Page 11 · Bass Clef E",
+    ]);
+    expect(pages[1].querySelector("small")!.textContent).toBe(
+      "Crayon Keys · Done OCT 20 2026",
+    );
+    expect(pages[2].querySelector("small")!.textContent).toBe("Color by Note");
+    await click(pages[1]);
+    expect(book.onSelect).toHaveBeenCalledWith(9);
+  });
+
+  it("opens and marks the open page, with no song marked", async () => {
+    await render({ workbook: workbook() });
+    await render({ selected: "", workbook: workbook(10) });
+    expect(groupContent("workbook-3").hidden).toBe(false);
+    expect(
+      Array.from(
+        container.querySelectorAll(".song[aria-pressed=true]"),
+        (b) => b.firstChild!.textContent,
+      ),
+    ).toEqual(["Page 10 · Treble Clef D and Bass Clef D"]);
+  });
+
+  it("finds pages by title when searching", async () => {
+    await render({ workbook: workbook() });
+    await type("clef d");
+    expect(
+      Array.from(
+        groupContent("workbook-3").querySelectorAll(".song"),
+        (b) => b.firstChild!.textContent,
+      ),
+    ).toEqual([
+      "Page 9 · Bass Clef D",
+      "Page 10 · Treble Clef D and Bass Clef D",
+    ]);
   });
 });

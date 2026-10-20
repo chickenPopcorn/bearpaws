@@ -2,7 +2,7 @@ import { noteName, suggestedFinger, type Note, type Song } from "./song";
 import type { Group, MidiState, Practice } from "./engine";
 import { createMeterMap } from "./notation";
 import { createBeatClock } from "./timeline";
-const scoreFont = '"Libre Baskerville", Baskerville, Georgia, serif';
+export const scoreFont = '"Libre Baskerville", Baskerville, Georgia, serif';
 const ranges = new WeakMap<Song, [number, number]>();
 const beatTimelines = new WeakMap<
   Song,
@@ -30,7 +30,7 @@ export const rightColor = "#a086e9",
   duetColor = "#f2c12e",
   DUET_ALPHA = 0.25;
 /** Darker hand colours for text on white keys, which the fills fail (2.5-3:1). */
-const rightText = "#6a4bc6",
+export const rightText = "#6a4bc6",
   leftText = "#22766a",
   labelColor = "#625c70";
 export const black = (pitch: number) => [1, 3, 6, 8, 10].includes(pitch % 12);
@@ -92,7 +92,11 @@ const keyboardPaints = new WeakMap<
     black: CanvasGradient;
   }
 >();
-function keyboardColors(c: CanvasRenderingContext2D, top: number, dpr: number) {
+export function keyboardColors(
+  c: CanvasRenderingContext2D,
+  top: number,
+  dpr: number,
+) {
   const key = `${top}:${dpr}`;
   const cached = keyboardPaints.get(c);
   if (cached?.key === key) return cached;
@@ -116,7 +120,7 @@ function keyboardColors(c: CanvasRenderingContext2D, top: number, dpr: number) {
   keyboardPaints.set(c, paint);
   return paint;
 }
-function keyOutline(
+export function keyOutline(
   c: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -155,7 +159,7 @@ function noteLabel(
   };
 }
 /** Shrinks a label to fit, since a fillText maxWidth squeezes the glyphs. */
-function fittedSize(
+export function fittedSize(
   c: CanvasRenderingContext2D,
   text: string,
   size: number,

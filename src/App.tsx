@@ -1,5 +1,6 @@
 import React, {
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -26,6 +27,9 @@ import { PracticeCalendar, useLocalDay } from "./PracticeCalendar";
 import { cloud, currentUser, studio } from "./session";
 import { CD_AUDIO_BUCKET, StoryPlayer } from "./story";
 import { signedInFetch } from "./supabase";
+import { SongTitle } from "./SongTitle";
+import { Workbook } from "./WorkbookScreen";
+import { WORKBOOK_PAGES, readStamps, stampPage } from "./workbook";
 /**
  * Save a library song's MIDI file. Only a signed-in request can read it, so
  * a plain link cannot: fetch it, then save it from this page.
@@ -77,21 +81,6 @@ const seek = (position: number) => studio.seek(position);
 const setAmbience = (ambience: number) => studio.sound(ambience);
 const setPianoVoice = (voice: PianoVoice, enabled: boolean) =>
   studio.pianoVoice(voice, enabled);
-
-function SongTitle({ title }: { title: string }) {
-  const letter = /\p{L}/u.exec(title);
-  if (!letter) return <>{title}</>;
-  return (
-    <>
-      <span className="sr-only">{title}</span>
-      <span aria-hidden="true">
-        {title.slice(0, letter.index)}
-        <span className="song-title-initial">{letter[0]}</span>
-        {title.slice(letter.index + letter[0].length)}
-      </span>
-    </>
-  );
-}
 
 const shortcuts: Record<string, number> = {
   z: 48,
@@ -525,6 +514,39 @@ export function App({
   useSyncExternalStore(studio.subscribe, studio.snapshot);
   const [connectTried, setConnectTried] = useState(false),
     [busy, setBusy] = useState(false);
+  // The open Music Workbook 3 page, which takes the studio's place.
+  const [workbookPage, setWorkbookPage] = useState<number | null>(null),
+    [stamps, setStamps] = useState(readStamps);
+  const openPage = useCallback((page: number) => {
+    // The workbook and the song never sound together.
+    studio.pause();
+    story.stop();
+    setWorkbookPage(page);
+  }, []);
+  const chooseSong = useCallback((song: Song) => {
+    setWorkbookPage(null);
+    selectSong(song);
+  }, []);
+  const finishPage = useCallback((page: number) => {
+    const { stamps, saved } = stampPage(page);
+    setStamps(stamps);
+    if (!saved) {
+      studio.storageNotice =
+        "Browser storage is full or blocked. Workbook stamps will last for this session.";
+      studio.emit();
+    }
+  }, []);
+  const leaveWorkbook = useCallback(() => setWorkbookPage(null), []);
+  const workbook = useMemo(
+    () => ({
+      pages: WORKBOOK_PAGES,
+      selected: workbookPage,
+      stamps,
+      onSelect: openPage,
+    }),
+    [workbookPage, stamps, openPage],
+  );
+  const page = WORKBOOK_PAGES.find((p) => p.page === workbookPage);
   const fullscreen = usePianoFullscreen(() => {
     if (!studio.playing && !busy) void startPlayback();
   });
@@ -624,6 +646,7 @@ export function App({
     await startPlayback();
   };
   usePracticeShortcuts({
+    enabled: !page,
     busy,
     onEnter: () => void fullscreen.enter(),
     onTogglePlayback: () => void toggle(),
@@ -750,8 +773,9 @@ export function App({
           />
           <SongLibrary
             songs={studio.songs}
-            selected={studio.song.id}
-            onSelect={selectSong}
+            selected={page ? "" : studio.song.id}
+            onSelect={chooseSong}
+            workbook={workbook}
           />
           <p className="privacy">Progress syncs to your account.</p>
           <div className="side-footer">
@@ -761,345 +785,364 @@ export function App({
           </div>
         </aside>
         <main>
-          <div className="song-head">
-            <div>
-              <div className="kicker">Practice studio</div>
-              <h1>
-                <SongTitle title={studio.song.title} />
-              </h1>
-              <p>
-                {studio.song.source ? (
-                  <>
-                    {studio.song.source.composer} ·{" "}
-                    {studio.song.source.description}{" "}
-                    <a
-                      href={studio.song.source.url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      MIDI by {studio.song.source.credit}
-                    </a>
-                  </>
-                ) : studio.song.lesson ? (
-                  `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
-                ) : (
-                  `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events`
-                )}
-              </p>
-            </div>
-            <div className="song-tools">
-              <span className="chip">{book.title}</span>
-              <StoryButton song={studio.song} />
-              {studio.song.library?.midi && (
-                <button
-                  type="button"
-                  className="song-midi-download"
-                  onClick={() => void downloadMidi(studio.song)}
-                  aria-label={`Download ${studio.song.title} MIDI`}
-                >
-                  Download MIDI
-                </button>
-              )}
-            </div>
-          </div>
-          {studio.storageNotice && (
-            <p className="alert" role="status">
-              {studio.storageNotice}
-            </p>
-          )}
-          {cloud?.error && (
-            <p className="alert" role="status">
-              {cloud.error}
-            </p>
-          )}
-          <FingerGuide song={studio.song} left={s.left} right={s.right} />
-          <div className="workspace">
-            <div
-              id="piano-stage"
-              ref={fullscreen.stage}
-              className={`work-main ${fullscreen.expanded ? "piano-expanded" : ""}`}
-              role={fullscreen.expanded ? "dialog" : "region"}
-              aria-label="Piano practice"
-              aria-modal={fullscreen.expanded || undefined}
-              tabIndex={-1}
-            >
-              <div className="practice-toolbar" aria-label="Practice controls">
-                {fullscreen.expanded && (
-                  <div
-                    className="fullscreen-song-heading"
-                    title={studio.song.title}
-                  >
-                    <strong className="fullscreen-song-title">
-                      <SongTitle title={studio.song.title} />
-                    </strong>
-                    <div className="fullscreen-book">
-                      {book.title} · {songIndex + 1} of {bookSongs.length}
-                    </div>
-                  </div>
-                )}
-                <PracticeControls
-                  mode={s.mode}
-                  left={s.left}
-                  right={s.right}
-                  duet={s.duet}
-                  hasDuet={!!studio.song.duet}
-                />
-                <div
-                  className="transport-buttons"
-                  role="group"
-                  aria-label="Playback"
-                >
-                  <button
-                    className="square"
-                    aria-label="Restart passage"
-                    title="Restart passage"
-                    onClick={() => studio.seek(0)}
-                  >
-                    ↺
-                  </button>
-                  <button
-                    className="primary play"
-                    disabled={busy || studio.outputChanging}
-                    aria-busy={busy || studio.outputChanging}
-                    title={playing ? "Pause (Space)" : "Play (Space)"}
-                    aria-keyshortcuts="Space"
-                    onClick={() => void toggle()}
-                  >
-                    {busy ? "Loading…" : playing ? "Ⅱ Pause" : "▷ Play"}
-                  </button>
-                  <button
-                    className="square"
-                    aria-label="Loop passage"
-                    title="Loop passage"
-                    aria-pressed={studio.loopEnabled}
-                    onClick={() => studio.loop(!studio.loopEnabled)}
-                  >
-                    ⇄
-                  </button>
-                  <button
-                    className="square metronome"
-                    aria-label="Metronome"
-                    title={
-                      s.mode === "wait"
-                        ? "No metronome in Wait for me: the music waits for you"
-                        : "Metronome: a click on every beat, after a bar's count-in"
-                    }
-                    aria-pressed={studio.clicking}
-                    disabled={s.mode === "wait"}
-                    onClick={() => studio.click()}
-                  >
-                    <svg
-                      viewBox="0 0 16 16"
-                      width="16"
-                      height="16"
-                      aria-hidden="true"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5.5 1.75h5l2.75 12.5H2.75z" />
-                      <path d="M8 11.25l3.75-6.5" />
-                    </svg>
-                  </button>
+          {page ? (
+            <Workbook
+              key={page.page}
+              page={page}
+              stamp={stamps[page.page]}
+              onFinish={finishPage}
+              onPage={openPage}
+              onLeave={leaveWorkbook}
+            />
+          ) : (
+            <>
+              <div className="song-head">
+                <div>
+                  <div className="kicker">Practice studio</div>
+                  <h1>
+                    <SongTitle title={studio.song.title} />
+                  </h1>
+                  <p>
+                    {studio.song.source ? (
+                      <>
+                        {studio.song.source.composer} ·{" "}
+                        {studio.song.source.description}{" "}
+                        <a
+                          href={studio.song.source.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          MIDI by {studio.song.source.credit}
+                        </a>
+                      </>
+                    ) : studio.song.lesson ? (
+                      `${studio.song.lesson.composer} · ${studio.song.lesson.description}`
+                    ) : (
+                      `${studio.song.tracks.filter((t) => t.count).length} note tracks · ${studio.song.tempos.length || 1} tempo events`
+                    )}
+                  </p>
                 </div>
-                <div className="playback-cluster">
-                  <div
-                    className="playback-status"
-                    role="group"
-                    aria-label="Speed and position"
-                  >
-                    <label className="speed">
-                      <span className="speed-label">Speed</span>
-                      <input
-                        aria-label="Playback speed"
-                        title="Playback speed"
-                        type="range"
-                        min={SPEED_PERCENT.min}
-                        max={SPEED_PERCENT.max}
-                        step={SPEED_PERCENT.step}
-                        value={s.speed * 100}
-                        onChange={(e) =>
-                          studio.speed(Number(e.target.value) / 100)
-                        }
-                      />
-                      <output>{Math.round(s.speed * 100)}%</output>
-                    </label>
-                    <span className="time">
-                      {stamp(studio.position)} / {stamp(studio.song.duration)}
-                    </span>
-                  </div>
-                  <button
-                    className="fullscreen-toggle"
-                    aria-label={
-                      fullscreen.expanded
-                        ? "Exit full screen"
-                        : "Full screen piano"
-                    }
-                    aria-expanded={fullscreen.expanded}
-                    aria-controls="piano-stage"
-                    aria-keyshortcuts={fullscreen.expanded ? "Escape" : "Enter"}
-                    title={
-                      fullscreen.expanded
-                        ? "Exit full screen (Esc)"
-                        : "Full screen and play (Enter)"
-                    }
-                    onClick={() => void fullscreen.toggle()}
-                  >
-                    <span aria-hidden="true">
-                      {fullscreen.expanded ? "↙" : "⛶"}
-                    </span>
-                    {/* Icon only beside the controls, so they fit one row. */}
-                    {fullscreen.expanded && "Exit full screen"}
-                  </button>
-                </div>
-                {fullscreen.expanded && (
-                  <div
-                    className="song-navigation"
-                    role="group"
-                    aria-label="Book navigation"
-                  >
+                <div className="song-tools">
+                  <span className="chip">{book.title}</span>
+                  <StoryButton song={studio.song} />
+                  {studio.song.library?.midi && (
                     <button
-                      aria-label="Previous song"
-                      aria-keyshortcuts="ArrowLeft"
-                      title={
-                        previousSong
-                          ? `Previous: ${previousSong.title} (Left arrow)`
-                          : "First song in this book"
-                      }
-                      disabled={!previousSong || busy}
-                      onClick={() => void navigateSong(previousSong)}
+                      type="button"
+                      className="song-midi-download"
+                      onClick={() => void downloadMidi(studio.song)}
+                      aria-label={`Download ${studio.song.title} MIDI`}
                     >
-                      <span aria-hidden="true">←</span> Previous
+                      Download MIDI
                     </button>
-                    <button
-                      aria-label="Next song"
-                      aria-keyshortcuts="ArrowRight"
-                      title={
-                        nextSong
-                          ? `Next: ${nextSong.title} (Right arrow)`
-                          : "Last song in this book"
-                      }
-                      disabled={!nextSong || busy}
-                      onClick={() => void navigateSong(nextSong)}
-                    >
-                      Next <span aria-hidden="true">→</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-              {stageNotice && (
-                <div className="piano-notice" role="status">
-                  {stageNotice}
-                </div>
-              )}
-              {studio.duetNotes.length > 0 && (
-                <p className="duet-note">
-                  <span className="swatch duet" /> Duet: the teacher part plays
-                  along.{" "}
-                  {studio.octaveShift
-                    ? `Play ${Math.abs(studio.octaveShift) > 12 ? "two octaves" : "one octave"} ${studio.octaveShift > 0 ? "higher" : "lower"}, as the book shows.`
-                    : "Play as written."}
-                </p>
-              )}
-              {s.mode === "wait" && (
-                <p className="sr-only" aria-live="polite">
-                  {describeWaitTarget(
-                    studio.song,
-                    p.gate,
-                    studio.input.down,
-                    p.hit,
                   )}
+                </div>
+              </div>
+              {studio.storageNotice && (
+                <p className="alert" role="status">
+                  {studio.storageNotice}
                 </p>
               )}
-              <SheetTimeline
-                song={studio.written}
-                octaves={studio.octaveShift / 12}
-                position={studio.position}
-                mode={s.mode}
-                hit={p.hit}
-                selectedNotes={studio.notes}
-                from={p.from}
-                onSeek={seek}
-              />
-              <div className="roll">
-                <div className="roll-caption">
-                  <span>
-                    {s.mode === "listen"
-                      ? "Follow the music"
-                      : s.mode === "wait"
-                        ? "Your pace. Your next note."
-                        : "Find your rhythm"}
-                  </span>
-                  <div className="roll-actions">
-                    <span>5 seconds ahead</span>
+              {cloud?.error && (
+                <p className="alert" role="status">
+                  {cloud.error}
+                </p>
+              )}
+              <FingerGuide song={studio.song} left={s.left} right={s.right} />
+              <div className="workspace">
+                <div
+                  id="piano-stage"
+                  ref={fullscreen.stage}
+                  className={`work-main ${fullscreen.expanded ? "piano-expanded" : ""}`}
+                  role={fullscreen.expanded ? "dialog" : "region"}
+                  aria-label="Piano practice"
+                  aria-modal={fullscreen.expanded || undefined}
+                  tabIndex={-1}
+                >
+                  <div
+                    className="practice-toolbar"
+                    aria-label="Practice controls"
+                  >
+                    {fullscreen.expanded && (
+                      <div
+                        className="fullscreen-song-heading"
+                        title={studio.song.title}
+                      >
+                        <strong className="fullscreen-song-title">
+                          <SongTitle title={studio.song.title} />
+                        </strong>
+                        <div className="fullscreen-book">
+                          {book.title} · {songIndex + 1} of {bookSongs.length}
+                        </div>
+                      </div>
+                    )}
+                    <PracticeControls
+                      mode={s.mode}
+                      left={s.left}
+                      right={s.right}
+                      duet={s.duet}
+                      hasDuet={!!studio.song.duet}
+                    />
+                    <div
+                      className="transport-buttons"
+                      role="group"
+                      aria-label="Playback"
+                    >
+                      <button
+                        className="square"
+                        aria-label="Restart passage"
+                        title="Restart passage"
+                        onClick={() => studio.seek(0)}
+                      >
+                        ↺
+                      </button>
+                      <button
+                        className="primary play"
+                        disabled={busy || studio.outputChanging}
+                        aria-busy={busy || studio.outputChanging}
+                        title={playing ? "Pause (Space)" : "Play (Space)"}
+                        aria-keyshortcuts="Space"
+                        onClick={() => void toggle()}
+                      >
+                        {busy ? "Loading…" : playing ? "Ⅱ Pause" : "▷ Play"}
+                      </button>
+                      <button
+                        className="square"
+                        aria-label="Loop passage"
+                        title="Loop passage"
+                        aria-pressed={studio.loopEnabled}
+                        onClick={() => studio.loop(!studio.loopEnabled)}
+                      >
+                        ⇄
+                      </button>
+                      <button
+                        className="square metronome"
+                        aria-label="Metronome"
+                        title={
+                          s.mode === "wait"
+                            ? "No metronome in Wait for me: the music waits for you"
+                            : "Metronome: a click on every beat, after a bar's count-in"
+                        }
+                        aria-pressed={studio.clicking}
+                        disabled={s.mode === "wait"}
+                        onClick={() => studio.click()}
+                      >
+                        <svg
+                          viewBox="0 0 16 16"
+                          width="16"
+                          height="16"
+                          aria-hidden="true"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M5.5 1.75h5l2.75 12.5H2.75z" />
+                          <path d="M8 11.25l3.75-6.5" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="playback-cluster">
+                      <div
+                        className="playback-status"
+                        role="group"
+                        aria-label="Speed and position"
+                      >
+                        <label className="speed">
+                          <span className="speed-label">Speed</span>
+                          <input
+                            aria-label="Playback speed"
+                            title="Playback speed"
+                            type="range"
+                            min={SPEED_PERCENT.min}
+                            max={SPEED_PERCENT.max}
+                            step={SPEED_PERCENT.step}
+                            value={s.speed * 100}
+                            onChange={(e) =>
+                              studio.speed(Number(e.target.value) / 100)
+                            }
+                          />
+                          <output>{Math.round(s.speed * 100)}%</output>
+                        </label>
+                        <span className="time">
+                          {stamp(studio.position)} /{" "}
+                          {stamp(studio.song.duration)}
+                        </span>
+                      </div>
+                      <button
+                        className="fullscreen-toggle"
+                        aria-label={
+                          fullscreen.expanded
+                            ? "Exit full screen"
+                            : "Full screen piano"
+                        }
+                        aria-expanded={fullscreen.expanded}
+                        aria-controls="piano-stage"
+                        aria-keyshortcuts={
+                          fullscreen.expanded ? "Escape" : "Enter"
+                        }
+                        title={
+                          fullscreen.expanded
+                            ? "Exit full screen (Esc)"
+                            : "Full screen and play (Enter)"
+                        }
+                        onClick={() => void fullscreen.toggle()}
+                      >
+                        <span aria-hidden="true">
+                          {fullscreen.expanded ? "↙" : "⛶"}
+                        </span>
+                        {/* Icon only beside the controls, so they fit one row. */}
+                        {fullscreen.expanded && "Exit full screen"}
+                      </button>
+                    </div>
+                    {fullscreen.expanded && (
+                      <div
+                        className="song-navigation"
+                        role="group"
+                        aria-label="Book navigation"
+                      >
+                        <button
+                          aria-label="Previous song"
+                          aria-keyshortcuts="ArrowLeft"
+                          title={
+                            previousSong
+                              ? `Previous: ${previousSong.title} (Left arrow)`
+                              : "First song in this book"
+                          }
+                          disabled={!previousSong || busy}
+                          onClick={() => void navigateSong(previousSong)}
+                        >
+                          <span aria-hidden="true">←</span> Previous
+                        </button>
+                        <button
+                          aria-label="Next song"
+                          aria-keyshortcuts="ArrowRight"
+                          title={
+                            nextSong
+                              ? `Next: ${nextSong.title} (Right arrow)`
+                              : "Last song in this book"
+                          }
+                          disabled={!nextSong || busy}
+                          onClick={() => void navigateSong(nextSong)}
+                        >
+                          Next <span aria-hidden="true">→</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {stageNotice && (
+                    <div className="piano-notice" role="status">
+                      {stageNotice}
+                    </div>
+                  )}
+                  {studio.duetNotes.length > 0 && (
+                    <p className="duet-note">
+                      <span className="swatch duet" /> Duet: the teacher part
+                      plays along.{" "}
+                      {studio.octaveShift
+                        ? `Play ${Math.abs(studio.octaveShift) > 12 ? "two octaves" : "one octave"} ${studio.octaveShift > 0 ? "higher" : "lower"}, as the book shows.`
+                        : "Play as written."}
+                    </p>
+                  )}
+                  {s.mode === "wait" && (
+                    <p className="sr-only" aria-live="polite">
+                      {describeWaitTarget(
+                        studio.song,
+                        p.gate,
+                        studio.input.down,
+                        p.hit,
+                      )}
+                    </p>
+                  )}
+                  <SheetTimeline
+                    song={studio.written}
+                    octaves={studio.octaveShift / 12}
+                    position={studio.position}
+                    mode={s.mode}
+                    hit={p.hit}
+                    selectedNotes={studio.notes}
+                    from={p.from}
+                    onSeek={seek}
+                  />
+                  <div className="roll">
+                    <div className="roll-caption">
+                      <span>
+                        {s.mode === "listen"
+                          ? "Follow the music"
+                          : s.mode === "wait"
+                            ? "Your pace. Your next note."
+                            : "Find your rhythm"}
+                      </span>
+                      <div className="roll-actions">
+                        <span>5 seconds ahead</span>
+                      </div>
+                    </div>
+                    <Piano />
                   </div>
                 </div>
-                <Piano />
               </div>
-            </div>
-          </div>
-          <div className="settings-row">
-            <label>
-              Timing tolerance{" "}
-              <select
-                aria-label="Timing tolerance"
-                value={s.tolerance}
-                onChange={(e) => studio.tolerance(Number(e.target.value))}
-              >
-                <option value="0.12">Focused · ±120 ms</option>
-                <option value="0.22">Relaxed · ±220 ms</option>
-                <option value="0.35">Gentle · ±350 ms</option>
-              </select>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={s.names}
-                onChange={(e) => studio.names(e.target.checked)}
-              />{" "}
-              Note names
-            </label>
-            <PianoSoundControls
-              ambience={s.ambience}
-              onChange={setAmbience}
-              voices={s.pianoVoices}
-              onVoiceChange={setPianoVoice}
-            />
-            <span className="pedal">
-              <span>
-                Pedal <b>{studio.input.sustain ? "Down" : "Up"}</b>
-              </span>
-              <span>
-                Velocity <b>{studio.lastVelocity || "—"}</b>
-              </span>
-            </span>
-          </div>
-          <section className="lower-grid">
-            <PracticeReview
-              recent={recent}
-              misses={misses}
-              matched={p.hit.size}
-              missed={stats.missed}
-              wrong={stats.wrong}
-              timing={
-                stats.timingCount
-                  ? Math.round(
-                      (stats.timingAbsTotal / stats.timingCount) * 1000,
-                    )
-                  : undefined
-              }
-              attempts={studio.progress.attempts}
-              best={studio.progress.best}
-            />
-            <PassagePanel
-              song={studio.song}
-              loopStart={studio.loopStart}
-              loopEnd={studio.loopEnd}
-            />
-          </section>
-          <KeyboardHelp shift={studio.octaveShift} />
+              <div className="settings-row">
+                <label>
+                  Timing tolerance{" "}
+                  <select
+                    aria-label="Timing tolerance"
+                    value={s.tolerance}
+                    onChange={(e) => studio.tolerance(Number(e.target.value))}
+                  >
+                    <option value="0.12">Focused · ±120 ms</option>
+                    <option value="0.22">Relaxed · ±220 ms</option>
+                    <option value="0.35">Gentle · ±350 ms</option>
+                  </select>
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={s.names}
+                    onChange={(e) => studio.names(e.target.checked)}
+                  />{" "}
+                  Note names
+                </label>
+                <PianoSoundControls
+                  ambience={s.ambience}
+                  onChange={setAmbience}
+                  voices={s.pianoVoices}
+                  onVoiceChange={setPianoVoice}
+                />
+                <span className="pedal">
+                  <span>
+                    Pedal <b>{studio.input.sustain ? "Down" : "Up"}</b>
+                  </span>
+                  <span>
+                    Velocity <b>{studio.lastVelocity || "—"}</b>
+                  </span>
+                </span>
+              </div>
+              <section className="lower-grid">
+                <PracticeReview
+                  recent={recent}
+                  misses={misses}
+                  matched={p.hit.size}
+                  missed={stats.missed}
+                  wrong={stats.wrong}
+                  timing={
+                    stats.timingCount
+                      ? Math.round(
+                          (stats.timingAbsTotal / stats.timingCount) * 1000,
+                        )
+                      : undefined
+                  }
+                  attempts={studio.progress.attempts}
+                  best={studio.progress.best}
+                />
+                <PassagePanel
+                  song={studio.song}
+                  loopStart={studio.loopStart}
+                  loopEnd={studio.loopEnd}
+                />
+              </section>
+              <KeyboardHelp shift={studio.octaveShift} />
+            </>
+          )}
           <footer>
             Practice syncs to your account.{" "}
             <span>USB MIDI · Desktop Chrome / Edge · HTTPS required</span>

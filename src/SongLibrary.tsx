@@ -2,6 +2,14 @@ import { memo, useEffect, useEffectEvent, useRef, useState } from "react";
 import { books, bookForSong, CLASSES_TITLE, songsInBook } from "./books";
 import type { LibraryBook } from "./library";
 import type { Song } from "./song";
+import {
+  GAME_NAMES,
+  WORKBOOK_SERIES,
+  WORKBOOK_TITLE,
+  stampText,
+  type Stamps,
+  type WorkbookPage,
+} from "./workbook";
 
 const searchText = (text: string) =>
   text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -9,6 +17,8 @@ const songMatches = (song: Song, term: string) =>
   searchText(
     `${song.title} ${song.lesson?.composer ?? song.source?.composer ?? ""}`,
   ).includes(term);
+const pageMatches = (page: WorkbookPage, term: string) =>
+  searchText(`page ${page.page} ${page.title}`).includes(term);
 const allBooks = (open: boolean) =>
   Object.fromEntries(books.map(({ id }) => [id, open])) as Record<
     LibraryBook,
@@ -19,18 +29,30 @@ export const SongLibrary = memo(function SongLibrary({
   songs,
   selected,
   onSelect,
+  workbook,
 }: {
   songs: Song[];
+  /** The open song's id, or "" while a workbook page is open. */
   selected: string;
   onSelect(song: Song): void;
+  /** Music Workbook 3's pages, listed after the class books. */
+  workbook?: {
+    pages: readonly WorkbookPage[];
+    /** The open page, if any. */
+    selected: number | null;
+    stamps: Stamps;
+    onSelect(page: number): void;
+  };
 }) {
   const [query, setQuery] = useState("");
   // Books start folded, even for the restored song; a later song change opens
   // that song's book.
   const [expanded, setExpanded] = useState(() => allBooks(false));
+  const [workbookOpen, setWorkbookOpen] = useState(false);
   const started = useRef(false);
   const revealSelection = useEffectEvent(() => {
     const song = songs.find((song) => song.id === selected);
+    if (!song) return;
     const book = bookForSong(song).id;
     setExpanded((current) => ({ ...current, [book]: true }));
     setQuery((current) =>
@@ -41,6 +63,12 @@ export const SongLibrary = memo(function SongLibrary({
     if (started.current) revealSelection();
     started.current = true;
   }, [selected]);
+  const openPage = workbook?.selected ?? null;
+  useEffect(() => {
+    if (openPage === null) return;
+    setWorkbookOpen(true);
+    setQuery("");
+  }, [openPage]);
   const term = searchText(query.trim());
   const groups = books.map((book) => ({
     ...book,
@@ -60,7 +88,10 @@ export const SongLibrary = memo(function SongLibrary({
         onChange={(event) => {
           const value = event.target.value;
           setQuery(value);
-          if (value.trim()) setExpanded(allBooks(true));
+          if (value.trim()) {
+            setExpanded(allBooks(true));
+            setWorkbookOpen(true);
+          }
         }}
       />
       {groups.map((group) => {
@@ -121,6 +152,56 @@ export const SongLibrary = memo(function SongLibrary({
           </section>
         );
       })}
+      {workbook && (
+        <section className="library-section">
+          <button
+            className="library-section-toggle"
+            aria-expanded={workbookOpen}
+            aria-controls="library-workbook-3"
+            onClick={() => setWorkbookOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="m4.5 2.5 3.5 3.5-3.5 3.5" />
+            </svg>
+            <span className="library-section-icon" aria-hidden="true">
+              🖍️
+            </span>
+            <span className="library-section-title">
+              <small>{WORKBOOK_SERIES}</small>
+              {WORKBOOK_TITLE}
+            </span>
+            <span className="library-section-count" aria-hidden="true">
+              {workbook.pages.length}
+            </span>
+          </button>
+          <div id="library-workbook-3" hidden={!workbookOpen}>
+            <div className="library-songs" aria-label={WORKBOOK_TITLE}>
+              {workbook.pages
+                .filter((page) => pageMatches(page, term))
+                .map((page) => {
+                  const day = workbook.stamps[page.page];
+                  return (
+                    <button
+                      key={page.page}
+                      className="song"
+                      aria-pressed={page.page === workbook.selected}
+                      onClick={() => workbook.onSelect(page.page)}
+                    >
+                      {`Page ${page.page} · ${page.title}`}
+                      <small>
+                        {GAME_NAMES[page.game]}
+                        {day ? ` · Done ${stampText(day)}` : ""}
+                      </small>
+                    </button>
+                  );
+                })}
+              {!workbook.pages.some((page) => pageMatches(page, term)) && (
+                <p className="library-empty">No matches in this book.</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
     </>
   );
 });

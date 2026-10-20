@@ -1,12 +1,15 @@
 import { useEffect, useEffectEvent, useRef } from "react";
 
 export function usePracticeShortcuts({
+  enabled = true,
   busy,
   onEnter,
   onTogglePlayback,
   onPreviousSong,
   onNextSong,
 }: {
+  /** False while the studio's practice is hidden, as on a workbook page. */
+  enabled?: boolean;
   busy: boolean;
   onEnter(): void;
   onTogglePlayback(): void;
@@ -17,6 +20,7 @@ export function usePracticeShortcuts({
   const down = useEffectEvent((event: KeyboardEvent) => {
     const target = event.target instanceof Element ? event.target : null;
     if (
+      !enabled ||
       event.defaultPrevented ||
       event.isComposing ||
       event.ctrlKey ||
