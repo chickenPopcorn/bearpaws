@@ -34,6 +34,7 @@ import {
   pageBefore,
   SKIP_KEY,
   stampText,
+  inPlayZone,
   zoneOf,
   type ControlAction,
   type Crayon,
@@ -44,7 +45,13 @@ import {
   workbookKeys,
   type KeyLabel,
 } from "./workbookKeyboard";
-import { HoldGame, cardCounts, holdFeedback, holdPrompt } from "./workbookHold";
+import {
+  HoldGame,
+  cardCounts,
+  holdFeedback,
+  holdHint,
+  holdPrompt,
+} from "./workbookHold";
 import { HandsGame, handsFeedback, handsPrompt } from "./workbookHands";
 import {
   CLAP_BEAT,
@@ -225,7 +232,9 @@ function BeatBar({ game }: { game: HoldGame }) {
     let frame = 0,
       clicked = -1,
       shown: number | null = null;
-    const limit = cardCounts(card) + 1;
+    // One click per count: none at the end of the last one, when the key
+    // is let go or the next note played.
+    const limit = cardCounts(card);
     const tick = () => {
       const now = game.beats(performance.now()),
         count = now === null ? null : Math.floor(now);
@@ -253,7 +262,8 @@ function BeatBar({ game }: { game: HoldGame }) {
         <span
           key={i}
           className={
-            shown !== null && shown >= i
+            // A block fills once its count has passed.
+            shown !== null && shown > i
               ? "workbook-beat is-on"
               : "workbook-beat"
           }
@@ -326,6 +336,10 @@ export const Workbook = memo(function Workbook({
           void listen(game);
           return;
         }
+        if (game instanceof HoldGame) {
+          setHint(holdHint(game) ?? "");
+          return;
+        }
         game.hint();
         setRevision((r) => r + 1);
         setHint("Hint: the letters are on the keys.");
@@ -361,11 +375,11 @@ export const Workbook = memo(function Workbook({
     if (!down) {
       if (controls.current?.up(pitch)) return;
       // Hold It! times how long each key is held; a slur joins the keys.
-      if (game instanceof HoldGame && zoneOf(pitch) === "play")
+      if (game instanceof HoldGame && inPlayZone(pitch))
         play(pitch, time, false);
       if (game instanceof HandsGame && zoneOf(pitch) === "play")
         game.up(pitch, time);
-      if (game instanceof EarGame && zoneOf(pitch) === "play") {
+      if (game instanceof EarGame && inPlayZone(pitch)) {
         game.up(pitch, time);
         watchEcho(game);
       }
@@ -380,6 +394,8 @@ export const Workbook = memo(function Workbook({
         earOutcome(game, () => game.answer(option), option);
         return;
       }
+      // An echo is played on the page's own keys, C3 to C5.
+      if (!inPlayZone(pitch)) return;
       const outcome = game.down(pitch, time);
       const text = earFeedback(game.page, outcome, undefined);
       if (text !== null) setHint(text);
@@ -412,7 +428,7 @@ export const Workbook = memo(function Workbook({
       return;
     }
     if (game instanceof HoldGame) {
-      if (zoneOf(pitch) === "play") play(pitch, time, true);
+      if (inPlayZone(pitch)) play(pitch, time, true);
       return;
     }
     const skip =

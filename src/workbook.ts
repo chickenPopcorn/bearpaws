@@ -47,6 +47,9 @@ export const HOLD_MS = 2000;
 export const LETTER_MISSES = 2;
 
 export type Zone = "control" | "play" | "answer";
+/** Whether `pitch` is one of the keys the page's notes are on, C3 to C5. */
+export const inPlayZone = (pitch: number) =>
+  pitch >= PLAY_ZONE[0] && pitch <= PLAY_ZONE[1];
 export function zoneOf(pitch: number): Zone {
   if (pitch >= CONTROL_ZONE[0] && pitch <= CONTROL_ZONE[1]) return "control";
   if (pitch >= ANSWER_ZONE[0] && pitch <= ANSWER_ZONE[1]) return "answer";

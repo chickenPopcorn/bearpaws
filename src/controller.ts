@@ -1112,8 +1112,13 @@ export class Studio {
    * sounding on a MIDI output.
    */
   releaseKeys() {
-    for (const pitch of this.input.down) this.midi.player.keyUp(pitch);
+    const down = [...this.input.down],
+      time = performance.now();
+    for (const pitch of down) this.midi.player.keyUp(pitch);
     this.input.clear();
+    // Followers of the keys hear them come up, as the keys can no longer.
+    for (const pitch of down)
+      for (const listener of this.keyListeners) listener(pitch, false, time);
   }
   virtual(pitch: number, on: boolean) {
     const request = ++this.nextVirtualRequest;
