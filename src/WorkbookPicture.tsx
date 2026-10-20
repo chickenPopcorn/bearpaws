@@ -581,12 +581,15 @@ export function SnapBoard({
   const first = columns.map((_, c) =>
     columns.slice(0, c).reduce((sum, column) => sum + column.notes.length, 0),
   );
+  // The cards in playing order, and the bright one, said for screen readers.
+  const order = columns.flatMap((column) => column.notes),
+    current = order[joined];
   return (
     <svg
       className="workbook-picture"
       viewBox={`0 0 640 ${height}`}
       role="img"
-      aria-label={`Letters and notes to join, ${joined} joined`}
+      aria-label={`Letters and notes to join, ${joined} of ${order.length} joined${current ? `. Bright card: ${bookName(current.pitch)}` : ""}`}
     >
       <line
         className="workbook-snap-divider"
