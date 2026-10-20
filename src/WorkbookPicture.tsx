@@ -1038,7 +1038,10 @@ export function EarCards({
             <title>
               {`Example ${i + 1}${ring === undefined ? "" : `: ${page.labels?.[ring] ?? (ring ? "bottom" : "top")} circled`}`}
             </title>
-            <path d="M -148 -82 Q -148 -90 -140 -90 L 140 -90 Q 148 -90 148 -82 L 148 82 Q 148 90 140 90 L -140 90 Q -148 90 -148 82 Z" />
+            <path
+              className="workbook-shape"
+              d="M -148 -82 Q -148 -90 -140 -90 L 140 -90 Q 148 -90 148 -82 L 148 82 Q 148 90 140 90 L -140 90 Q -148 90 -148 82 Z"
+            />
             {example.options.map((option, n) => (
               <g key={n} transform={`translate(0 ${n ? 42 : -38})`}>
                 {page.labels ? (
