@@ -195,12 +195,15 @@ export function WorkbookPicture({
   current,
   height = 300,
   scale = 1,
+  summary,
 }: {
   areas: readonly PictureArea[];
   /** The area to play now, by index. */
   current?: number;
   height?: number;
   scale?: number;
+  /** What the picture holds and how far along it is, if not areas painted. */
+  summary?: string;
 }) {
   const done = areas.filter((area) => area.crayon || area.ring).length;
   return (
@@ -208,7 +211,9 @@ export function WorkbookPicture({
       className="workbook-picture"
       viewBox={`0 0 640 ${height}`}
       role="img"
-      aria-label={`Picture with ${areas.length} areas, ${done} painted`}
+      aria-label={
+        summary ?? `Picture with ${areas.length} areas, ${done} painted`
+      }
     >
       {areas.map((area, i) => (
         <g
