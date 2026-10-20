@@ -8,6 +8,8 @@ import {
   type HoldCard,
   type NoteValue,
   type RestValue,
+  type SnapColumn,
+  letterName,
 } from "./workbook";
 import { cardCounts } from "./workbookHold";
 
@@ -511,6 +513,103 @@ export function HoldCards({
           </g>
         );
       })}
+    </svg>
+  );
+}
+
+/**
+ * A Note Snap page: each column pair's letter cards and staff cards, with
+ * a dot on each, as printed. The staff card to play is outlined; once its
+ * note is played, a line joins its dot to its letter's.
+ */
+export function SnapBoard({
+  columns,
+  joined,
+}: {
+  columns: readonly SnapColumn[];
+  /** How many staff cards are joined, in order: the next one is outlined. */
+  joined: number;
+}) {
+  const rows = Math.max(...columns.map((c) => c.notes.length)),
+    height = rows * 76 + 24,
+    letterX = (c: number) => 55 + c * 320,
+    staffX = (c: number) => 225 + c * 320,
+    rowY = (r: number) => 50 + r * 76;
+  // Each column's first card's place in the playing order.
+  const first = columns.map((_, c) =>
+    columns.slice(0, c).reduce((sum, column) => sum + column.notes.length, 0),
+  );
+  // The cards in playing order, and the bright one, said for screen readers.
+  const order = columns.flatMap((column) => column.notes),
+    current = order[joined];
+  return (
+    <svg
+      className="workbook-picture"
+      viewBox={`0 0 640 ${height}`}
+      role="img"
+      aria-label={`Letters and notes to join, ${joined} of ${order.length} joined${current ? `. Bright card: ${bookName(current.pitch)}` : ""}`}
+    >
+      <line
+        className="workbook-snap-divider"
+        x1={320}
+        x2={320}
+        y1={14}
+        y2={height - 10}
+      />
+      {columns.map((column, c) => (
+        <g key={c}>
+          {column.notes.map(({ pitch }, r) => {
+            if (first[c] + r >= joined) return null;
+            const to = column.letters.indexOf(letterName(pitch));
+            return (
+              <line
+                key={`line${r}`}
+                className="workbook-snap-line"
+                x1={letterX(c) + 34}
+                y1={rowY(to)}
+                x2={staffX(c) - 47}
+                y2={rowY(r)}
+                pathLength={1}
+              />
+            );
+          })}
+          {column.letters.map((letter, r) => (
+            <g key={letter} transform={`translate(${letterX(c)} ${rowY(r)})`}>
+              <rect
+                className="workbook-snap-card"
+                x={-30}
+                y={-24}
+                width={60}
+                height={48}
+                rx={6}
+              />
+              <text className="workbook-snap-letter" textAnchor="middle" y={9}>
+                {letter}
+              </text>
+              <circle className="workbook-snap-dot" cx={34} r={4} />
+            </g>
+          ))}
+          {column.notes.map(({ pitch, clef }, r) => (
+            <g
+              key={`note${r}`}
+              className={`workbook-area${first[c] + r === joined ? " is-current" : ""}`}
+              transform={`translate(${staffX(c)} ${rowY(r)})`}
+            >
+              <title>
+                {bookName(pitch)}
+                {first[c] + r < joined
+                  ? `, joined to ${letterName(pitch)}`
+                  : ""}
+              </title>
+              <g transform="scale(0.62)">
+                <path d={SHAPES.card} />
+                <StaffNotes notes={[pitch]} clef={clef} />
+              </g>
+              <circle className="workbook-snap-dot" cx={-47} r={4} />
+            </g>
+          ))}
+        </g>
+      ))}
     </svg>
   );
 }

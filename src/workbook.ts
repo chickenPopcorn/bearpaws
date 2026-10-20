@@ -129,7 +129,8 @@ export type WorkbookGame =
   | "interval-find"
   | "interval-name"
   | "interval-twins"
-  | "hold";
+  | "hold"
+  | "note-snap";
 // Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
@@ -140,6 +141,7 @@ export const GAME_NAMES: Record<WorkbookGame, string> = {
   "interval-name": "Interval Hop",
   "interval-twins": "Interval Hop",
   hold: "Hold It!",
+  "note-snap": "Note Snap",
 };
 interface PageInfo {
   page: number;
@@ -243,8 +245,15 @@ export const SKIP_KEY: number = ANSWER_ZONE[0];
 /** The answer keys in order, G5, A5, B5 and C6: a How far page's choices. */
 export const ANSWER_KEYS = [79, 81, 83, 84];
 /** A page of single notes: Crayon Keys, and Color by Note by notes. */
+/** One column pair of a Note Snap page: letter cards and staff cards. */
+export interface SnapColumn {
+  /** The letter cards, top to bottom. */
+  letters: string[];
+  /** The staff cards, top to bottom. */
+  notes: { pitch: number; clef: Clef }[];
+}
 export interface NotePage extends PageInfo {
-  game: "crayon-keys" | "color-by-note";
+  game: "crayon-keys" | "color-by-note" | "note-snap";
   steps: Step[];
   /** The book names notes by letter only ("an F"), not by clef. */
   byLetter?: boolean;
@@ -252,7 +261,39 @@ export interface NotePage extends PageInfo {
   areas?: Area[];
   /** Crayon Keys pages with a staff: its notes, left to right. */
   staff?: { pitch: number; clef: Clef }[];
+  /** Note Snap pages: two columns of letter cards and staff cards. */
+  snap?: SnapColumn[];
 }
+/** The book's line on the Note Snap pages. */
+export const SNAP_WORDS =
+  "Draw lines connecting the dots on the matching boxes.";
+/**
+ * A Note Snap page: each staff card in turn, top to bottom, left column
+ * first, is a step whose note the child plays to draw its line.
+ */
+const snapPage = (
+  page: number,
+  title: string,
+  useWith: number,
+  snap: SnapColumn[],
+): NotePage => ({
+  page,
+  title,
+  useWith,
+  game: "note-snap",
+  snap,
+  steps: snap.flatMap((column) =>
+    column.notes.map(({ pitch }) => ({
+      crayon: "blue" as const,
+      pitches: [pitch],
+      words: {
+        instruction: SNAP_WORDS,
+        prompt: "Play the note on the bright card",
+      },
+    })),
+  ),
+});
+const LETTER_COLUMN = ["C", "D", "E", "F", "G"];
 
 const area = (
   shape: AreaShape,
@@ -734,6 +775,16 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       [57, 60],
     ],
   ]),
+  snapPage(30, "C Position", 29, [
+    {
+      letters: LETTER_COLUMN,
+      notes: bass(50, 48, 55, 53, 52),
+    },
+    {
+      letters: LETTER_COLUMN,
+      notes: treble(62, 60, 65, 67, 64),
+    },
+  ]),
   {
     page: 33,
     title: "Melodic and Harmonic Intervals",
@@ -753,6 +804,16 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     ],
     picture: { height: 345, scale: 1 },
   },
+  snapPage(34, "Middle C Position", 33, [
+    {
+      letters: ["F", "G", "A", "B", "C"],
+      notes: bass(55, 57, 60, 59, 53),
+    },
+    {
+      letters: LETTER_COLUMN,
+      notes: treble(62, 60, 65, 67, 64),
+    },
+  ]),
   {
     page: 36,
     title: "C, D, E, F and G",
@@ -1078,7 +1139,10 @@ export class PaintGame {
     const target = this.current;
     if (!target) return { kind: "finished" };
     if (target.pitches.includes(pitch)) {
-      if (this.painted.has(pitch)) return { kind: "again", pitch };
+      // A letter step's note played twice; one note's step moves on at once,
+      // so its note is new to it even if an earlier step painted it.
+      if (target.pitches.length > 1 && this.painted.has(pitch))
+        return { kind: "again", pitch };
       this.painted.set(pitch, target.crayon);
       const left = this.left.length;
       if (!left) {
@@ -1091,8 +1155,10 @@ export class PaintGame {
     this.misses++;
     const lettersShown = !this.letters && this.misses >= LETTER_MISSES;
     if (lettersShown) this.letters = true;
-    // The nearest note still to find with this letter, if any.
-    const [nearest] = this.left
+    // The nearest note still to find with this letter, if any. A one-note
+    // step's note is still to find even if an earlier step painted it.
+    const looking = target.pitches.length > 1 ? this.left : target.pitches;
+    const [nearest] = looking
       .filter((p) => letterName(p) === letterName(pitch) && !isBlack(pitch))
       .sort((a, b) => Math.abs(a - pitch) - Math.abs(b - pitch));
     if (nearest !== undefined)
@@ -1110,13 +1176,13 @@ export class PaintGame {
   }
 }
 
-/** The hint under the prompt after `outcome`, for a grown-up to read aloud. */
 /** What a finished page says. */
 export const doneText = (page: WorkbookPage) =>
   `Page ${page.page} is done. ${pageAfter(page) ? "Next page: E2." : "This is the last page so far."}`;
 const lettersText = (outcome: { lettersShown?: boolean }) =>
   outcome.lettersShown ? " The letters are on the keys now." : "";
 
+/** The hint under the prompt after `outcome`, for a grown-up to read aloud. */
 export function feedback(
   page: NotePage,
   outcome: Outcome,
@@ -1129,6 +1195,8 @@ export function feedback(
     oneLetter = !want.includes(" or ");
   switch (outcome.kind) {
     case "painted":
+      if (page.game === "note-snap" && target)
+        return `Yes! That is ${letterName(target.pitches[0])}: line drawn.${outcome.finished ? ` ${done}` : ""}`;
       return outcome.finished
         ? done
         : !outcome.left

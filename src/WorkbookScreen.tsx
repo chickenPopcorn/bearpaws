@@ -30,6 +30,7 @@ import {
   intervalInstruction,
   intervalPrompt,
   prompt,
+  SNAP_WORDS,
   pageAfter,
   pageBefore,
   SKIP_KEY,
@@ -54,6 +55,7 @@ import {
 } from "./workbookHold";
 import {
   HoldCards,
+  SnapBoard,
   WorkbookPicture,
   WorkbookStaff,
   areaClef,
@@ -439,7 +441,8 @@ export const Workbook = memo(function Workbook({
     current: number | undefined,
     hop: Hop | undefined,
     stickers: ReadonlyMap<number, KeyLabel> | undefined,
-    summary: string | undefined;
+    summary: string | undefined,
+    shownStep = game.step;
   if (game instanceof HoldGame) {
     lines = game.page.steps.map((step) => ({
       crayon: step.crayon,
@@ -524,6 +527,12 @@ export const Workbook = memo(function Workbook({
         crayon: game.painted.get(i),
       }));
     }
+  } else if (game.page.game === "note-snap") {
+    // One line, the book's; the cards light one at a time.
+    lines = [{ crayon: "blue", text: SNAP_WORDS }];
+    shownStep = game.finished ? 1 : 0;
+    now = game.current && prompt(game.page, game.current);
+    keys = new Map(game.painted);
   } else {
     const { page } = game;
     lines = page.steps.map((step) => ({
@@ -539,7 +548,7 @@ export const Workbook = memo(function Workbook({
       crayon: game.painted.get(area.pitch),
     }));
   }
-  const crayonNow = game.finished ? undefined : lines[game.step]?.crayon;
+  const crayonNow = game.finished ? undefined : lines[shownStep]?.crayon;
   return (
     <>
       <div className="song-head">
@@ -584,8 +593,8 @@ export const Workbook = memo(function Workbook({
         {lines.map((line, i) => (
           <li
             key={i}
-            aria-current={i === game.step ? "step" : undefined}
-            className={i < game.step ? "done" : undefined}
+            aria-current={i === shownStep ? "step" : undefined}
+            className={i < shownStep ? "done" : undefined}
           >
             <span
               className="workbook-crayon"
@@ -593,7 +602,7 @@ export const Workbook = memo(function Workbook({
               aria-hidden="true"
             />
             {line.text}
-            {i < game.step && <span className="sr-only"> Done.</span>}
+            {i < shownStep && <span className="sr-only"> Done.</span>}
           </li>
         ))}
       </ol>
@@ -611,6 +620,11 @@ export const Workbook = memo(function Workbook({
             summary={summary}
             {...page.picture}
           />
+        </section>
+      )}
+      {game instanceof PaintGame && game.page.snap && (
+        <section className="panel workbook-picture-panel" aria-label="Cards">
+          <SnapBoard columns={game.page.snap} joined={game.step} />
         </section>
       )}
       {game instanceof HoldGame && (
@@ -638,7 +652,7 @@ export const Workbook = memo(function Workbook({
           <div className="roll-actions">
             <span>
               {!game.finished
-                ? `Step ${game.step + 1} of ${lines.length}`
+                ? `Step ${shownStep + 1} of ${lines.length}`
                 : next
                   ? `Next: page ${next.page} (E2)`
                   : "Last page so far"}
