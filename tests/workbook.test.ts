@@ -674,12 +674,11 @@ describe("Same and Different pages", () => {
     expect(intervalFeedback(p, game.answer("Same"), p.areas[3])).toBe(
       "Yes! Both are 2nds: Beethoven Bear.",
     );
-    let time = 8000;
-    play(game, (time += 2000));
-    play(game, (time += 2000));
+    play(game, 10_000);
+    play(game, 12_000);
     game.answer("Same");
-    play(game, (time += 2000));
-    play(game, (time += 2000));
+    play(game, 14_000);
+    play(game, 16_000);
     // The last box's character, then the page is done.
     expect(intervalFeedback(p, game.answer("Different"), p.areas[7])).toBe(
       "Yes! A 2nd and a 3rd: Mozart Mouse. Page 28 is done. Next page: E2.",
