@@ -1810,7 +1810,7 @@ footer a {
 .workbook-staff-paint {
   opacity: 0.85;
 }
-.workbook-area > path {
+.workbook-area .workbook-shape {
   fill: #fff;
   stroke: #8f88a0;
   stroke-width: 1.5;
@@ -1818,7 +1818,7 @@ footer a {
   transition: fill 0.4s;
 }
 /* The area to play now, on an interval page. */
-.workbook-area.is-current > path {
+.workbook-area.is-current .workbook-shape {
   stroke: var(--accent);
   stroke-width: 4;
   animation: workbook-area-glow 1.6s ease-in-out infinite;
@@ -2004,10 +2004,10 @@ footer a {
   .workbook-stamp.celebrate {
     animation: none;
   }
-  .workbook-area > path {
+  .workbook-area .workbook-shape {
     transition: none;
   }
-  .workbook-area.is-current > path,
+  .workbook-area.is-current .workbook-shape,
   .workbook-ring,
   .workbook-snap-line {
     animation: none;

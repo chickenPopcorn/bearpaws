@@ -269,6 +269,7 @@ export function WorkbookPicture({
             {area.faded ? ", skipped" : ""}
           </title>
           <path
+            className="workbook-shape"
             d={SHAPES[area.shape]}
             style={{ fill: area.crayon ? CRAYONS[area.crayon] : undefined }}
           />
@@ -496,7 +497,7 @@ export function HoldCards({
                   : `, ${cardCounts(card)} count${cardCounts(card) === 1 ? "" : "s"}`
                 : ""}
             </title>
-            <path d={SHAPES.card} />
+            <path className="workbook-shape" d={SHAPES.card} />
             {card.kind === "rest" && card.value !== "quarter" && (
               <line
                 className="workbook-rest-line"
@@ -638,7 +639,7 @@ export function SnapBoard({
                   : ""}
               </title>
               <g transform="scale(0.62)">
-                <path d={SHAPES.card} />
+                <path className="workbook-shape" d={SHAPES.card} />
                 <StaffNotes notes={[pitch]} clef={clef} />
               </g>
               <circle className="workbook-snap-dot" cx={-47} r={4} />
@@ -707,7 +708,10 @@ export function HandsCards({
             <title>
               {`${example.notes.map(bookName).join(", ")}${hand ? `, ${hand} hand` : ""}${done.has(i) ? ", played" : ""}`}
             </title>
-            <path d="M -140 -67 Q -140 -75 -132 -75 L 132 -75 Q 140 -75 140 -67 L 140 67 Q 140 75 132 75 L -132 75 Q -140 75 -140 67 Z" />
+            <path
+              className="workbook-shape"
+              d="M -140 -67 Q -140 -75 -132 -75 L 132 -75 Q 140 -75 140 -67 L 140 67 Q 140 75 132 75 L -132 75 Q -140 75 -140 67 Z"
+            />
             <g className="sheet-staff-line">
               {[0, 1, 2, 3, 4].map((line) => (
                 <line
