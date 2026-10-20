@@ -2302,6 +2302,18 @@ describe("key listeners", () => {
     ]);
   });
 
+  it("lets listeners hear keys come up when they are released together", () => {
+    const studio = create();
+    const keys: [number, boolean][] = [];
+    studio.onKey((pitch, down) => keys.push([pitch, down]));
+    studio.virtual(60, true);
+    studio.releaseKeys();
+    expect(keys).toEqual([
+      [60, true],
+      [60, false],
+    ]);
+  });
+
   it("gives each key the time it was played, not when it was handled", () => {
     const studio = create();
     const times: number[] = [];

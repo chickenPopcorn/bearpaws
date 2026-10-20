@@ -151,6 +151,20 @@ export class HoldGame {
   }
 }
 
+/** The hint key's help with the card now. */
+export function holdHint(game: HoldGame) {
+  const index = game.current;
+  if (index === undefined) return undefined;
+  const card = game.page.cards[index];
+  if (card.kind === "tap")
+    return card.staccato
+      ? "Hint: the dot means staccato. Bounce off the key."
+      : "Hint: no dot, so hold the key for a whole count.";
+  const n = COUNTS[card.value];
+  return card.kind === "note"
+    ? `Hint: a ${NAMES[card.value]} note gets ${counts(n)}. Let go when the bar is full.`
+    : `Hint: a ${NAMES[card.value]} rest gets ${counts(n)}. Play when the bar is full.`;
+}
 /** What the child does with the card now. */
 export function holdPrompt(game: HoldGame) {
   const index = game.current;

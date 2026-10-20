@@ -242,10 +242,16 @@ describe("workbook page", () => {
     expect(text(".workbook-hint")).toBe(
       "Hold longer: a half note gets 2 counts.",
     );
-    // Control keys still work, and answer keys do nothing.
+    // Answer keys and keys off the play zone do nothing.
     await tap(80);
+    await tap(30);
     expect(text(".workbook-hint")).toBe(
       "Hold longer: a half note gets 2 counts.",
+    );
+    // The hint key explains the card.
+    await tap(36);
+    expect(text(".workbook-hint")).toBe(
+      "Hint: a half note gets 2 counts. Let go when the bar is full.",
     );
   });
 

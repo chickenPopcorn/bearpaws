@@ -34,6 +34,7 @@ import {
   stampPage,
   stampText,
   zoneOf,
+  inPlayZone,
   type ControlAction,
   type FindPage,
   type NamePage,
@@ -51,6 +52,7 @@ import {
   STACCATO_MS,
   cardCounts,
   holdFeedback,
+  holdHint,
   holdPrompt,
 } from "../src/workbookHold";
 
@@ -663,6 +665,19 @@ describe("Hold It!", () => {
     expect([...game.done]).toEqual([0, 1, 2, 3]);
   });
 
+  it("hints at the card's counts on the hint key", () => {
+    const game = new HoldGame(hold(6));
+    expect(holdHint(game)).toBe(
+      "Hint: a quarter note gets 1 count. Let go when the bar is full.",
+    );
+    expect(holdHint(new HoldGame(hold(16)))).toBe(
+      "Hint: a quarter rest gets 1 count. Play when the bar is full.",
+    );
+    expect(holdHint(new HoldGame(hold(15)))).toBe(
+      "Hint: no dot, so hold the key for a whole count.",
+    );
+  });
+
   it("plays short for a staccato dot and a full count without", () => {
     const p = hold(15);
     const game = new HoldGame(p);
@@ -1024,6 +1039,17 @@ describe("HopGame", () => {
 });
 
 describe("zones", () => {
+  it("knows the play zone's own keys, C3 to C5", () => {
+    expect([47, 48, 72, 73, 30, 90].map(inPlayZone)).toEqual([
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+    ]);
+  });
+
   it("splits the piano into control, play and answer keys", () => {
     expect(zoneOf(CONTROL_ZONE[0])).toBe("control");
     expect(zoneOf(41)).toBe("control");
