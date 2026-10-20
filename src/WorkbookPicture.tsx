@@ -170,6 +170,10 @@ export interface PictureArea {
   dots?: readonly (Crayon | undefined)[];
   /** Passed over: a Find page's card without its interval. */
   faded?: boolean;
+  /** How far pages: the answers printed under the staff, 2, 3 and 4. */
+  choices?: readonly number[];
+  /** How far pages: the answer given, circled in `ring`. */
+  chosen?: number;
 }
 /** An area's clef: treble when all its notes are middle C or up. */
 export const areaClef = (notes: readonly number[], clef?: Clef): Clef =>
@@ -211,20 +215,45 @@ export function WorkbookPicture({
           <title>
             {area.notes.map(bookName).join(area.harmonic ? " with " : " then ")}
             {area.crayon ? `, ${area.crayon}` : ""}
-            {area.ring ? `, circled ${area.ring}` : ""}
+            {area.ring
+              ? area.chosen
+                ? `, ${area.chosen} circled ${area.ring}`
+                : `, circled ${area.ring}`
+              : ""}
             {area.faded ? ", skipped" : ""}
           </title>
           <path
             d={SHAPES[area.shape]}
             style={{ fill: area.crayon ? CRAYONS[area.crayon] : undefined }}
           />
-          <StaffNotes
-            notes={area.notes}
-            clef={area.clef}
-            harmonic={area.harmonic}
-            dots={area.dots}
-          />
-          {area.ring && (
+          <g transform={area.choices ? "translate(0 -10)" : undefined}>
+            <StaffNotes
+              notes={area.notes}
+              clef={area.clef}
+              harmonic={area.harmonic}
+              dots={area.dots}
+            />
+          </g>
+          {area.choices?.map((choice, n) => {
+            const x = (n - (area.choices!.length - 1) / 2) * 40;
+            return (
+              <g key={choice} transform={`translate(${x} 34)`}>
+                <text className="workbook-choice" textAnchor="middle" y={6}>
+                  {choice}
+                </text>
+                {area.ring && area.chosen === choice && (
+                  <ellipse
+                    className="workbook-ring"
+                    rx={13}
+                    ry={12}
+                    pathLength={1}
+                    style={{ stroke: CRAYONS[area.ring] }}
+                  />
+                )}
+              </g>
+            );
+          })}
+          {area.ring && !area.choices && (
             <ellipse
               className="workbook-ring"
               rx={86}

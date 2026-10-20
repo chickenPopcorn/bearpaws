@@ -29,7 +29,7 @@ import { CD_AUDIO_BUCKET, StoryPlayer } from "./story";
 import { signedInFetch } from "./supabase";
 import { SongTitle } from "./SongTitle";
 import { Workbook } from "./WorkbookScreen";
-import { SKIP_KEY, WORKBOOK_PAGES, readStamps, stampPage } from "./workbook";
+import { ANSWER_KEYS, WORKBOOK_PAGES, readStamps, stampPage } from "./workbook";
 /**
  * Save a library song's MIDI file. Only a signed-in request can read it, so
  * a plain link cannot: fetch it, then save it from this page.
@@ -82,6 +82,12 @@ const setAmbience = (ambience: number) => studio.sound(ambience);
 const setPianoVoice = (voice: PianoVoice, enabled: boolean) =>
   studio.pianoVoice(voice, enabled);
 
+/** On a workbook page, the answer keys: Skip, or a How far page's answers. */
+const ANSWER_SHORTCUTS: Record<string, number> = {
+  l: ANSWER_KEYS[0],
+  ";": ANSWER_KEYS[1],
+  "'": ANSWER_KEYS[2],
+};
 const shortcuts: Record<string, number> = {
   z: 48,
   x: 50,
@@ -589,10 +595,11 @@ export function App({
       )
         return;
       const key = e.key.toLowerCase(),
-        // On a workbook page L, the key after the play zone's K, is Skip.
+        // On a workbook page L ; and ', the keys after the play zone's K,
+        // are the answer keys G5, A5 and B5.
         written =
           shortcuts[key] ??
-          (pageOpen.current && key === "l" ? SKIP_KEY : undefined);
+          (pageOpen.current ? ANSWER_SHORTCUTS[key] : undefined);
       if (written !== undefined) {
         e.preventDefault();
         // With Duet on, the keys follow the student part up.

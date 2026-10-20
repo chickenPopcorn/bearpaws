@@ -17,8 +17,11 @@ import {
   IntervalGame,
   PaintGame,
   WORKBOOK_TITLE,
+  ANSWER_KEYS,
   feedback,
   findPrompt,
+  intervalName,
+  namePrompt,
   hopFeedback,
   instruction,
   intervalSize,
@@ -51,7 +54,9 @@ const START_HINT = "Play it on your piano.";
 const NO_KEYS = new Map<number, Crayon>();
 /** The game a page plays: by single notes, intervals or cards. */
 const newGame = (page: WorkbookPage) =>
-  page.game === "color-by-interval" || page.game === "interval-find"
+  page.game === "color-by-interval" ||
+  page.game === "interval-find" ||
+  page.game === "interval-name"
     ? new IntervalGame(page)
     : page.game === "interval-hop"
       ? new HopGame(page)
@@ -62,6 +67,14 @@ const NO_HOP: Hop = { from: 60, to: 60, count: 0 };
 const SKIP_STICKERS: ReadonlyMap<number, KeyLabel> = new Map([
   [SKIP_KEY, { mark: "»", word: "Skip" }],
 ]);
+/** A How far page's answers, one on each answer key from G5 up. */
+const answerStickers = (choices: readonly number[]) =>
+  new Map<number, KeyLabel>(
+    choices.map((choice, i) => [
+      ANSWER_KEYS[i],
+      { mark: String(choice), word: intervalName(choice) },
+    ]),
+  );
 const KEYS = workbookKeys();
 /** A key's centre, as a percentage of the keyboard's width. */
 const keyCentre = (pitch: number) => {
@@ -261,7 +274,11 @@ export const Workbook = memo(function Workbook({
       pitch === SKIP_KEY &&
       game instanceof IntervalGame &&
       game.page.game === "interval-find";
-    if (zoneOf(pitch) === "answer" && !skip) return;
+    const answer =
+      game instanceof IntervalGame && game.page.game === "interval-name"
+        ? game.page.choices[ANSWER_KEYS.indexOf(pitch)]
+        : undefined;
+    if (zoneOf(pitch) === "answer" && !skip && answer === undefined) return;
     const wasFinished = game.finished;
     if (game instanceof HopGame) {
       const text = hopFeedback(game, game.play(pitch, time, studio.input.down));
@@ -270,7 +287,9 @@ export const Workbook = memo(function Workbook({
       const index = game.current;
       const outcome = skip
         ? game.skip()
-        : game.play(pitch, time, studio.input.down);
+        : answer !== undefined
+          ? game.answer(answer)
+          : game.play(pitch, time, studio.input.down);
       const text = intervalFeedback(
         game.page,
         outcome,
@@ -353,6 +372,21 @@ export const Workbook = memo(function Workbook({
       }));
       hop = game.lastHop ?? NO_HOP;
       stickers = SKIP_STICKERS;
+    } else if (page.game === "interval-name") {
+      // The answer is circled under the card, as the book asks.
+      now =
+        current === undefined
+          ? undefined
+          : namePrompt(game, page.areas[current]);
+      areas = page.areas.map((area, i) => ({
+        ...area,
+        clef: areaClef(area.notes, area.clef),
+        choices: page.choices,
+        chosen: game.answers.get(i),
+        ring: game.painted.get(i),
+      }));
+      hop = game.lastHop ?? NO_HOP;
+      stickers = answerStickers(page.choices);
     } else {
       now =
         current === undefined ? undefined : intervalPrompt(page.areas[current]);
@@ -396,7 +430,9 @@ export const Workbook = memo(function Workbook({
                 ? "Play each card's two notes on your piano."
                 : page.game === "interval-find"
                   ? "Play the cards it asks for; skip the others on G5."
-                  : "Play each note on your piano."}
+                  : page.game === "interval-name"
+                    ? "Play each card, then press how far apart: 2, 3 or 4."
+                    : "Play each note on your piano."}
           </p>
         </div>
         <div className="song-tools">
@@ -479,6 +515,8 @@ export const Workbook = memo(function Workbook({
         hold to start over.
         {page.game === "interval-find" &&
           " Skip: G5, or L on the computer keyboard."}
+        {page.game === "interval-name" &&
+          " Answers: G5 is 2, A5 is 3, B5 is 4 (on the computer keyboard L, ; and ')."}
       </p>
     </>
   );

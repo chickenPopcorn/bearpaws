@@ -352,6 +352,7 @@ describe("Music Workbook 3", () => {
       "Page 38 · D and G",
       "Page 39 · 4ths",
       "Page 40 · 4ths",
+      "Page 41 · 2nds, 3rds and 4ths",
       "Page 42 · F and G",
       "Page 43 · 5ths",
       "Page 44 · 5ths",
