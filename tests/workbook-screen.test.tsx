@@ -286,6 +286,9 @@ describe("workbook page", () => {
     ).toBe("TREBLE CLEF G then TREBLE CLEF D, Different circled red");
     // Only the bottom cards print the answers.
     expect(container.querySelectorAll(".workbook-choice")).toHaveLength(8);
+    expect(
+      container.querySelector(".workbook-picture")!.getAttribute("aria-label"),
+    ).toBe("Picture with 4 boxes, 1 answered");
   });
 
   it("takes a How far answer on the answer keys and circles it", async () => {
