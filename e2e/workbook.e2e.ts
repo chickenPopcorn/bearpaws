@@ -55,3 +55,18 @@ test("the computer keys play a page's notes even with Duet moving the song", asy
   await page.keyboard.press("s");
   await expect(page.locator(".workbook-prompt")).toHaveText("Find BASS CLEF D");
 });
+
+test("a computer key held as a page opens lets go of the note it played", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Duet" }).click();
+  await page.getByRole("button", { name: /Music Workbook 3/ }).click();
+  // With Duet's octave up, Z plays middle C, page 7's first note.
+  await page.keyboard.down("z");
+  await page.getByRole("button", { name: /^Page 7 · Bass Clef C/ }).click();
+  await page.keyboard.up("z");
+  // A plays middle C on the page; it must be a fresh press.
+  await page.keyboard.press("a");
+  await expect(page.locator(".workbook-prompt")).toHaveText("Find BASS CLEF C");
+});

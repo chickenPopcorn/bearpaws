@@ -103,6 +103,8 @@ export const Workbook = memo(function Workbook({
   onFinish,
   onPage,
   onLeave,
+  notice,
+  syncError,
 }: {
   page: WorkbookPage;
   /** The day the page was finished, if it has been. */
@@ -110,6 +112,10 @@ export const Workbook = memo(function Workbook({
   onFinish(page: number): void;
   onPage(page: number): void;
   onLeave(): void;
+  /** Browser storage trouble, such as a stamp kept for this session only. */
+  notice?: string;
+  /** Account sync trouble. */
+  syncError?: string;
 }) {
   const [game, setGame] = useState(() => new PaintGame(page));
   // The game changes in place; a new revision redraws it.
@@ -201,6 +207,16 @@ export const Workbook = memo(function Workbook({
           <PageStamp day={stamp} fresh={fresh} />
         </div>
       </div>
+      {notice && (
+        <p className="alert" role="status">
+          {notice}
+        </p>
+      )}
+      {syncError && (
+        <p className="alert" role="status">
+          {syncError}
+        </p>
+      )}
       <ol className="workbook-steps" aria-label="Steps">
         {page.steps.map((step, i) => (
           <li

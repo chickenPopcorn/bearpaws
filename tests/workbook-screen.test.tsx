@@ -89,6 +89,20 @@ describe("workbook page", () => {
     ).toBe("Not done yet");
   });
 
+  it("shows storage and sync trouble on the page", async () => {
+    await render({
+      notice:
+        "Browser storage is full or blocked. Workbook stamps will last for this session.",
+      syncError: "Sync paused.",
+    });
+    expect(
+      Array.from(container.querySelectorAll(".alert"), (p) => p.textContent),
+    ).toEqual([
+      "Browser storage is full or blocked. Workbook stamps will last for this session.",
+      "Sync paused.",
+    ]);
+  });
+
   it("paints each step's key in order, then finishes the page", async () => {
     await render();
     await tap(62);

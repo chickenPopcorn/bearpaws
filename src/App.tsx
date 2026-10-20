@@ -574,6 +574,9 @@ export function App({
     studio.init();
     studio.narration = story;
     const shift = () => (pageOpen.current ? 0 : studio.octaveShift);
+    // The pitch each computer key pressed, so its release lets go of that
+    // pitch even if the shift changed meanwhile (a workbook page opened).
+    const held = new Map<string, number>();
     const down = (e: KeyboardEvent) => {
       if (
         (e.target as HTMLElement).closest(
@@ -585,21 +588,26 @@ export function App({
         e.repeat
       )
         return;
-      const pitch = shortcuts[e.key.toLowerCase()];
-      if (pitch !== undefined) {
+      const key = e.key.toLowerCase(),
+        written = shortcuts[key];
+      if (written !== undefined) {
         e.preventDefault();
         // With Duet on, the keys follow the student part up.
-        studio.virtual(pitch + shift(), true);
+        const pitch = written + shift();
+        held.set(key, pitch);
+        studio.virtual(pitch, true);
       }
     };
     const up = (e: KeyboardEvent) => {
-      const key = shortcuts[e.key.toLowerCase()];
-      const pitch = key === undefined ? undefined : key + shift();
+      const key = e.key.toLowerCase(),
+        pitch = held.get(key);
+      held.delete(key);
       if (pitch !== undefined && studio.input.down.has(pitch)) {
         studio.virtual(pitch, false);
       }
     };
     const blur = () => {
+      held.clear();
       studio.releaseKeys();
       if (studio.playing && studio.settings.mode !== "listen") studio.pause();
       else studio.emit();
@@ -801,6 +809,8 @@ export function App({
               onFinish={finishPage}
               onPage={openPage}
               onLeave={leaveWorkbook}
+              notice={studio.storageNotice}
+              syncError={cloud?.error}
             />
           ) : (
             <>
