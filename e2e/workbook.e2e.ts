@@ -70,3 +70,36 @@ test("a computer key held as a page opens lets go of the note it played", async 
   await page.keyboard.press("a");
   await expect(page.locator(".workbook-prompt")).toHaveText("Find BASS CLEF C");
 });
+
+test("a Find page can be finished from the computer keyboard, L being Skip", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Music Workbook 3/ }).click();
+  await page.getByRole("button", { name: /^Page 20 · 2nds/ }).click();
+  const hint = page.locator(".workbook-hint");
+  // E3 then D3: a 2nd. A melodic interval's notes come one after the other,
+  // not within TOGETHER_MS (150 ms) of each other.
+  const apart = () => page.waitForTimeout(250);
+  await page.keyboard.press("c");
+  await apart();
+  await page.keyboard.press("x");
+  await expect(hint).toHaveText("Yes! That is a 2nd: blue.");
+  // C4 to E4 is a 3rd: L skips it.
+  await page.keyboard.press("l");
+  await expect(hint).toHaveText("Right: no 2nd there. Next card.");
+  // D4 to E4, G4 to F4, C3 to D3, then skip G3 to E3.
+  for (const [first, second] of [
+    ["s", "d"],
+    ["g", "f"],
+    ["z", "x"],
+  ]) {
+    await page.keyboard.press(first);
+    await expect(hint).toHaveText("Now the note on the right.");
+    await apart();
+    await page.keyboard.press(second);
+    await expect(hint).toHaveText("Yes! That is a 2nd: blue.");
+  }
+  await page.keyboard.press("l");
+  await expect(page.locator(".workbook-prompt")).toHaveText("Page 20 is done");
+});

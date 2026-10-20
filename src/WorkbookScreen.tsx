@@ -477,6 +477,8 @@ export const Workbook = memo(function Workbook({
       <p className="small workbook-keys-help">
         Piano control keys: C2 hint · D2 back (hold to leave) · E2 next · F2
         hold to start over.
+        {page.game === "interval-find" &&
+          " Skip: G5, or L on the computer keyboard."}
       </p>
     </>
   );

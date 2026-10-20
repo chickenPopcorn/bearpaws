@@ -53,7 +53,8 @@ Each page is a game played on the piano:
   first key to the second.
 - **Interval Hop Find pages** (20, 24, 40 and 44) ask for one interval among
   mixed cards. The child plays a card that holds it, and passes over any
-  other card with **G5**, the answer key whose sticker says Skip.
+  other card with **G5**, the answer key whose sticker says Skip (on the
+  computer keyboard, **L**).
 
 The steps go in the book's order; a wrong key gets a hint, and after two
 misses the letter names appear on the keys. A finished page gets a date
