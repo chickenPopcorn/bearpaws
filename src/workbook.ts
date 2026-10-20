@@ -47,6 +47,9 @@ export const HOLD_MS = 2000;
 export const LETTER_MISSES = 2;
 
 export type Zone = "control" | "play" | "answer";
+/** Whether `pitch` is one of the keys the page's notes are on, C3 to C5. */
+export const inPlayZone = (pitch: number) =>
+  pitch >= PLAY_ZONE[0] && pitch <= PLAY_ZONE[1];
 export function zoneOf(pitch: number): Zone {
   if (pitch >= CONTROL_ZONE[0] && pitch <= CONTROL_ZONE[1]) return "control";
   if (pitch >= ANSWER_ZONE[0] && pitch <= ANSWER_ZONE[1]) return "answer";
@@ -125,7 +128,8 @@ export type WorkbookGame =
   | "interval-hop"
   | "interval-find"
   | "interval-name"
-  | "interval-twins";
+  | "interval-twins"
+  | "hold";
 // Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
@@ -135,6 +139,7 @@ export const GAME_NAMES: Record<WorkbookGame, string> = {
   "interval-find": "Interval Hop",
   "interval-name": "Interval Hop",
   "interval-twins": "Interval Hop",
+  hold: "Hold It!",
 };
 interface PageInfo {
   page: number;
@@ -203,8 +208,34 @@ export interface TwinsPage extends PageInfo {
 }
 export type IntervalsPage =
   IntervalPage | HopPage | FindPage | NamePage | TwinsPage;
+export type NoteValue = "quarter" | "half" | "dotted-half" | "whole";
+export type RestValue = "quarter" | "half" | "whole";
+/** One card of a Hold It! page. */
+export type HoldCard =
+  /** Hold a key for the note's counts. */
+  | { kind: "note"; value: NoteValue }
+  /** Play a note, then rest for the rest's counts, then play again. */
+  | { kind: "rest"; value: RestValue }
+  /** A quarter note to play short if it has a staccato dot, else a full count. */
+  | { kind: "tap"; staccato: boolean };
+/**
+ * A Hold It! page: note values, staccato and rests, played on any key in
+ * time with the laptop's metronome.
+ */
+export interface HoldPage extends PageInfo {
+  game: "hold";
+  /** The page's one step, in the book's words, and its crayon. */
+  steps: [{ crayon: Crayon; words: string }];
+  cards: HoldCard[];
+}
 export type WorkbookPage =
-  NotePage | IntervalPage | HopPage | FindPage | NamePage | TwinsPage;
+  | NotePage
+  | IntervalPage
+  | HopPage
+  | FindPage
+  | NamePage
+  | TwinsPage
+  | HoldPage;
 /** A page whose cards are answered on the answer keys after playing. */
 export type AnswerPage = NamePage | TwinsPage;
 /** The answer key whose sticker says Skip: G5. */
@@ -369,6 +400,25 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     picture: { height: 400, scale: 0.72 },
   },
   {
+    page: 6,
+    title: "Note Values",
+    useWith: 6,
+    game: "hold",
+    steps: [
+      {
+        crayon: "purple",
+        words:
+          "Draw a line from each note to the number of counts it gets in 4/4 or 3/4 time.",
+      },
+    ],
+    cards: [
+      { kind: "note", value: "quarter" },
+      { kind: "note", value: "half" },
+      { kind: "note", value: "dotted-half" },
+      { kind: "note", value: "whole" },
+    ],
+  },
+  {
     page: 7,
     title: "Bass Clef C",
     useWith: 7,
@@ -510,6 +560,41 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
           prompt: "Find Left Hand C Position: C D E F G",
         },
       },
+    ],
+  },
+  {
+    page: 15,
+    title: "Staccato",
+    useWith: 15,
+    game: "hold",
+    steps: [
+      {
+        crayon: "orange",
+        words:
+          "Using an orange crayon, circle each note that is played STACCATO.",
+      },
+    ],
+    // The page's eight notes, in reading order.
+    cards: [false, true, true, false, false, false, true, true].map(
+      (staccato) => ({ kind: "tap", staccato }),
+    ),
+  },
+  {
+    page: 16,
+    title: "Rests",
+    useWith: 16,
+    game: "hold",
+    steps: [
+      {
+        crayon: "purple",
+        words:
+          "Draw a line from each rest to the number of counts it gets in 4/4 time.",
+      },
+    ],
+    cards: [
+      { kind: "rest", value: "quarter" },
+      { kind: "rest", value: "half" },
+      { kind: "rest", value: "whole" },
     ],
   },
   {
@@ -1027,7 +1112,7 @@ export class PaintGame {
 
 /** The hint under the prompt after `outcome`, for a grown-up to read aloud. */
 /** What a finished page says. */
-const doneText = (page: WorkbookPage) =>
+export const doneText = (page: WorkbookPage) =>
   `Page ${page.page} is done. ${pageAfter(page) ? "Next page: E2." : "This is the last page so far."}`;
 const lettersText = (outcome: { lettersShown?: boolean }) =>
   outcome.lettersShown ? " The letters are on the keys now." : "";
@@ -1585,6 +1670,17 @@ export class ControlKeys {
     this.holds.delete(pitch);
     if (pitch === CONTROL_KEYS.back) this.act("back");
     else this.act("restart-short");
+    return true;
+  }
+  /**
+   * A key was let go without its release reaching here, as when the window
+   * loses focus: its hold ends without acting. False when it is not a
+   * control key.
+   */
+  cancel(pitch: number) {
+    if (zoneOf(pitch) !== "control") return false;
+    clearTimeout(this.holds.get(pitch));
+    this.holds.delete(pitch);
     return true;
   }
   /** Forget held keys, as when the page closes. */

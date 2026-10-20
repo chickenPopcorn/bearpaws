@@ -4,20 +4,25 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HOLD_MS, SKIP_KEY, WORKBOOK_PAGES } from "../src/workbook";
 
+type KeyListener = (
+  pitch: number,
+  down: boolean,
+  time: number,
+  lost?: boolean,
+) => void;
 const fake = vi.hoisted(() => {
-  const keys = new Set<(pitch: number, down: boolean, time: number) => void>();
+  const keys = new Set<KeyListener>();
   const listeners = new Set<() => void>();
   return {
     keys,
     studio: {
       input: { down: new Set<number>() },
+      beat: () => {},
       subscribe: (listener: () => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-      onKey: (
-        listener: (pitch: number, down: boolean, time: number) => void,
-      ) => {
+      onKey: (listener: KeyListener) => {
         keys.add(listener);
         return () => keys.delete(listener);
       },
@@ -40,12 +45,12 @@ async function render(overrides: Partial<Props> = {}) {
 }
 /** The keys' clock, in ms: each key is played 1 s after the last. */
 let clock = 0;
-async function key(pitch: number, down: boolean) {
+async function key(pitch: number, down: boolean, lost = false) {
   clock += 1000;
   await act(async () => {
     if (down) fake.studio.input.down.add(pitch);
     else fake.studio.input.down.delete(pitch);
-    for (const listener of fake.keys) listener(pitch, down, clock);
+    for (const listener of fake.keys) listener(pitch, down, clock, lost);
   });
 }
 async function tap(pitch: number) {
@@ -222,6 +227,38 @@ describe("workbook page", () => {
     expect(text(".workbook-hint")).toBe("Yes! That is a 3rd: red.");
   });
 
+  it("times a Hold It! note while its key is held", async () => {
+    await render({ page: page(6) });
+    expect(text("p")).toBe("Hold It! · Play each note on your piano.");
+    expect(text(".workbook-prompt")).toBe(
+      "Hold a key for the quarter note's counts, then let go",
+    );
+    expect(container.querySelectorAll(".workbook-beat")).toHaveLength(1);
+    // tap() holds a key for 1 s: one count.
+    await tap(60);
+    expect(text(".workbook-hint")).toBe("Yes! A quarter note gets 1 count.");
+    expect(
+      container.querySelectorAll(".workbook-area title")[0].textContent,
+    ).toBe("quarter note, 1 count");
+    expect(container.querySelectorAll(".workbook-beat")).toHaveLength(2);
+    // The half note, held 1 s: too short.
+    await tap(60);
+    expect(text(".workbook-hint")).toBe(
+      "Hold longer: a half note gets 2 counts.",
+    );
+    // Answer keys and keys off the play zone do nothing.
+    await tap(80);
+    await tap(30);
+    expect(text(".workbook-hint")).toBe(
+      "Hold longer: a half note gets 2 counts.",
+    );
+    // The hint key explains the card.
+    await tap(36);
+    expect(text(".workbook-hint")).toBe(
+      "Hint: a half note gets 2 counts. Let go when the bar is full.",
+    );
+  });
+
   it("takes Same or Different under a box's bottom card", async () => {
     await render({ page: page(47) });
     expect(text(".workbook-prompt")).toBe("Play the top card, left then right");
@@ -347,6 +384,16 @@ describe("workbook control keys", () => {
     await key(38, false);
     expect(props.onLeave).toHaveBeenCalledOnce();
     expect(props.onPage).not.toHaveBeenCalled();
+  });
+
+  it("neither goes back nor leaves when the window loses focus mid-hold", async () => {
+    vi.useFakeTimers();
+    await render();
+    await key(38, true);
+    await key(38, false, true);
+    await act(async () => vi.advanceTimersByTime(HOLD_MS));
+    expect(props.onPage).not.toHaveBeenCalled();
+    expect(props.onLeave).not.toHaveBeenCalled();
   });
 
   it("starts the page over only when F2 is held", async () => {

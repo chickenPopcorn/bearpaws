@@ -5,7 +5,11 @@ import {
   type AreaShape,
   type Clef,
   type Crayon,
+  type HoldCard,
+  type NoteValue,
+  type RestValue,
 } from "./workbook";
+import { cardCounts } from "./workbookHold";
 
 /** Half a staff space, in picture units: one step up the staff. */
 const HALF = 3.75;
@@ -374,6 +378,136 @@ export function WorkbookStaff({
             <text className="workbook-note" x={x} y={y} fontSize={40}>
               {""}
             </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/** Bravura glyphs for Hold It! cards. */
+const NOTE_GLYPHS: Record<NoteValue, string> = {
+  quarter: "",
+  half: "",
+  "dotted-half": "",
+  whole: "",
+};
+const REST_GLYPHS: Record<RestValue, string> = {
+  quarter: "",
+  half: "",
+  whole: "",
+};
+
+/**
+ * A Hold It! page's cards in a row (two rows for more than four): each
+ * note or rest as printed. The card to play is outlined; a done note or
+ * rest shows its counts, a done staccato note is circled in the page's
+ * crayon, and a done plain note fades.
+ */
+export function HoldCards({
+  cards,
+  current,
+  done,
+  crayon,
+}: {
+  cards: readonly HoldCard[];
+  current?: number;
+  done: ReadonlySet<number>;
+  crayon: Crayon;
+}) {
+  const perRow = cards.length > 4 ? 4 : cards.length,
+    rows = Math.ceil(cards.length / perRow),
+    height = rows * 140 + 20;
+  return (
+    <svg
+      className="workbook-picture"
+      viewBox={`0 0 640 ${height}`}
+      role="img"
+      aria-label={`${cards.length} cards, ${done.size} done`}
+    >
+      {cards.map((card, i) => {
+        const x = 320 + ((i % perRow) - (perRow - 1) / 2) * 150,
+          y = 80 + Math.floor(i / perRow) * 140,
+          finished = done.has(i);
+        const label =
+          card.kind === "tap"
+            ? card.staccato
+              ? "quarter note with a staccato dot"
+              : "quarter note"
+            : `${card.value.replace("-", " ")} ${card.kind}`;
+        return (
+          <g
+            key={i}
+            className={`workbook-area${i === current ? " is-current" : ""}${
+              finished && card.kind === "tap" && !card.staccato
+                ? " is-skipped"
+                : ""
+            }`}
+            transform={`translate(${x} ${y})`}
+          >
+            <title>
+              {label}
+              {finished
+                ? card.kind === "tap"
+                  ? card.staccato
+                    ? `, circled ${crayon}`
+                    : ", done"
+                  : `, ${cardCounts(card)} count${cardCounts(card) === 1 ? "" : "s"}`
+                : ""}
+            </title>
+            <path d={SHAPES.card} />
+            {card.kind === "rest" && card.value !== "quarter" && (
+              <line
+                className="workbook-rest-line"
+                x1={-30}
+                x2={30}
+                y1={0}
+                y2={0}
+              />
+            )}
+            <text
+              className={`workbook-glyph${card.kind === "rest" ? " is-rest" : ""}`}
+              textAnchor="middle"
+              x={card.kind === "rest" ? 0 : -6}
+              // A note's head sits low, its stem up; a whole note centres.
+              y={
+                card.kind === "rest"
+                  ? card.value === "quarter"
+                    ? 14
+                    : 0
+                  : card.kind === "note" && card.value === "whole"
+                    ? 6
+                    : 16
+              }
+            >
+              {card.kind === "rest"
+                ? REST_GLYPHS[card.value]
+                : NOTE_GLYPHS[card.kind === "note" ? card.value : "quarter"]}
+            </text>
+            {card.kind === "note" && card.value === "dotted-half" && (
+              <text className="workbook-glyph" x={8} y={16}>
+                {""}
+              </text>
+            )}
+            {card.kind === "tap" && card.staccato && (
+              <text className="workbook-glyph" x={-12} y={28}>
+                {""}
+              </text>
+            )}
+            {finished && card.kind !== "tap" && (
+              <text className="workbook-choice" textAnchor="middle" y={44}>
+                {`= ${cardCounts(card)}`}
+              </text>
+            )}
+            {finished && card.kind === "tap" && card.staccato && (
+              <ellipse
+                className="workbook-ring"
+                rx={86}
+                ry={64}
+                pathLength={1}
+                style={{ stroke: CRAYONS[crayon] }}
+              />
+            )}
           </g>
         );
       })}
