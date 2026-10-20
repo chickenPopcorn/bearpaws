@@ -56,7 +56,8 @@ const NO_KEYS = new Map<number, Crayon>();
 const newGame = (page: WorkbookPage) =>
   page.game === "color-by-interval" ||
   page.game === "interval-find" ||
-  page.game === "interval-name"
+  page.game === "interval-name" ||
+  page.game === "interval-twins"
     ? new IntervalGame(page)
     : page.game === "interval-hop"
       ? new HopGame(page)
@@ -75,6 +76,11 @@ const answerStickers = (choices: readonly number[]) =>
       { mark: String(choice), word: intervalName(choice) },
     ]),
   );
+/** A Same and Different page's answers, on G5 and A5. */
+const TWIN_STICKERS: ReadonlyMap<number, KeyLabel> = new Map([
+  [ANSWER_KEYS[0], { mark: "=", word: "Same" }],
+  [ANSWER_KEYS[1], { mark: "≠", word: "Different" }],
+]);
 const KEYS = workbookKeys();
 /** A key's centre, as a percentage of the keyboard's width. */
 const keyCentre = (pitch: number) => {
@@ -275,7 +281,9 @@ export const Workbook = memo(function Workbook({
       game instanceof IntervalGame &&
       game.page.game === "interval-find";
     const answer =
-      game instanceof IntervalGame && game.page.game === "interval-name"
+      game instanceof IntervalGame &&
+      (game.page.game === "interval-name" ||
+        game.page.game === "interval-twins")
         ? game.page.choices[ANSWER_KEYS.indexOf(pitch)]
         : undefined;
     if (zoneOf(pitch) === "answer" && !skip && answer === undefined) return;
@@ -372,8 +380,13 @@ export const Workbook = memo(function Workbook({
       }));
       hop = game.lastHop ?? NO_HOP;
       stickers = SKIP_STICKERS;
-    } else if (page.game === "interval-name") {
-      // The answer is circled under the card, as the book asks.
+    } else if (
+      page.game === "interval-name" ||
+      page.game === "interval-twins"
+    ) {
+      // The answer is circled under the card (on a Same and Different page,
+      // under its box's bottom card), as the book asks.
+      const twins = page.game === "interval-twins";
       now =
         current === undefined
           ? undefined
@@ -381,12 +394,12 @@ export const Workbook = memo(function Workbook({
       areas = page.areas.map((area, i) => ({
         ...area,
         clef: areaClef(area.notes, area.clef),
-        choices: page.choices,
+        choices: twins && i % 2 === 0 ? undefined : page.choices,
         chosen: game.answers.get(i),
         ring: game.painted.get(i),
       }));
       hop = game.lastHop ?? NO_HOP;
-      stickers = answerStickers(page.choices);
+      stickers = twins ? TWIN_STICKERS : answerStickers(page.choices);
     } else {
       now =
         current === undefined ? undefined : intervalPrompt(page.areas[current]);
@@ -432,7 +445,9 @@ export const Workbook = memo(function Workbook({
                   ? "Play the cards it asks for; skip the others on G5."
                   : page.game === "interval-name"
                     ? "Play each card, then press how far apart: 2, 3 or 4."
-                    : "Play each note on your piano."}
+                    : page.game === "interval-twins"
+                      ? "Play both cards, then press Same or Different."
+                      : "Play each note on your piano."}
           </p>
         </div>
         <div className="song-tools">
@@ -517,6 +532,8 @@ export const Workbook = memo(function Workbook({
           " Skip: G5, or L on the computer keyboard."}
         {page.game === "interval-name" &&
           " Answers: G5 is 2, A5 is 3, B5 is 4 (on the computer keyboard L, ; and ')."}
+        {page.game === "interval-twins" &&
+          " Answers: G5 is Same, A5 is Different (on the computer keyboard L and ;)."}
       </p>
     </>
   );

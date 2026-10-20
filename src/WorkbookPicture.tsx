@@ -171,9 +171,9 @@ export interface PictureArea {
   /** Passed over: a Find page's card without its interval. */
   faded?: boolean;
   /** How far pages: the answers printed under the staff, 2, 3 and 4. */
-  choices?: readonly number[];
+  choices?: readonly (number | string)[];
   /** How far pages: the answer given, circled in `ring`. */
-  chosen?: number;
+  chosen?: number | string;
 }
 /** An area's clef: treble when all its notes are middle C or up. */
 export const areaClef = (notes: readonly number[], clef?: Clef): Clef =>
@@ -235,16 +235,22 @@ export function WorkbookPicture({
             />
           </g>
           {area.choices?.map((choice, n) => {
-            const x = (n - (area.choices!.length - 1) / 2) * 40;
+            // Words ("Same", "Different") take more room than numbers.
+            const word = typeof choice === "string",
+              x = (n - (area.choices!.length - 1) / 2) * (word ? 62 : 40);
             return (
               <g key={choice} transform={`translate(${x} 34)`}>
-                <text className="workbook-choice" textAnchor="middle" y={6}>
+                <text
+                  className={`workbook-choice${word ? " is-word" : ""}`}
+                  textAnchor="middle"
+                  y={word ? 5 : 6}
+                >
                   {choice}
                 </text>
                 {area.ring && area.chosen === choice && (
                   <ellipse
                     className="workbook-ring"
-                    rx={13}
+                    rx={word ? 34 : 13}
                     ry={12}
                     pathLength={1}
                     style={{ stroke: CRAYONS[area.ring] }}

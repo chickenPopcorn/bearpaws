@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app | 27/45 |
+| Game built in the app | 29/45 |
 
 By game, in the suggested build order:
 
@@ -35,8 +35,8 @@ covers 17 pages. Interval Hop adds the most pages of any single game.
 
 **Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and 42)
 all of Color by Note (pages 4, 8, 10, 12, 21 and 48, and the interval pages
-26, 33 and 45), and the Hop, Find and How far pages of Interval Hop (13, 19, 20, 23, 24,
-39, 40, 41, 43 and 44), in
+26, 33 and 45), and all of Interval Hop (13, 19, 20, 23, 24, 28, 39, 40, 41, 43, 44 and 47),
+in
 `src/workbook.ts` (pages, `PaintGame`, `IntervalGame`, `HopGame`,
 `ControlKeys`), `src/WorkbookScreen.tsx`,
 `src/WorkbookPicture.tsx` and `src/workbookKeyboard.ts`. Music Workbook 3 is the
@@ -241,9 +241,12 @@ color for up or down.
   notes are: G5 is 2, A5 is 3, B5 is 4. The answer is circled under the card,
   as in the book; a wrong one gets "Count each line and space". On the
   computer keyboard L, ; and ' are G5, A5 and B5.
-- **Twins** (28, 47): play both intervals in the box, then press the Same or
-  Different answer key (Beethoven Bear / Mozart Mouse on 28, Haydn Hippo /
-  Clara Schumann-Cat on 47).
+- **Twins** (28, 47): built. Each box's top card, then its bottom card, is
+  played left then right; then the child presses G5 (Same) or A5 (Different),
+  and the answer is circled under the bottom card. The hint names the
+  character the book circles: Beethoven Bear or Mozart Mouse on 28, Haydn
+  Hippo or Clara Schumann-Cat on 47. On the computer keyboard L and ; are G5
+  and A5.
 - Extra round: "Play a 3rd up from E." The child builds the interval.
 
 ### 4. Ear Detective
@@ -333,7 +336,7 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   25 | Melodies with 2nds and 3rds             | Listen: circle the melody                       | Ear Detective     | Idea   |
 |   26 | 2nds and 3rds                           | Color areas by interval                         | Color by Note     | Built  |
 |   27 | Staccato and Legato Melodies            | Listen: circle the melody                       | Ear Detective     | Idea   |
-|   28 | Same and Different                      | Same or different intervals                     | Interval Hop      | Idea   |
+|   28 | Same and Different                      | Same or different intervals                     | Interval Hop      | Built  |
 |   29 | Left Hand and Right Hand                | Color the hand, trace the slur, play            | Together or Apart | Idea   |
 |   30 | C Position                              | Line from letter to staff note                  | Note Snap         | Idea   |
 |   31 | Harmonic Intervals                      | Circle notes played together                    | Together or Apart | Idea   |
@@ -352,7 +355,7 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   44 | 5ths                                    | Circle each 5th                                 | Interval Hop      | Built  |
 |   45 | 4ths and 5ths                           | Color areas by interval                         | Color by Note     | Built  |
 |   46 | Melodies with 2nds, 3rds, 4ths and 5ths | Listen: circle the melody                       | Ear Detective     | Idea   |
-|   47 | Same and Different                      | Same or different intervals                     | Interval Hop      | Idea   |
+|   47 | Same and Different                      | Same or different intervals                     | Interval Hop      | Built  |
 |   48 | C Position and Middle C Position        | Color areas A–G (Market)                        | Color by Note     | Built  |
 
 When a game ships, change its pages' status to **Built** and update the

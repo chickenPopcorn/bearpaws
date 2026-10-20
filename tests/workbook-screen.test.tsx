@@ -222,6 +222,29 @@ describe("workbook page", () => {
     expect(text(".workbook-hint")).toBe("Yes! That is a 3rd: red.");
   });
 
+  it("takes Same or Different under a box's bottom card", async () => {
+    await render({ page: page(47) });
+    expect(text(".workbook-prompt")).toBe("Play the top card, left then right");
+    await tap(67);
+    await tap(60);
+    expect(text(".workbook-hint")).toBe(
+      "Now play the bottom card, left then right.",
+    );
+    await tap(67);
+    await tap(62);
+    expect(text(".workbook-prompt")).toBe("Same or different? Press G5 or A5");
+    // A5 is Different: a 5th and a 4th.
+    await tap(81);
+    expect(text(".workbook-hint")).toBe(
+      "Yes! A 5th and a 4th: Clara Schumann-Cat.",
+    );
+    expect(
+      container.querySelectorAll(".workbook-area title")[1].textContent,
+    ).toBe("TREBLE CLEF G then TREBLE CLEF D, Different circled red");
+    // Only the bottom cards print the answers.
+    expect(container.querySelectorAll(".workbook-choice")).toHaveLength(8);
+  });
+
   it("takes a How far answer on the answer keys and circles it", async () => {
     await render({ page: page(41) });
     expect(text(".workbook-prompt")).toBe(

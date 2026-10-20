@@ -25,6 +25,7 @@ import {
   findPrompt,
   letterName,
   namePrompt,
+  rightAnswer,
   prompt,
   stepColors,
   pageAfter,
@@ -36,6 +37,7 @@ import {
   type ControlAction,
   type FindPage,
   type NamePage,
+  type TwinsPage,
   type HopPage,
   type IntervalPage,
   type NotePage,
@@ -46,6 +48,8 @@ const page = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
 const intervals = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as IntervalPage;
+const twins = (number: number) =>
+  WORKBOOK_PAGES.find((p) => p.page === number) as TwinsPage;
 const named = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NamePage;
 const find = (number: number) =>
@@ -67,12 +71,15 @@ const findPages = WORKBOOK_PAGES.filter(
 const namePages = WORKBOOK_PAGES.filter(
   (p): p is NamePage => p.game === "interval-name",
 );
+const twinPages = WORKBOOK_PAGES.filter(
+  (p): p is TwinsPage => p.game === "interval-twins",
+);
 
 describe("workbook pages", () => {
   it("lists the built pages in book order", () => {
     expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([
-      4, 7, 8, 9, 10, 11, 12, 13, 14, 19, 20, 21, 23, 24, 26, 33, 36, 37, 38,
-      39, 40, 41, 42, 43, 44, 45, 48,
+      4, 7, 8, 9, 10, 11, 12, 13, 14, 19, 20, 21, 23, 24, 26, 28, 33, 36, 37,
+      38, 39, 40, 41, 42, 43, 44, 45, 47, 48,
     ]);
   });
 
@@ -82,9 +89,13 @@ describe("workbook pages", () => {
         ...p.steps.flatMap((s) => s.pitches),
         ...(p.areas ?? []).map((a) => a.pitch),
       ]),
-      ...[...intervalPages, ...hopPages, ...findPages, ...namePages].flatMap(
-        (p) => p.areas.flatMap((a) => a.notes),
-      ),
+      ...[
+        ...intervalPages,
+        ...hopPages,
+        ...findPages,
+        ...namePages,
+        ...twinPages,
+      ].flatMap((p) => p.areas.flatMap((a) => a.notes)),
     ]) {
       expect(zoneOf(pitch)).toBe("play");
       expect(pitch).toBeGreaterThanOrEqual(PLAY_ZONE[0]);
@@ -234,7 +245,7 @@ describe("workbook pages", () => {
     expect(pageAfter(page(7))?.page).toBe(8);
     expect(pageBefore(page(10))?.page).toBe(9);
     expect(pageAfter(page(12))?.page).toBe(13);
-    expect(pageBefore(page(48))?.page).toBe(45);
+    expect(pageBefore(page(48))?.page).toBe(47);
     expect(pageAfter(page(21))?.page).toBe(23);
     expect(pageAfter(hop(19))?.page).toBe(20);
     expect(pageAfter(page(48))).toBeUndefined();
@@ -576,6 +587,97 @@ describe("Interval Hop Find pages", () => {
     ]);
     expect(findPrompt(find(20))).toBe("Is it a 2nd? Play it, or press Skip");
     expect(SKIP_KEY).toBe(79);
+  });
+});
+
+describe("Same and Different pages", () => {
+  const held = (...pitches: number[]) => new Set(pitches);
+  const boxes = (number: number) => {
+    const { areas } = twins(number);
+    return [0, 2, 4, 6].map(
+      (i) => `${areas[i].notes.join(">")} ${areas[i + 1].notes.join(">")}`,
+    );
+  };
+  const play = (game: IntervalGame, time: number) => {
+    const [first, second] = game.page.areas[game.current!].notes;
+    game.play(first, time, held(first));
+    return game.play(second, time + 500, held(second));
+  };
+
+  it("has each box's two cards as printed", () => {
+    expect(boxes(28)).toEqual([
+      "60>64 60>62",
+      "62>60 62>60",
+      "60>57 60>57",
+      "59>60 57>60",
+    ]);
+    expect(boxes(47)).toEqual([
+      "67>60 67>62",
+      "67>65 67>65",
+      "55>50 55>50",
+      "55>53 55>52",
+    ]);
+    // Boxes 1 and 4 differ, 2 and 3 are the same, on both pages.
+    for (const p of twinPages)
+      expect([1, 3, 5, 7].map((i) => rightAnswer(p, i))).toEqual([
+        "Different",
+        "Same",
+        "Same",
+        "Different",
+      ]);
+  });
+
+  it("words the page with its characters", () => {
+    expect(intervalInstruction(twins(28).steps[0])).toBe(
+      "Circle Beethoven Bear if the intervals are the same. Circle Mozart Mouse if the intervals are different.",
+    );
+    expect(twins(47).characters).toEqual({
+      same: "Haydn Hippo",
+      different: "Clara Schumann-Cat",
+    });
+  });
+
+  it("plays the top card, the bottom card, then takes Same or Different", () => {
+    const p = twins(28);
+    const game = new IntervalGame(p);
+    expect(game.order).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(namePrompt(game, p.areas[0])).toBe(
+      "Play the top card, left then right",
+    );
+    expect(game.answer("Same")).toEqual({ kind: "play-first" });
+    const first = play(game, 0);
+    expect(intervalFeedback(p, first, p.areas[0])).toBe(
+      "Now play the bottom card, left then right.",
+    );
+    expect(game.lastHop).toMatchObject({ from: 60, to: 64 });
+    expect(namePrompt(game, p.areas[1])).toBe(
+      "Play the bottom card, left then right",
+    );
+    const second = play(game, 2000);
+    expect(intervalFeedback(p, second, p.areas[1])).toBe(
+      "Same or different? Same is G5, Different is A5.",
+    );
+    const wrong = game.answer("Same");
+    expect(intervalFeedback(p, wrong, p.areas[1])).toBe(
+      "Look again: count how far apart the notes on each card are.",
+    );
+    const right = game.answer("Different");
+    expect(intervalFeedback(p, right, p.areas[1])).toBe(
+      "Yes! A 3rd and a 2nd: Mozart Mouse.",
+    );
+    expect(game.answers.get(1)).toBe("Different");
+    play(game, 4000);
+    play(game, 6000);
+    expect(intervalFeedback(p, game.answer("Same"), p.areas[3])).toBe(
+      "Yes! Both are 2nds: Beethoven Bear.",
+    );
+    let time = 8000;
+    for (const answer of ["Same", "Different"]) {
+      play(game, (time += 2000));
+      play(game, (time += 2000));
+      game.answer(answer);
+    }
+    expect(game.finished).toBe(true);
   });
 });
 
