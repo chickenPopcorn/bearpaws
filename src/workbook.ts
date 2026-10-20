@@ -1265,7 +1265,8 @@ export class IntervalGame {
       return { kind: "wrong-answer", choice };
     this.answers.set(index, choice);
     this.answering = false;
-    return this.paint(index);
+    // The card hopped as it was played; the answer only paints it.
+    return this.paint(index, false);
   }
   /**
    * A card played as written: painted; on a How far page, to answer; on a
@@ -1280,6 +1281,7 @@ export class IntervalGame {
       this.next();
       return { kind: "played-first" };
     }
+    this.hop(index);
     this.answering = true;
     this.pressed.clear();
     return { kind: "played" };
@@ -1306,9 +1308,9 @@ export class IntervalGame {
   hint() {
     if (!this.finished) this.letters = true;
   }
-  private paint(index: number): IntervalOutcome {
+  private paint(index: number, hop = true): IntervalOutcome {
     this.painted.set(index, this.page.steps[this.step].crayon);
-    this.hop(index);
+    if (hop) this.hop(index);
     this.next();
     return { kind: "painted", finished: this.finished };
   }
@@ -1376,18 +1378,21 @@ export function intervalFeedback(
 ): string | null {
   switch (outcome.kind) {
     case "painted": {
-      if (outcome.finished || !area) return doneText(page);
+      if (!area) return doneText(page);
+      // An answer page's last answer is praised too, before the page ends.
+      const done = outcome.finished ? ` ${doneText(page)}` : "";
       if (page.game === "interval-name") {
         const size = intervalSize(area.notes);
-        return `Yes! ${size}: that is a ${intervalName(size)}.`;
+        return `Yes! ${size}: that is a ${intervalName(size)}.${done}`;
       }
       if (page.game === "interval-twins") {
         const top = page.areas[page.areas.indexOf(area) - 1],
           [a, b] = [top, area].map((card) => intervalSize(card.notes));
         return a === b
-          ? `Yes! Both are ${intervalName(a)}s: ${page.characters.same}.`
-          : `Yes! A ${intervalName(a)} and a ${intervalName(b)}: ${page.characters.different}.`;
+          ? `Yes! Both are ${intervalName(a)}s: ${page.characters.same}.${done}`
+          : `Yes! A ${intervalName(a)} and a ${intervalName(b)}: ${page.characters.different}.${done}`;
       }
+      if (outcome.finished) return doneText(page);
       const step = page.steps.find((s) => stepColors(s, area))!;
       if (step.name) return `Yes! That is a ${step.name}: ${step.crayon}.`;
       if ("up" in step.match)
