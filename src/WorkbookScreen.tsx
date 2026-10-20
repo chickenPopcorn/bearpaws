@@ -334,7 +334,8 @@ export const Workbook = memo(function Workbook({
     areas: PictureArea[] | undefined,
     current: number | undefined,
     hop: Hop | undefined,
-    stickers: ReadonlyMap<number, KeyLabel> | undefined;
+    stickers: ReadonlyMap<number, KeyLabel> | undefined,
+    summary: string | undefined;
   if (game instanceof HopGame) {
     const { page } = game;
     lines = [
@@ -400,6 +401,9 @@ export const Workbook = memo(function Workbook({
       }));
       hop = game.lastHop ?? NO_HOP;
       stickers = twins ? TWIN_STICKERS : answerStickers(page.choices);
+      // A box is one answer, under its bottom card.
+      if (twins)
+        summary = `Picture with ${page.areas.length / 2} boxes, ${game.answers.size} answered`;
     } else {
       now =
         current === undefined ? undefined : intervalPrompt(page.areas[current]);
@@ -490,7 +494,12 @@ export const Workbook = memo(function Workbook({
         )}
       {areas && (
         <section className="panel workbook-picture-panel" aria-label="Picture">
-          <WorkbookPicture areas={areas} current={current} {...page.picture} />
+          <WorkbookPicture
+            areas={areas}
+            current={current}
+            summary={summary}
+            {...page.picture}
+          />
         </section>
       )}
       <div className="roll workbook-roll">
