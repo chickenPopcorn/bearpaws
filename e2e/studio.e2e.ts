@@ -64,7 +64,9 @@ test("searching finds a song in another book", async ({ page }) => {
     "true",
   );
   await expect(song(page, "Dancing Raindrops")).toBeHidden();
-  await expect(page.getByText("No matches in this book.")).toBeVisible();
+  await expect(
+    page.locator("#library-recital-3").getByText("No matches in this book."),
+  ).toBeVisible();
 
   await song(page, "Five O'Clock").click();
   await expect(songTitle(page)).toHaveText(/Five O'Clock/);

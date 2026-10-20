@@ -89,6 +89,8 @@ export class Studio {
   lastVelocity = 0;
   revision = 0;
   listeners = new Set<() => void>();
+  /** Told of every key that goes down or comes up, as the workbook needs. */
+  private keyListeners = new Set<(pitch: number, down: boolean) => void>();
   lastSave = 0;
   /** The current song's record as last written, without its stamp. */
   private savedProgress = "";
@@ -312,6 +314,11 @@ export class Studio {
     return () => this.listeners.delete(listener);
   };
   snapshot = () => this.revision;
+  /** Follow key presses and releases from the piano, the screen and shortcuts. */
+  onKey = (listener: (pitch: number, down: boolean) => void) => {
+    this.keyListeners.add(listener);
+    return () => this.keyListeners.delete(listener);
+  };
   emit() {
     this.revision++;
     for (const l of this.listeners) l();
@@ -914,7 +921,14 @@ export class Studio {
       event = Math.min(now, this.audio.eventTime(timestamp)),
       mapped = this.transport.eventAt(event);
     if (wasPlaying) this.tick();
+    const before = this.input.down;
     const edge = this.input.message(data);
+    if (this.keyListeners.size) {
+      if (edge) for (const l of this.keyListeners) l(edge.pitch, true);
+      for (const pitch of before)
+        if (!this.input.down.has(pitch))
+          for (const l of this.keyListeners) l(pitch, false);
+    }
     if (edge) {
       this.lastVelocity = edge.velocity;
       // Only presses during playback that counts keep practice time going;

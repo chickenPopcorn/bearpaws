@@ -33,6 +33,26 @@ The files have separate left/right tracks, one full silent count-in bar, tempo,
 and finger numbers as text events. The count-in keeps musical downbeats aligned
 with barlines. General MIDI players may ignore these text events.
 
+## Music Workbook 3
+
+The library's last section is _Music for Little Mozarts, Music Workbook 3_.
+Each page is a game played on the piano: pages 7, 9 and 11 (Crayon Keys) paint
+the named keys, and page 10 (Color by Note) paints each area of a picture by
+its note. The steps go in the book's order; a wrong key gets a hint, and after
+two misses the letter names appear on the keys. A finished page gets a date
+stamp, kept in this browser.
+
+Once a page is open, the piano does everything, so the child never needs the
+mouse:
+
+- **C2**: hint (letter names on the keys)
+- **D2**: previous page; hold 2 seconds to leave the workbook
+- **E2**: next page
+- **F2**: hold 2 seconds to start the page over
+
+The page's notes are between C3 and C5. The computer shortcuts also play
+them. See [Workbook games](workbook-games.md) for every page's plan.
+
 ## Score, waterfall and shortcuts
 
 The sheet-music timeline above the waterfall follows the current bar. Accepted

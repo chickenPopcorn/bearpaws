@@ -1724,6 +1724,106 @@ footer a {
     display: none;
   }
 }
+/* Music Workbook 3 pages: src/WorkbookScreen.tsx. */
+.workbook-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.workbook-steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+.workbook-steps li[aria-current="step"] {
+  color: var(--text);
+  font-weight: 600;
+}
+.workbook-steps li.done {
+  text-decoration: line-through;
+  text-decoration-color: #b4aec4;
+}
+.workbook-crayon {
+  display: inline-block;
+  flex: none;
+  width: 28px;
+  height: 10px;
+  border-radius: 3px 6px 6px 3px;
+}
+.workbook-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.workbook-hint {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0;
+  min-height: 29px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.workbook-keyboard {
+  display: block;
+  width: 100%;
+  height: 148px;
+}
+.workbook-picture-panel {
+  padding: var(--space-2);
+}
+.workbook-picture {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+}
+.workbook-area path {
+  fill: #fff;
+  stroke: #8f88a0;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition: fill 0.4s;
+}
+.workbook-note {
+  font-family: "Bravura";
+  fill: var(--text);
+}
+.workbook-stamp-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+.workbook-stamp {
+  width: 56px;
+  margin-left: 0;
+}
+.workbook-stamp.celebrate {
+  animation: workbook-stamp-in 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+@keyframes workbook-stamp-in {
+  0% {
+    transform: scale(1.8) rotate(-30deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(-10deg);
+    opacity: 1;
+  }
+}
+.workbook-stamp-date {
+  font-family: var(--score-font);
+  font-size: var(--text-xs);
+  letter-spacing: 0.05em;
+  color: #b07a1c;
+}
+.workbook-keys-help {
+  margin-bottom: 0;
+}
 @media (prefers-reduced-motion: reduce) {
   .tabs-indicator,
   .tabs button {
@@ -1734,8 +1834,12 @@ footer a {
   }
   .bear-paw-wave,
   .bear-paw-digit,
-  .practice-day.celebrate .practice-star {
+  .practice-day.celebrate .practice-star,
+  .workbook-stamp.celebrate {
     animation: none;
+  }
+  .workbook-area path {
+    transition: none;
   }
   .practice-ring-done {
     transition: none;

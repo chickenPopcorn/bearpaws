@@ -2276,3 +2276,29 @@ describe("metronome", () => {
     expect(studio.practice.missed).toEqual(new Set());
   });
 });
+
+describe("key listeners", () => {
+  it("tells listeners each key going down and coming up, once", () => {
+    const studio = create();
+    const keys: [number, boolean][] = [];
+    const stop = studio.onKey((pitch, down) => keys.push([pitch, down]));
+    midi(studio, [0x90, 36, 80]);
+    // A repeated note-on is not a new press.
+    midi(studio, [0x90, 36, 80]);
+    midi(studio, [0x80, 36, 0]);
+    // Releasing a key that is not down tells nobody.
+    midi(studio, [0x80, 60, 0]);
+    // A key let go under the pedal still comes up.
+    midi(studio, [0xb0, 64, 127]);
+    midi(studio, [0x90, 62, 70]);
+    midi(studio, [0x90, 62, 0]);
+    stop();
+    midi(studio, [0x90, 40, 80]);
+    expect(keys).toEqual([
+      [36, true],
+      [36, false],
+      [62, true],
+      [62, false],
+    ]);
+  });
+});

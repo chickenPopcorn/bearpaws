@@ -37,8 +37,8 @@ npm run format         # Format source, tests and documentation
 `npm run test:e2e` builds the app into `e2e/.dist`, serves it on port 4174
 and drives it in Chromium with Playwright: Google sign-in and sign-out, the
 library and search, settings from and to the account, Listen and Wait for me
-practice, the course CD's story, a library that fails to load, and the one
-studio tab. The first run needs the browser: `npx playwright install
+practice, the course CD's story, a workbook page, a library that fails to
+load, and the one studio tab. The first run needs the browser: `npx playwright install
 chromium`. The build talks to a fake Supabase project that
 `e2e/fake-supabase.ts` answers inside the browser, with the three fixture
 songs as the library, so the tests need no account or network. Like Storage, the fake answers library requests only when they carry
@@ -69,5 +69,7 @@ check; it can also be run by hand from the Actions tab.
 - `src/App.tsx`: Practice studio: library, practice controls, piano and score.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.
+- `src/workbook.ts`: Music Workbook 3's pages, the paint game, the piano's control keys and page stamps.
+- `src/WorkbookScreen.tsx`, `src/WorkbookPicture.tsx`, `src/workbookKeyboard.ts`: a workbook page, its Color by Note picture and its three-zone keyboard.
 
 Once audio is unlocked, AudioContext time is the musical clock; MIDI event timestamps are mapped from the performance clock into it. Transport position is derived from anchors and speed, never accumulated frame deltas. Rendering, audio scheduling and scoring use that timeline. Audio uses a short look-ahead and cancels on discontinuities. Timestamp history preserves event positions across speed changes; queued events from before a seek/song/loop reset are excluded from the new passage. Rhythm reconciles a delayed in-window timestamp even if the current clock already marked that note missed.
