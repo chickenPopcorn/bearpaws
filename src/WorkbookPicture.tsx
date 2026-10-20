@@ -137,3 +137,105 @@ export function WorkbookPicture({
     </svg>
   );
 }
+
+/** A Crayon Keys page's staff: one staff, or a grand staff with a brace. */
+export function WorkbookStaff({
+  notes,
+  painted,
+}: {
+  notes: readonly { pitch: number; clef: Clef }[];
+  painted: ReadonlyMap<number, Crayon>;
+}) {
+  // The studio score's spacing: a staff space of 10.
+  const half = 5,
+    grand = new Set(notes.map((n) => n.clef)).size > 1,
+    bottoms = { treble: 70, bass: grand ? 170 : 70 },
+    left = 34,
+    spacing = 80,
+    width = left + 70 + notes.length * spacing,
+    clefs: Clef[] = grand ? ["treble", "bass"] : [notes[0].clef];
+  const yOf = (pitch: number, clef: Clef) =>
+    bottoms[clef] -
+    (pitchPosition(pitch, clef === "treble" ? "right" : "left").step -
+      BOTTOM_LINE_STEP[clef]) *
+      half;
+  return (
+    <svg
+      className="workbook-staff"
+      viewBox={`0 0 ${width} ${grand ? 210 : 110}`}
+      role="img"
+      aria-label={`Staff: ${notes.map((n) => `${bookName(n.pitch)}${painted.has(n.pitch) ? ` (${painted.get(n.pitch)})` : ""}`).join(", ")}`}
+    >
+      <g className="sheet-staff-line" fill="none">
+        {clefs.flatMap((clef) =>
+          [0, 1, 2, 3, 4].map((line) => (
+            <line
+              key={`${clef}${line}`}
+              x1={left}
+              x2={width - 10}
+              y1={bottoms[clef] - line * 2 * half}
+              y2={bottoms[clef] - line * 2 * half}
+            />
+          )),
+        )}
+        {grand && (
+          <>
+            <line x1={left} x2={left} y1={30} y2={170} />
+            <path d="M 27 30 Q 17 40 23 72 Q 27 94 18 100 Q 27 106 23 128 Q 17 160 27 170" />
+          </>
+        )}
+      </g>
+      {clefs.map((clef) => (
+        <text
+          key={clef}
+          className="sheet-clef"
+          x={left + 6}
+          y={clef === "treble" ? bottoms.treble - 10 : bottoms.bass - 30}
+          fontSize={40}
+        >
+          {clef === "treble" ? "" : ""}
+        </text>
+      ))}
+      {notes.map(({ pitch, clef }, i) => {
+        const x = left + 70 + i * spacing,
+          y = yOf(pitch, clef),
+          crayon = painted.get(pitch),
+          { step } = pitchPosition(pitch, clef === "treble" ? "right" : "left");
+        const ledgers: number[] = [];
+        for (let s = BOTTOM_LINE_STEP[clef] - 2; s >= step; s -= 2)
+          ledgers.push(bottoms[clef] - (s - BOTTOM_LINE_STEP[clef]) * half);
+        for (let s = BOTTOM_LINE_STEP[clef] + 10; s <= step; s += 2)
+          ledgers.push(bottoms[clef] - (s - BOTTOM_LINE_STEP[clef]) * half);
+        return (
+          <g key={i}>
+            {crayon && (
+              // The crayon over the note, as a child colors it in the book.
+              <ellipse
+                className="workbook-staff-paint"
+                cx={x + 7}
+                cy={y}
+                rx={15}
+                ry={12}
+                style={{ fill: CRAYONS[crayon] }}
+              />
+            )}
+            <g className="sheet-staff-line">
+              {ledgers.map((ledger) => (
+                <line
+                  key={ledger}
+                  x1={x - 6}
+                  x2={x + 20}
+                  y1={ledger}
+                  y2={ledger}
+                />
+              ))}
+            </g>
+            <text className="workbook-note" x={x} y={y} fontSize={40}>
+              {""}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}

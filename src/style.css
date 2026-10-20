@@ -1781,6 +1781,20 @@ footer a {
   height: auto;
   max-height: 520px;
 }
+.workbook-staff-panel {
+  padding: var(--space-3) var(--space-4);
+}
+.workbook-staff {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 760px;
+  max-height: 300px;
+  margin: 0 auto;
+}
+.workbook-staff-paint {
+  opacity: 0.85;
+}
 .workbook-area path {
   fill: #fff;
   stroke: #8f88a0;

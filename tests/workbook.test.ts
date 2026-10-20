@@ -27,7 +27,7 @@ const page = (number: number) => WORKBOOK_PAGES.find((p) => p.page === number)!;
 describe("workbook pages", () => {
   it("lists the built pages in book order", () => {
     expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([
-      4, 7, 8, 9, 10, 11, 12, 21, 48,
+      4, 7, 8, 9, 10, 11, 12, 14, 21, 36, 37, 38, 42, 48,
     ]);
   });
 
@@ -50,6 +50,19 @@ describe("workbook pages", () => {
       expect(new Set(steps).size).toBe(steps.length);
       expect(new Set(p.areas!.map((a) => a.pitch))).toEqual(new Set(steps));
     }
+  });
+
+  it("puts exactly the steps' notes on a Crayon Keys staff", () => {
+    for (const p of WORKBOOK_PAGES.filter((p) => p.staff)) {
+      const steps = p.steps.flatMap((s) => s.pitches);
+      expect(p.staff!.map((n) => n.pitch).sort()).toEqual(steps.sort());
+    }
+    // Page 36's staff, left to right, as printed.
+    expect(page(36).staff!.map((n) => n.pitch)).toEqual([52, 50, 53, 55, 48]);
+    expect(page(37).staff).toEqual([
+      { pitch: 64, clef: "treble" },
+      { pitch: 60, clef: "bass" },
+    ]);
   });
 
   it("has each picture's areas as printed", () => {
@@ -142,6 +155,24 @@ describe("workbook pages", () => {
     ]);
   });
 
+  it("words staff pages and page 14 as the book does", () => {
+    expect(page(36).steps.map((s) => instruction(page(36), s))[0]).toBe(
+      "Color the BASS CLEF C on the keyboard and staff green.",
+    );
+    expect(page(37).steps.map((s) => instruction(page(37), s))).toEqual([
+      "Color the C on the keyboard and staff green.",
+      "Color the E on the keyboard and staff red.",
+    ]);
+    expect(instruction(page(14), page(14).steps[0])).toBe(
+      "Color C, D, E, F and G from the Left Hand C POSITION blue.",
+    );
+    expect(prompt(page(14), page(14).steps[0])).toBe(
+      "Find Left Hand C Position: C D E F G",
+    );
+    expect(prompt(page(38), page(38).steps[0])).toBe("Play the D on the staff");
+    expect(prompt(page(42), page(42).steps[0])).toBe("Find TREBLE CLEF F");
+  });
+
   it("prompts by clef, or by letter where the book uses letters", () => {
     expect(prompt(page(9), page(9).steps[1])).toBe("Find BASS CLEF D");
     expect(prompt(page(12), page(12).steps[0])).toBe("Play TREBLE CLEF E");
@@ -152,7 +183,8 @@ describe("workbook pages", () => {
     expect(pageBefore(page(4))).toBeUndefined();
     expect(pageAfter(page(7))?.page).toBe(8);
     expect(pageBefore(page(10))?.page).toBe(9);
-    expect(pageAfter(page(12))?.page).toBe(21);
+    expect(pageAfter(page(12))?.page).toBe(14);
+    expect(pageBefore(page(48))?.page).toBe(42);
     expect(pageAfter(page(48))).toBeUndefined();
   });
 
@@ -270,6 +302,15 @@ describe("PaintGame", () => {
     expect(p.areas!.every((a) => game.painted.has(a.pitch))).toBe(true);
   });
 
+  it("paints page 14's five keys in any order before finishing", () => {
+    const game = new PaintGame(page(14));
+    for (const pitch of [55, 48, 52, 50]) game.play(pitch);
+    expect(game.finished).toBe(false);
+    expect(game.left).toEqual([53]);
+    expect(game.play(53)).toMatchObject({ kind: "painted", finished: true });
+    expect(game.painted.size).toBe(5);
+  });
+
   it("finishes a letter step once each of its notes is played", () => {
     const game = new PaintGame(page(21));
     expect(game.play(48)).toEqual({
@@ -337,6 +378,26 @@ describe("feedback", () => {
         undefined,
       ),
     ).toBe("Page 9 is done. Next page: E2.");
+  });
+  it("counts down a step of several letters", () => {
+    const step = page(14).steps[0];
+    expect(
+      feedback(
+        page(14),
+        { kind: "painted", pitch: 48, left: 4, finished: false },
+        step,
+      ),
+    ).toBe("Yes! 4 more to find.");
+    expect(feedback(page(14), { kind: "again", pitch: 48 }, step)).toBe(
+      "That C is painted.",
+    );
+    expect(
+      feedback(
+        page(14),
+        { kind: "wrong", pitch: 57, lettersShown: false },
+        step,
+      ),
+    ).toBe("That is A. Look for C, D, E, F or G.");
   });
   it("sends the child to a letter's other note", () => {
     const c = page(21).steps[0];
