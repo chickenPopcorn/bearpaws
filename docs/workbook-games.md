@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app |  4/45 |
+| Game built in the app |  9/45 |
 
 By game, in the suggested build order:
 
@@ -33,7 +33,8 @@ By game, in the suggested build order:
 Games 1 and 2 share one engine (play a note, paint it), so building both first
 covers 17 pages. Interval Hop adds the most pages of any single game.
 
-**Built so far:** pages 7, 9 and 11 (Crayon Keys) and page 10 (Color by Note),
+**Built so far:** pages 7, 9 and 11 (Crayon Keys) and pages 4, 8, 10, 12, 21
+and 48 (Color by Note),
 in `src/workbook.ts` (pages, `PaintGame`, `ControlKeys`), `src/WorkbookScreen.tsx`,
 `src/WorkbookPicture.tsx` and `src/workbookKeyboard.ts`. Music Workbook 3 is the
 last section of the library.
@@ -195,6 +196,9 @@ is full.
 - Note pages (4, 8, 10, 12, 21, 48): one note per area. Pages 4 and 48 have
   seven colors (A–G): page 4 reviews Middle C Position, and page 48 is the
   end-of-book challenge.
+- Pages 4, 21 and 48 name notes by letter only ("an F"). Such a step can hold
+  a note in each clef (F3 and F4); it is done once every one of them is
+  played, and "Yes! Now find the other F." sends the child to the next.
 - Interval pages (26, 33, 45): each area holds two notes. The child plays both;
   harmonic intervals must be played together, melodic ones one after the
   other. When both notes are right, the area paints in its interval's crayon
@@ -283,15 +287,15 @@ hand C–G). No timer: the page is done when every line is drawn.
 
 | Page | Title                                   | Paper task                                      | Game              | Status |
 | ---: | --------------------------------------- | ----------------------------------------------- | ----------------- | ------ |
-|    4 | Middle C Position Review                | Color areas by note (A–G, Middle C Position)    | Color by Note     | Idea   |
+|    4 | Middle C Position Review                | Color areas by note (A–G, Middle C Position)    | Color by Note     | Built  |
 |    5 | Left Hand and Right Hand                | Color the hand, play                            | Together or Apart | Idea   |
 |    6 | Note Values                             | Line from note to counts (4/4 or 3/4)           | Hold It!          | Idea   |
 |    7 | Bass Clef C                             | Color Middle C and Bass Clef C on keyboard      | Crayon Keys       | Built  |
-|    8 | Middle C and Bass Clef C                | Color areas by note                             | Color by Note     | Idea   |
+|    8 | Middle C and Bass Clef C                | Color areas by note                             | Color by Note     | Built  |
 |    9 | Bass Clef D                             | Color Treble D and Bass D on keyboard           | Crayon Keys       | Built  |
 |   10 | Treble Clef D and Bass Clef D           | Color areas by note                             | Color by Note     | Built  |
 |   11 | Bass Clef E                             | Color Treble E and Bass E on keyboard           | Crayon Keys       | Built  |
-|   12 | Treble Clef E and Bass Clef E           | Color areas by note                             | Color by Note     | Idea   |
+|   12 | Treble Clef E and Bass Clef E           | Color areas by note                             | Color by Note     | Built  |
 |   13 | Steps, Skips and Repeats                | Circle steps, skips, repeats                    | Interval Hop      | Idea   |
 |   14 | C Position for the Left Hand            | Color LH C Position C–G on keyboard             | Crayon Keys       | Idea   |
 |   15 | Staccato                                | Circle staccato notes                           | Hold It!          | Idea   |
@@ -300,7 +304,7 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   18 | Rhythm Patterns in 4/4 Time             | Listen: circle the clapped rhythm               | Ear Detective     | Idea   |
 |   19 | 2nds                                    | Color G and F; circle 2nds up and down          | Interval Hop      | Idea   |
 |   20 | 2nds                                    | Circle each 2nd                                 | Interval Hop      | Idea   |
-|   21 | C Position                              | Color areas C–G (Talent Show)                   | Color by Note     | Idea   |
+|   21 | C Position                              | Color areas C–G (Talent Show)                   | Color by Note     | Built  |
 |   22 | Rhythm Patterns                         | Listen: circle the clapped rhythm (3/4 and 4/4) | Ear Detective     | Idea   |
 |   23 | 3rds                                    | Color G and E; circle 3rds up and down          | Interval Hop      | Idea   |
 |   24 | 3rds                                    | Circle each 3rd                                 | Interval Hop      | Idea   |
@@ -327,7 +331,7 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   45 | 4ths and 5ths                           | Color areas by interval                         | Color by Note     | Idea   |
 |   46 | Melodies with 2nds, 3rds, 4ths and 5ths | Listen: circle the melody                       | Ear Detective     | Idea   |
 |   47 | Same and Different                      | Same or different intervals                     | Interval Hop      | Idea   |
-|   48 | C Position and Middle C Position        | Color areas A–G (Market)                        | Color by Note     | Idea   |
+|   48 | C Position and Middle C Position        | Color areas A–G (Market)                        | Color by Note     | Built  |
 
 When a game ships, change its pages' status to **Built** and update the
 counts in [Coverage](#coverage).

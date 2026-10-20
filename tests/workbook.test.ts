@@ -11,6 +11,7 @@ import {
   bookName,
   feedback,
   instruction,
+  prompt,
   pageAfter,
   pageBefore,
   readStamps,
@@ -24,13 +25,18 @@ import { workbookKeys } from "../src/workbookKeyboard";
 const page = (number: number) => WORKBOOK_PAGES.find((p) => p.page === number)!;
 
 describe("workbook pages", () => {
-  it("lists pages 7, 9, 10 and 11 in book order", () => {
-    expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([7, 9, 10, 11]);
+  it("lists the built pages in book order", () => {
+    expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([
+      4, 7, 8, 9, 10, 11, 12, 21, 48,
+    ]);
   });
 
   it("keeps every printed note in the play zone, on a white key", () => {
     for (const p of WORKBOOK_PAGES)
-      for (const { pitch } of [...p.steps, ...(p.areas ?? [])]) {
+      for (const pitch of [
+        ...p.steps.flatMap((s) => s.pitches),
+        ...(p.areas ?? []).map((a) => a.pitch),
+      ]) {
         expect(zoneOf(pitch)).toBe("play");
         expect(pitch).toBeGreaterThanOrEqual(PLAY_ZONE[0]);
         expect(pitch).toBeLessThanOrEqual(PLAY_ZONE[1]);
@@ -38,11 +44,80 @@ describe("workbook pages", () => {
       }
   });
 
-  it("gives every Color by Note step an area, and every area a step", () => {
+  it("gives every Color by Note note an area, and every area one step", () => {
     for (const p of WORKBOOK_PAGES.filter((p) => p.game === "color-by-note")) {
-      const steps = new Set(p.steps.map((s) => s.pitch));
-      const areas = new Set(p.areas!.map((a) => a.pitch));
-      expect(areas).toEqual(steps);
+      const steps = p.steps.flatMap((s) => s.pitches);
+      expect(new Set(steps).size).toBe(steps.length);
+      expect(new Set(p.areas!.map((a) => a.pitch))).toEqual(new Set(steps));
+    }
+  });
+
+  it("has each picture's areas as printed", () => {
+    // Areas per note, as read from the book's pages.
+    const counts = (number: number) => {
+      const tally: Record<number, number> = {};
+      for (const { pitch } of page(number).areas!)
+        tally[pitch] = (tally[pitch] ?? 0) + 1;
+      return tally;
+    };
+    expect(counts(4)).toEqual({
+      53: 1,
+      55: 1,
+      57: 2,
+      59: 2,
+      60: 2,
+      62: 6,
+      64: 2,
+      65: 1,
+      67: 1,
+    });
+    expect(counts(8)).toEqual({ 48: 3, 60: 2 });
+    expect(counts(10)).toEqual({ 48: 2, 50: 2, 62: 3 });
+    expect(counts(12)).toEqual({ 48: 2, 50: 2, 52: 2, 64: 2 });
+    expect(counts(21)).toEqual({
+      48: 1,
+      50: 1,
+      52: 1,
+      53: 1,
+      55: 1,
+      60: 1,
+      62: 1,
+      64: 1,
+      65: 1,
+      67: 1,
+    });
+    expect(counts(48)).toEqual({
+      48: 1,
+      50: 2,
+      52: 1,
+      53: 1,
+      55: 1,
+      57: 2,
+      59: 2,
+      60: 2,
+      62: 1,
+      64: 1,
+      65: 1,
+      67: 1,
+    });
+    // Middle C in the bass clef, with its ledger line above the staff.
+    expect(
+      [4, 48].map((n) => page(n).areas!.filter((a) => a.clef === "bass")),
+    ).toEqual([
+      [expect.objectContaining({ pitch: 60 })],
+      [expect.objectContaining({ pitch: 60 })],
+    ]);
+  });
+
+  it("keeps every area inside its picture", () => {
+    for (const p of WORKBOOK_PAGES.filter((p) => p.areas)) {
+      const height = p.picture?.height ?? 300;
+      for (const a of p.areas!) {
+        expect(a.x).toBeGreaterThan(0);
+        expect(a.x).toBeLessThan(640);
+        expect(a.y).toBeGreaterThan(0);
+        expect(a.y).toBeLessThan(height);
+      }
     }
   });
 
@@ -56,13 +131,29 @@ describe("workbook pages", () => {
       "Color the areas containing BASS CLEF D blue.",
       "Color the areas containing BASS CLEF C pink.",
     ]);
+    expect(page(4).steps.map((s) => instruction(page(4), s))).toEqual([
+      "Color the areas containing an A pink.",
+      "Color the areas containing a B green.",
+      "Color the areas containing a C yellow.",
+      "Color the areas containing a D brown.",
+      "Color the areas containing an E red.",
+      "Color the areas containing an F blue.",
+      "Color the areas containing a G orange.",
+    ]);
+  });
+
+  it("prompts by clef, or by letter where the book uses letters", () => {
+    expect(prompt(page(9), page(9).steps[1])).toBe("Find BASS CLEF D");
+    expect(prompt(page(12), page(12).steps[0])).toBe("Play TREBLE CLEF E");
+    expect(prompt(page(21), page(21).steps[3])).toBe("Play every F");
   });
 
   it("finds the built pages before and after a page", () => {
-    expect(pageBefore(page(7))).toBeUndefined();
-    expect(pageAfter(page(7))?.page).toBe(9);
+    expect(pageBefore(page(4))).toBeUndefined();
+    expect(pageAfter(page(7))?.page).toBe(8);
     expect(pageBefore(page(10))?.page).toBe(9);
-    expect(pageAfter(page(11))).toBeUndefined();
+    expect(pageAfter(page(12))?.page).toBe(21);
+    expect(pageAfter(page(48))).toBeUndefined();
   });
 
   it("names notes as the book does", () => {
@@ -106,7 +197,7 @@ describe("zones", () => {
 describe("PaintGame", () => {
   it("paints a Crayon Keys page in step order, then finishes", () => {
     const game = new PaintGame(page(9));
-    expect(game.current).toEqual({ crayon: "yellow", pitch: 62 });
+    expect(game.current).toEqual({ crayon: "yellow", pitches: [62] });
     // The second step's note does not paint yet.
     expect(game.play(50)).toMatchObject({
       kind: "octave",
@@ -116,11 +207,13 @@ describe("PaintGame", () => {
     expect(game.play(62)).toEqual({
       kind: "painted",
       pitch: 62,
+      left: 0,
       finished: false,
     });
     expect(game.play(50)).toEqual({
       kind: "painted",
       pitch: 50,
+      left: 0,
       finished: true,
     });
     expect(game.finished).toBe(true);
@@ -176,6 +269,23 @@ describe("PaintGame", () => {
     expect(game.finished).toBe(true);
     expect(p.areas!.every((a) => game.painted.has(a.pitch))).toBe(true);
   });
+
+  it("finishes a letter step once each of its notes is played", () => {
+    const game = new PaintGame(page(21));
+    expect(game.play(48)).toEqual({
+      kind: "painted",
+      pitch: 48,
+      left: 1,
+      finished: false,
+    });
+    expect(game.step).toBe(0);
+    expect(game.play(48)).toEqual({ kind: "again", pitch: 48 });
+    // The C still to find is below C5.
+    expect(game.play(72)).toMatchObject({ kind: "octave", direction: "lower" });
+    expect(game.play(60)).toMatchObject({ kind: "painted", left: 0 });
+    expect(game.step).toBe(1);
+    expect([...game.painted.values()]).toEqual(["green", "green"]);
+  });
 });
 
 describe("feedback", () => {
@@ -203,22 +313,43 @@ describe("feedback", () => {
   it("says the last page is the last, with no next page to go to", () => {
     expect(
       feedback(
-        page(11),
-        { kind: "painted", pitch: 52, finished: true },
+        page(48),
+        { kind: "painted", pitch: 67, left: 0, finished: true },
         undefined,
       ),
-    ).toBe("Page 11 is done. This is the last page so far.");
-    expect(feedback(page(11), { kind: "finished" }, undefined)).toBe(
-      "Page 11 is done. This is the last page so far.",
+    ).toBe("Page 48 is done. This is the last page so far.");
+    expect(feedback(page(48), { kind: "finished" }, undefined)).toBe(
+      "Page 48 is done. This is the last page so far.",
     );
   });
   it("praises a painted key and finishes the page", () => {
     expect(
-      feedback(p, { kind: "painted", pitch: 62, finished: false }, target),
+      feedback(
+        p,
+        { kind: "painted", pitch: 62, left: 0, finished: false },
+        target,
+      ),
     ).toBe("Yes! Next crayon.");
     expect(
-      feedback(p, { kind: "painted", pitch: 50, finished: true }, undefined),
+      feedback(
+        p,
+        { kind: "painted", pitch: 50, left: 0, finished: true },
+        undefined,
+      ),
     ).toBe("Page 9 is done. Next page: E2.");
+  });
+  it("sends the child to a letter's other note", () => {
+    const c = page(21).steps[0];
+    expect(
+      feedback(
+        page(21),
+        { kind: "painted", pitch: 48, left: 1, finished: false },
+        c,
+      ),
+    ).toBe("Yes! Now find the other C.");
+    expect(feedback(page(21), { kind: "again", pitch: 48 }, c)).toBe(
+      "That C is painted. Find the other C.",
+    );
   });
 });
 

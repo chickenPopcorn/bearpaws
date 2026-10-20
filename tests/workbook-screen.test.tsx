@@ -151,14 +151,14 @@ describe("workbook control keys", () => {
     await tap(40);
     expect(props.onPage).toHaveBeenCalledWith(10);
     await tap(38);
-    expect(props.onPage).toHaveBeenCalledWith(7);
+    expect(props.onPage).toHaveBeenCalledWith(8);
   });
 
   it("says when there is no page before or after", async () => {
-    await render({ page: page(7) });
+    await render({ page: page(4) });
     await tap(38);
     expect(text(".workbook-hint")).toBe("This is the first page so far.");
-    await render({ page: page(11) });
+    await render({ page: page(48) });
     await tap(40);
     expect(text(".workbook-hint")).toBe("This is the last page so far.");
     expect(props.onPage).not.toHaveBeenCalled();

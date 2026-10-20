@@ -331,16 +331,21 @@ describe("Music Workbook 3", () => {
       groupContent("workbook-3").querySelectorAll<HTMLButtonElement>(".song"),
     );
     expect(pages.map((page) => page.firstChild!.textContent)).toEqual([
+      "Page 4 · Middle C Position Review",
       "Page 7 · Bass Clef C",
+      "Page 8 · Middle C and Bass Clef C",
       "Page 9 · Bass Clef D",
       "Page 10 · Treble Clef D and Bass Clef D",
       "Page 11 · Bass Clef E",
+      "Page 12 · Treble Clef E and Bass Clef E",
+      "Page 21 · C Position",
+      "Page 48 · C Position and Middle C Position",
     ]);
-    expect(pages[1].querySelector("small")!.textContent).toBe(
+    expect(pages[3].querySelector("small")!.textContent).toBe(
       "Crayon Keys · Done OCT 20 2026",
     );
-    expect(pages[2].querySelector("small")!.textContent).toBe("Color by Note");
-    await click(pages[1]);
+    expect(pages[4].querySelector("small")!.textContent).toBe("Color by Note");
+    await click(pages[3]);
     expect(book.onSelect).toHaveBeenCalledWith(9);
   });
 

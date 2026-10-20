@@ -15,9 +15,9 @@ import {
   GAME_NAMES,
   PaintGame,
   WORKBOOK_TITLE,
-  bookName,
   feedback,
   instruction,
+  prompt,
   pageAfter,
   pageBefore,
   stampText,
@@ -236,7 +236,11 @@ export const Workbook = memo(function Workbook({
       </ol>
       {page.areas && (
         <section className="panel workbook-picture-panel" aria-label="Picture">
-          <WorkbookPicture areas={page.areas} painted={painted} />
+          <WorkbookPicture
+            areas={page.areas}
+            painted={painted}
+            {...page.picture}
+          />
         </section>
       )}
       <div className="roll workbook-roll">
@@ -249,9 +253,7 @@ export const Workbook = memo(function Workbook({
                 aria-hidden="true"
               />
             )}
-            {current
-              ? `${page.game === "crayon-keys" ? "Find" : "Play"} ${bookName(current.pitch)}`
-              : `Page ${page.page} is done`}
+            {current ? prompt(page, current) : `Page ${page.page} is done`}
           </span>
           <div className="roll-actions">
             <span>
