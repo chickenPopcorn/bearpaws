@@ -38,11 +38,21 @@ import {
   type FindPage,
   type NamePage,
   type TwinsPage,
+  type HoldPage,
   type HopPage,
   type IntervalPage,
   type NotePage,
 } from "../src/workbook";
 import { workbookKeys } from "../src/workbookKeyboard";
+import {
+  BEAT_MS,
+  FULL_MS,
+  HoldGame,
+  STACCATO_MS,
+  cardCounts,
+  holdFeedback,
+  holdPrompt,
+} from "../src/workbookHold";
 
 const page = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
@@ -77,9 +87,11 @@ const twinPages = WORKBOOK_PAGES.filter(
 
 describe("workbook pages", () => {
   it("lists the built pages in book order", () => {
-    expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([
-      4, 7, 8, 9, 10, 11, 12, 13, 14, 19, 20, 21, 23, 24, 26, 28, 33, 36, 37,
-      38, 39, 40, 41, 42, 43, 44, 45, 47, 48,
+    const pages = WORKBOOK_PAGES.map((p) => p.page);
+    expect(pages).toEqual([...pages].sort((a, b) => a - b));
+    expect(pages).toEqual([
+      4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 23, 24, 26, 28, 33,
+      36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47, 48,
     ]);
   });
 
@@ -184,7 +196,7 @@ describe("workbook pages", () => {
 
   it("keeps every area inside its picture", () => {
     for (const p of WORKBOOK_PAGES) {
-      if (!p.areas) continue;
+      if (!("areas" in p) || !p.areas) continue;
       const height = p.picture?.height ?? 300;
       for (const a of p.areas!) {
         expect(a.x).toBeGreaterThan(0);
@@ -587,6 +599,133 @@ describe("Interval Hop Find pages", () => {
     ]);
     expect(findPrompt(find(20))).toBe("Is it a 2nd? Play it, or press Skip");
     expect(SKIP_KEY).toBe(79);
+  });
+});
+
+describe("Hold It!", () => {
+  const hold = (number: number) =>
+    WORKBOOK_PAGES.find((p) => p.page === number) as HoldPage;
+  const at = (beats: number) => beats * BEAT_MS;
+
+  it("has each page's cards as printed", () => {
+    expect(hold(6).cards).toEqual([
+      { kind: "note", value: "quarter" },
+      { kind: "note", value: "half" },
+      { kind: "note", value: "dotted-half" },
+      { kind: "note", value: "whole" },
+    ]);
+    expect(hold(15).cards.map((c) => c.kind === "tap" && c.staccato)).toEqual([
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+    ]);
+    expect(
+      hold(16).cards.map((c) => c.kind === "rest" && cardCounts(c)),
+    ).toEqual([1, 2, 4]);
+  });
+
+  it("holds each note for its counts, half a count either way", () => {
+    const p = hold(6);
+    const game = new HoldGame(p);
+    expect(holdPrompt(game)).toBe(
+      "Hold a key for the quarter note's counts, then let go",
+    );
+    expect(game.down(60, 0)).toEqual({ kind: "holding" });
+    expect(game.beats(at(0.5))).toBe(0.5);
+    const short = game.up(60, at(0.4));
+    expect(holdFeedback(p, short, p.cards[0])).toBe(
+      "Hold longer: a quarter note gets 1 count.",
+    );
+    game.down(60, at(10));
+    expect(holdFeedback(p, game.up(60, at(11.2)), p.cards[0])).toBe(
+      "Yes! A quarter note gets 1 count.",
+    );
+    // Another key while one is held does nothing.
+    game.down(62, at(20));
+    expect(game.down(64, at(20.1))).toEqual({ kind: "ignored" });
+    expect(game.up(64, at(20.2))).toEqual({ kind: "ignored" });
+    expect(holdFeedback(p, game.up(62, at(23)), p.cards[1])).toBe(
+      "Let go sooner: a half note gets 2 counts.",
+    );
+    game.down(62, at(30));
+    game.up(62, at(32));
+    game.down(62, at(40));
+    expect(holdFeedback(p, game.up(62, at(43)), p.cards[2])).toBe(
+      "Yes! A dotted half note gets 3 counts.",
+    );
+    game.down(62, at(50));
+    expect(game.up(62, at(54.4))).toEqual({ kind: "done", finished: true });
+    expect([...game.done]).toEqual([0, 1, 2, 3]);
+  });
+
+  it("plays short for a staccato dot and a full count without", () => {
+    const p = hold(15);
+    const game = new HoldGame(p);
+    expect(holdPrompt(game)).toBe("Play this note as written");
+    game.down(60, 0);
+    expect(holdFeedback(p, game.up(60, 200), p.cards[0])).toBe(
+      "No dot on this one: hold it for a whole count.",
+    );
+    game.down(60, 1000);
+    expect(holdFeedback(p, game.up(60, 1000 + FULL_MS), p.cards[0])).toBe(
+      "Yes! A full count: that one is not staccato.",
+    );
+    game.down(60, 3000);
+    expect(holdFeedback(p, game.up(60, 3800), p.cards[1])).toBe(
+      "That note has a dot: play it short and bounce off the key.",
+    );
+    game.down(60, 5000);
+    expect(holdFeedback(p, game.up(60, 5000 + STACCATO_MS), p.cards[1])).toBe(
+      "Yes! Short and bouncy: that is staccato.",
+    );
+    // A tap has no counting bar.
+    game.down(60, 6000);
+    expect(game.beats(6500)).toBeNull();
+  });
+
+  it("rests for the rest's counts between two notes", () => {
+    const p = hold(16);
+    const game = new HoldGame(p);
+    expect(holdPrompt(game)).toBe("Play a note and let go: then rest");
+    game.down(60, 0);
+    expect(game.beats(500)).toBeNull();
+    const resting = game.up(60, 400);
+    expect(holdFeedback(p, resting, p.cards[0])).toBe(
+      "Shh… rest for 1 count, then play when the bar is full.",
+    );
+    expect(game.resting).toBe(true);
+    expect(holdPrompt(game)).toBe("Rest… then play when the bar is full");
+    expect(game.beats(900)).toBe(0.5);
+    // Too soon: start again with a note.
+    expect(holdFeedback(p, game.down(60, 800), p.cards[0])).toBe(
+      "Shh! Too soon: a quarter rest gets 1 count. Let go and rest again.",
+    );
+    expect(game.resting).toBe(false);
+    // Its release starts the rest again.
+    game.up(60, 900);
+    expect(game.down(62, 900 + at(1.1))).toEqual({
+      kind: "done",
+      finished: false,
+    });
+    // The note after the rest: letting it go does nothing.
+    expect(game.up(62, 5000)).toEqual({ kind: "ignored" });
+    expect(game.resting).toBe(false);
+    game.down(60, at(10));
+    game.up(60, at(10.5));
+    expect(holdFeedback(p, game.down(60, at(14)), p.cards[1])).toBe(
+      "Play right when the rest ends. Let go and rest again.",
+    );
+    game.up(60, at(14.5));
+    game.down(60, at(16.5));
+    game.up(60, at(17));
+    game.down(60, at(20));
+    game.up(60, at(20.3));
+    expect(game.down(60, at(24.3))).toEqual({ kind: "done", finished: true });
   });
 });
 

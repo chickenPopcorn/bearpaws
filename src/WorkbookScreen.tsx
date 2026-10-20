@@ -43,7 +43,9 @@ import {
   workbookKeys,
   type KeyLabel,
 } from "./workbookKeyboard";
+import { HoldGame, cardCounts, holdFeedback, holdPrompt } from "./workbookHold";
 import {
+  HoldCards,
   WorkbookPicture,
   WorkbookStaff,
   areaClef,
@@ -61,7 +63,9 @@ const newGame = (page: WorkbookPage) =>
     ? new IntervalGame(page)
     : page.game === "interval-hop"
       ? new HopGame(page)
-      : new PaintGame(page);
+      : page.game === "hold"
+        ? new HoldGame(page)
+        : new PaintGame(page);
 type Hop = { from: number; to: number; count: number };
 const NO_HOP: Hop = { from: 60, to: 60, count: 0 };
 /** A Find page's one sticker, on its answer key. */
@@ -183,6 +187,62 @@ const WorkbookKeyboard = memo(function WorkbookKeyboard({
   );
 });
 
+/**
+ * Hold It!'s counting: a block per count that fills as the counts pass,
+ * while a note's key is held or a rest is counted, and a metronome click
+ * on the laptop for each count.
+ */
+function BeatBar({ game }: { game: HoldGame }) {
+  // The counts begun so far, while counting; it changes once a count.
+  const [beats, setBeats] = useState<number | null>(null);
+  const index = game.current;
+  const card = index === undefined ? undefined : game.page.cards[index];
+  const active = game.beats(performance.now()) !== null;
+  useEffect(() => {
+    if (!active || !card) return;
+    let frame = 0,
+      clicked = -1,
+      shown: number | null = null;
+    const limit = cardCounts(card) + 1;
+    const tick = () => {
+      const now = game.beats(performance.now()),
+        count = now === null ? null : Math.floor(now);
+      // A click on each count, the first one accented, and none after the
+      // card's last count.
+      if (count !== null && count > clicked && count < limit) {
+        clicked = count;
+        studio.beat(count === 0);
+      }
+      if (count !== shown) {
+        shown = count;
+        setBeats(count);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [game, card, active]);
+  if (!card || card.kind === "tap") return null;
+  const total = cardCounts(card),
+    shown = active ? beats : null;
+  return (
+    <div className="workbook-beats" role="img" aria-label={`${total} counts`}>
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={
+            shown !== null && shown >= i
+              ? "workbook-beat is-on"
+              : "workbook-beat"
+          }
+        >
+          {i + 1}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** The stamp a finished page gets, like the teacher's date stamp. */
 function PageStamp({ day, fresh }: { day?: string; fresh: boolean }) {
   return (
@@ -272,10 +332,17 @@ export const Workbook = memo(function Workbook({
   });
   const key = useEffectEvent((pitch: number, down: boolean, time: number) => {
     if (!down) {
-      controls.current?.up(pitch);
+      if (controls.current?.up(pitch)) return;
+      // Hold It! times how long each key is held.
+      if (game instanceof HoldGame && zoneOf(pitch) === "play")
+        play(pitch, time, false);
       return;
     }
     if (controls.current?.down(pitch)) return;
+    if (game instanceof HoldGame) {
+      if (zoneOf(pitch) === "play") play(pitch, time, true);
+      return;
+    }
     const skip =
       pitch === SKIP_KEY &&
       game instanceof IntervalGame &&
@@ -314,6 +381,24 @@ export const Workbook = memo(function Workbook({
       onFinish(page.page);
     }
   });
+  /** A Hold It! key going down or coming up. */
+  const play = (pitch: number, time: number, down: boolean) => {
+    if (!(game instanceof HoldGame)) return;
+    const index = game.current;
+    const wasFinished = game.finished;
+    const outcome = down ? game.down(pitch, time) : game.up(pitch, time);
+    const text = holdFeedback(
+      game.page,
+      outcome,
+      index === undefined ? undefined : game.page.cards[index],
+    );
+    if (text !== null) setHint(text);
+    setRevision((r) => r + 1);
+    if (!wasFinished && game.finished) {
+      setFresh(true);
+      onFinish(page.page);
+    }
+  };
   useEffect(() => {
     const keys = new ControlKeys(
       (action) => control(action),
@@ -335,7 +420,14 @@ export const Workbook = memo(function Workbook({
     current: number | undefined,
     hop: Hop | undefined,
     stickers: ReadonlyMap<number, KeyLabel> | undefined;
-  if (game instanceof HopGame) {
+  if (game instanceof HoldGame) {
+    lines = game.page.steps.map((step) => ({
+      crayon: step.crayon,
+      text: step.words,
+    }));
+    now = holdPrompt(game);
+    keys = NO_KEYS;
+  } else if (game instanceof HopGame) {
     const { page } = game;
     lines = [
       ...page.colors.map(({ crayon, letter }) => ({
@@ -493,6 +585,16 @@ export const Workbook = memo(function Workbook({
           <WorkbookPicture areas={areas} current={current} {...page.picture} />
         </section>
       )}
+      {game instanceof HoldGame && (
+        <section className="panel workbook-picture-panel" aria-label="Cards">
+          <HoldCards
+            cards={game.page.cards}
+            current={game.current}
+            done={game.done}
+            crayon={game.page.steps[0].crayon}
+          />
+        </section>
+      )}
       <div className="roll workbook-roll">
         <div className="roll-caption">
           <span className="workbook-prompt">
@@ -518,6 +620,7 @@ export const Workbook = memo(function Workbook({
         <p className="workbook-hint" role="status">
           {hint}
         </p>
+        {game instanceof HoldGame && <BeatBar game={game} />}
         <WorkbookKeyboard
           painted={keys}
           letters={game.letters}

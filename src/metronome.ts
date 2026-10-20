@@ -104,6 +104,28 @@ interface Scheduled {
   pass: Set<number>;
 }
 /**
+ * One click at context time `when`, on the laptop: a short, bright tick, a
+ * quick attack and a fast decay. The first beat of a bar is accented.
+ */
+export function playClick(
+  context: AudioContext,
+  when: number,
+  accent: boolean,
+) {
+  const source = context.createOscillator(),
+    gain = context.createGain(),
+    level = accent ? 0.4 : 0.25;
+  source.frequency.value = accent ? 1760 : 1320;
+  gain.gain.setValueAtTime(0, when);
+  gain.gain.linearRampToValueAtTime(level, when + 0.001);
+  gain.gain.exponentialRampToValueAtTime(0.001, when + CLICK_SECONDS);
+  source.connect(gain);
+  gain.connect(context.destination);
+  source.start(when);
+  source.stop(when + CLICK_SECONDS);
+  return { source, gain };
+}
+/**
  * The metronome's clicks, always on the laptop, apart from the piano's room.
  * A piano on one MIDI channel has no percussion to play them, and a click
  * there would be held by the song's pedal like a note.
@@ -160,21 +182,10 @@ export class Metronome {
     pass.add(click.time);
     const when = Math.max(now, now + (at - clock.position) / clock.speed);
     try {
-      const source = context.createOscillator(),
-        gain = context.createGain(),
-        level = click.accent ? 0.4 : 0.25;
-      // A short, bright tick: a quick attack and a fast decay.
-      source.frequency.value = click.accent ? 1760 : 1320;
-      gain.gain.setValueAtTime(0, when);
-      gain.gain.linearRampToValueAtTime(level, when + 0.001);
-      gain.gain.exponentialRampToValueAtTime(0.001, when + CLICK_SECONDS);
-      source.connect(gain);
-      gain.connect(context.destination);
+      const { source, gain } = playClick(context, when, click.accent);
       const scheduled = { source, gain, when, time: click.time, pass };
       this.sources.add(scheduled);
       source.onended = () => this.cancel(scheduled);
-      source.start(when);
-      source.stop(when + CLICK_SECONDS);
     } catch {
       // A click that cannot play is left out; the music plays on.
     }

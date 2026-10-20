@@ -29,6 +29,7 @@ import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
 import {
   createClickTrack,
   Metronome,
+  playClick,
   type ClickClock,
   type ClickTrack,
 } from "./metronome";
@@ -323,6 +324,20 @@ export class Studio {
    * Follow key presses and releases from the piano, the screen and
    * shortcuts, each with when it happened.
    */
+  /**
+   * One metronome click now, on the laptop, as the workbook's Hold It! game
+   * counts beats. A click that cannot play is left out.
+   */
+  beat(accent = false) {
+    void this.audio
+      .unlock()
+      .then(() => {
+        const context = this.audio.context;
+        if (context?.state === "running")
+          playClick(context, context.currentTime, accent);
+      })
+      .catch(() => {});
+  }
   onKey = (listener: KeyListener) => {
     this.keyListeners.add(listener);
     return () => this.keyListeners.delete(listener);

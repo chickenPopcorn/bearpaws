@@ -11,6 +11,7 @@ const fake = vi.hoisted(() => {
     keys,
     studio: {
       input: { down: new Set<number>() },
+      beat: () => {},
       subscribe: (listener: () => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
@@ -220,6 +221,32 @@ describe("workbook page", () => {
     // Other answer keys do nothing.
     await tap(SKIP_KEY + 2);
     expect(text(".workbook-hint")).toBe("Yes! That is a 3rd: red.");
+  });
+
+  it("times a Hold It! note while its key is held", async () => {
+    await render({ page: page(6) });
+    expect(text("p")).toBe("Hold It! · Play each note on your piano.");
+    expect(text(".workbook-prompt")).toBe(
+      "Hold a key for the quarter note's counts, then let go",
+    );
+    expect(container.querySelectorAll(".workbook-beat")).toHaveLength(1);
+    // tap() holds a key for 1 s: one count.
+    await tap(60);
+    expect(text(".workbook-hint")).toBe("Yes! A quarter note gets 1 count.");
+    expect(
+      container.querySelectorAll(".workbook-area title")[0].textContent,
+    ).toBe("quarter note, 1 count");
+    expect(container.querySelectorAll(".workbook-beat")).toHaveLength(2);
+    // The half note, held 1 s: too short.
+    await tap(60);
+    expect(text(".workbook-hint")).toBe(
+      "Hold longer: a half note gets 2 counts.",
+    );
+    // Control keys still work, and answer keys do nothing.
+    await tap(80);
+    expect(text(".workbook-hint")).toBe(
+      "Hold longer: a half note gets 2 counts.",
+    );
   });
 
   it("takes Same or Different under a box's bottom card", async () => {

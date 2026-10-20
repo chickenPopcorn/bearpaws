@@ -1829,6 +1829,42 @@ footer a {
   }
 }
 /* How far pages: the answers printed under each card's staff. */
+/* Hold It!'s note and rest glyphs on their cards. */
+.workbook-glyph {
+  font-family: "Bravura";
+  font-size: 44px;
+  fill: var(--text);
+}
+.workbook-glyph.is-rest {
+  font-size: 56px;
+}
+.workbook-rest-line {
+  stroke: #8f88a0;
+  stroke-width: 1.5;
+}
+/* Hold It!'s counts, filling as they pass. */
+.workbook-beats {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) 0;
+}
+.workbook-beat {
+  flex: 0 0 44px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--muted);
+  font-family: var(--score-font);
+  font-size: var(--text-sm);
+  display: grid;
+  place-items: center;
+}
+.workbook-beat.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 .workbook-choice {
   font-family: var(--score-font);
   font-size: 16px;
