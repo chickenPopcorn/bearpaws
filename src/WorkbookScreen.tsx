@@ -14,11 +14,12 @@ import {
   ControlKeys,
   GAME_NAMES,
   PaintGame,
-  WORKBOOK_PAGES,
   WORKBOOK_TITLE,
   bookName,
   feedback,
   instruction,
+  pageAfter,
+  pageBefore,
   stampText,
   zoneOf,
   type ControlAction,
@@ -116,9 +117,8 @@ export const Workbook = memo(function Workbook({
   const [hint, setHint] = useState(START_HINT);
   const [fresh, setFresh] = useState(false);
   const controls = useRef<ControlKeys | null>(null);
-  const index = WORKBOOK_PAGES.indexOf(page);
-  const previous = WORKBOOK_PAGES[index - 1],
-    next = WORKBOOK_PAGES[index + 1];
+  const previous = pageBefore(page),
+    next = pageAfter(page);
   const control = useEffectEvent((action: ControlAction) => {
     switch (action) {
       case "hint":

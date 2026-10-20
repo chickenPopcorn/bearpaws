@@ -11,6 +11,8 @@ import {
   bookName,
   feedback,
   instruction,
+  pageAfter,
+  pageBefore,
   readStamps,
   stampPage,
   stampText,
@@ -54,6 +56,13 @@ describe("workbook pages", () => {
       "Color the areas containing BASS CLEF D blue.",
       "Color the areas containing BASS CLEF C pink.",
     ]);
+  });
+
+  it("finds the built pages before and after a page", () => {
+    expect(pageBefore(page(7))).toBeUndefined();
+    expect(pageAfter(page(7))?.page).toBe(9);
+    expect(pageBefore(page(10))?.page).toBe(9);
+    expect(pageAfter(page(11))).toBeUndefined();
   });
 
   it("names notes as the book does", () => {
@@ -190,6 +199,18 @@ describe("feedback", () => {
     expect(
       feedback(p, { kind: "wrong", pitch: 63, lettersShown: false }, target),
     ).toBe("That is a black key. D is a white key.");
+  });
+  it("says the last page is the last, with no next page to go to", () => {
+    expect(
+      feedback(
+        page(11),
+        { kind: "painted", pitch: 52, finished: true },
+        undefined,
+      ),
+    ).toBe("Page 11 is done. This is the last page so far.");
+    expect(feedback(page(11), { kind: "finished" }, undefined)).toBe(
+      "Page 11 is done. This is the last page so far.",
+    );
   });
   it("praises a painted key and finishes the page", () => {
     expect(

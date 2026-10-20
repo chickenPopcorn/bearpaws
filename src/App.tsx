@@ -529,7 +529,8 @@ export function App({
   }, []);
   const finishPage = useCallback((page: number) => {
     const { stamps, saved } = stampPage(page);
-    setStamps(stamps);
+    // Unsaved stamps from earlier in this session stay too.
+    setStamps((current) => ({ ...current, ...stamps }));
     if (!saved) {
       studio.storageNotice =
         "Browser storage is full or blocked. Workbook stamps will last for this session.";
@@ -547,6 +548,12 @@ export function App({
     [workbookPage, stamps, openPage],
   );
   const page = WORKBOOK_PAGES.find((p) => p.page === workbookPage);
+  // A workbook page's notes are fixed, so the computer keys play them
+  // unshifted even when the song behind it has Duet moving its part.
+  const pageOpen = useRef(false);
+  useEffect(() => {
+    pageOpen.current = !!page;
+  }, [page]);
   const fullscreen = usePianoFullscreen(() => {
     if (!studio.playing && !busy) void startPlayback();
   });
@@ -566,6 +573,7 @@ export function App({
   useEffect(() => {
     studio.init();
     studio.narration = story;
+    const shift = () => (pageOpen.current ? 0 : studio.octaveShift);
     const down = (e: KeyboardEvent) => {
       if (
         (e.target as HTMLElement).closest(
@@ -581,12 +589,12 @@ export function App({
       if (pitch !== undefined) {
         e.preventDefault();
         // With Duet on, the keys follow the student part up.
-        studio.virtual(pitch + studio.octaveShift, true);
+        studio.virtual(pitch + shift(), true);
       }
     };
     const up = (e: KeyboardEvent) => {
       const key = shortcuts[e.key.toLowerCase()];
-      const pitch = key === undefined ? undefined : key + studio.octaveShift;
+      const pitch = key === undefined ? undefined : key + shift();
       if (pitch !== undefined && studio.input.down.has(pitch)) {
         studio.virtual(pitch, false);
       }

@@ -136,6 +136,13 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
   },
 ];
 
+/** The built page after `page`, if any. */
+export const pageAfter = (page: WorkbookPage) =>
+  WORKBOOK_PAGES.find((p) => p.page > page.page);
+/** The built page before `page`, if any. */
+export const pageBefore = (page: WorkbookPage) =>
+  WORKBOOK_PAGES.filter((p) => p.page < page.page).at(-1);
+
 const LETTERS = ["C", "C", "D", "D", "E", "F", "F", "G", "G", "A", "A", "B"];
 /** The note's letter, without its octave. */
 export const letterName = (pitch: number) => LETTERS[pitch % 12];
@@ -222,11 +229,10 @@ export function feedback(
 ) {
   const letters = "lettersShown" in outcome && outcome.lettersShown;
   const more = letters ? " The letters are on the keys now." : "";
+  const done = `Page ${page.page} is done. ${pageAfter(page) ? "Next page: E2." : "This is the last page so far."}`;
   switch (outcome.kind) {
     case "painted":
-      return outcome.finished
-        ? `Page ${page.page} is done. Next page: E2.`
-        : "Yes! Next crayon.";
+      return outcome.finished ? done : "Yes! Next crayon.";
     case "octave":
       return `That is ${bookName(outcome.pitch)}. Go ${outcome.direction}.${more}`;
     case "wrong": {
@@ -236,7 +242,7 @@ export function feedback(
         : `That is ${letterName(outcome.pitch)}. Look for ${want}.${more}`;
     }
     case "finished":
-      return `Page ${page.page} is done. Next page: E2.`;
+      return done;
   }
 }
 

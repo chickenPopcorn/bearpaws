@@ -39,3 +39,19 @@ test("a workbook page paints on the piano and gets its stamp", async ({
   );
   await expect(page.locator(".workbook-prompt")).toHaveCount(0);
 });
+
+test("the computer keys play a page's notes even with Duet moving the song", async ({
+  page,
+}) => {
+  await page.goto("/");
+  // Dancing Raindrops' duet moves the student part up an octave.
+  await page.getByRole("button", { name: "Duet" }).click();
+  await expect(page.getByRole("button", { name: "Duet" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: /Music Workbook 3/ }).click();
+  await page.getByRole("button", { name: /^Page 9 · Bass Clef D/ }).click();
+  await page.keyboard.press("s");
+  await expect(page.locator(".workbook-prompt")).toHaveText("Find BASS CLEF D");
+});
