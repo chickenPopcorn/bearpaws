@@ -27,7 +27,7 @@ import {
   type WorkbookPage,
 } from "./workbook";
 import { drawWorkbookKeyboard } from "./workbookKeyboard";
-import { WorkbookPicture } from "./WorkbookPicture";
+import { WorkbookPicture, WorkbookStaff } from "./WorkbookPicture";
 
 const START_HINT = "Play it on your piano.";
 
@@ -234,6 +234,11 @@ export const Workbook = memo(function Workbook({
           </li>
         ))}
       </ol>
+      {page.staff && (
+        <section className="panel workbook-staff-panel" aria-label="Staff">
+          <WorkbookStaff notes={page.staff} painted={painted} />
+        </section>
+      )}
       {page.areas && (
         <section className="panel workbook-picture-panel" aria-label="Picture">
           <WorkbookPicture

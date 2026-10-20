@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app |  9/45 |
+| Game built in the app | 14/45 |
 
 By game, in the suggested build order:
 
@@ -33,8 +33,8 @@ By game, in the suggested build order:
 Games 1 and 2 share one engine (play a note, paint it), so building both first
 covers 17 pages. Interval Hop adds the most pages of any single game.
 
-**Built so far:** pages 7, 9 and 11 (Crayon Keys) and pages 4, 8, 10, 12, 21
-and 48 (Color by Note),
+**Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and 42)
+and pages 4, 8, 10, 12, 21 and 48 of Color by Note,
 in `src/workbook.ts` (pages, `PaintGame`, `ControlKeys`), `src/WorkbookScreen.tsx`,
 `src/WorkbookPicture.tsx` and `src/workbookKeyboard.ts`. Music Workbook 3 is the
 last section of the library.
@@ -45,7 +45,6 @@ last section of the library.
 - Stamps sync to the account; today they stay in this browser.
 - Workbook time in the practice calendar.
 - Full-screen workbook pages.
-- Page 14's five-key step, and painting the staff note on pages 36–38 and 42.
 
 ## Rules for every game
 
@@ -171,13 +170,13 @@ staff note.
 
 The screen shows the page's keyboard and a crayon. A prompt says "Find BASS
 CLEF D" in the crayon's color. The child plays the key; the on-screen key fills
-with that color. On pages with a staff (36, 37, 38, 42), the staff note fills
-too, so the note and the key connect.
+with that color. On pages with a staff (36, 37, 38, 42), the note on the staff
+gets the same crayon, so the note and the key connect.
 
 - Wrong octave: the key wobbles and an arrow points up or down ("That is
   TREBLE CLEF D. Go lower.").
-- Page 14: color all five keys of Left Hand C Position (bass C–G), then play
-  them up and down as a five-finger pattern to finish.
+- Page 14: color all five keys of Left Hand C Position (bass C–G), in any
+  order; the hint counts down the ones left.
 - Check: exact MIDI pitch (Middle C = 60, Bass Clef C = 48).
 - Letter names stay hidden on the keys, like the book. After two misses on
   the same prompt, the letters appear.
@@ -297,7 +296,7 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   11 | Bass Clef E                             | Color Treble E and Bass E on keyboard           | Crayon Keys       | Built  |
 |   12 | Treble Clef E and Bass Clef E           | Color areas by note                             | Color by Note     | Built  |
 |   13 | Steps, Skips and Repeats                | Circle steps, skips, repeats                    | Interval Hop      | Idea   |
-|   14 | C Position for the Left Hand            | Color LH C Position C–G on keyboard             | Crayon Keys       | Idea   |
+|   14 | C Position for the Left Hand            | Color LH C Position C–G on keyboard             | Crayon Keys       | Built  |
 |   15 | Staccato                                | Circle staccato notes                           | Hold It!          | Idea   |
 |   16 | Rests                                   | Line from rest to counts                        | Hold It!          | Idea   |
 |   17 | Staccato                                | Listen: staccato or not                         | Ear Detective     | Idea   |
@@ -319,13 +318,13 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   33 | Melodic and Harmonic Intervals          | Color areas by interval kind                    | Color by Note     | Idea   |
 |   34 | Middle C Position                       | Line from letter to staff note                  | Note Snap         | Idea   |
 |   35 | Hands Together                          | Circle examples played hands together           | Together or Apart | Idea   |
-|   36 | C, D, E, F and G                        | Color Bass C–G on keyboard and staff            | Crayon Keys       | Idea   |
-|   37 | C and E                                 | Color C and E on keyboard and staff             | Crayon Keys       | Idea   |
-|   38 | D and G                                 | Color D and G on keyboard and staff             | Crayon Keys       | Idea   |
+|   36 | C, D, E, F and G                        | Color Bass C–G on keyboard and staff            | Crayon Keys       | Built  |
+|   37 | C and E                                 | Color C and E on keyboard and staff             | Crayon Keys       | Built  |
+|   38 | D and G                                 | Color D and G on keyboard and staff             | Crayon Keys       | Built  |
 |   39 | 4ths                                    | Color C, F, G; circle 4ths up and down          | Interval Hop      | Idea   |
 |   40 | 4ths                                    | Circle each 4th                                 | Interval Hop      | Idea   |
 |   41 | 2nds, 3rds and 4ths                     | Circle 2, 3 or 4 for each interval              | Interval Hop      | Idea   |
-|   42 | F and G                                 | Color Treble F and Bass G on keyboard and staff | Crayon Keys       | Idea   |
+|   42 | F and G                                 | Color Treble F and Bass G on keyboard and staff | Crayon Keys       | Built  |
 |   43 | 5ths                                    | Color C and G; circle 5ths up and down          | Interval Hop      | Idea   |
 |   44 | 5ths                                    | Circle each 5th                                 | Interval Hop      | Idea   |
 |   45 | 4ths and 5ths                           | Color areas by interval                         | Color by Note     | Idea   |

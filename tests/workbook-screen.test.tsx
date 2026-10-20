@@ -134,6 +134,16 @@ describe("workbook page", () => {
     expect(props.onFinish).not.toHaveBeenCalled();
   });
 
+  it("paints a staff page's note on the staff and the key", async () => {
+    await render({ page: page(37) });
+    const staff = () =>
+      container.querySelector(".workbook-staff")!.getAttribute("aria-label");
+    expect(staff()).toBe("Staff: TREBLE CLEF E, MIDDLE C");
+    expect(text(".workbook-prompt")).toBe("Play the C on the staff");
+    await tap(60);
+    expect(staff()).toBe("Staff: TREBLE CLEF E, MIDDLE C (green)");
+  });
+
   it("paints every area holding the note on a Color by Note page", async () => {
     await render({ page: page(10) });
     const picture = () =>

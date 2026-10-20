@@ -338,7 +338,12 @@ describe("Music Workbook 3", () => {
       "Page 10 · Treble Clef D and Bass Clef D",
       "Page 11 · Bass Clef E",
       "Page 12 · Treble Clef E and Bass Clef E",
+      "Page 14 · C Position for the Left Hand",
       "Page 21 · C Position",
+      "Page 36 · C, D, E, F and G",
+      "Page 37 · C and E",
+      "Page 38 · D and G",
+      "Page 42 · F and G",
       "Page 48 · C Position and Middle C Position",
     ]);
     expect(pages[3].querySelector("small")!.textContent).toBe(

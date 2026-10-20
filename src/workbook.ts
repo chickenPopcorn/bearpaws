@@ -61,6 +61,8 @@ export interface Step {
    * ("an F"): every F in the picture, in either clef.
    */
   pitches: readonly number[];
+  /** The book's own words, for a step the usual wording cannot say. */
+  words?: { instruction: string; prompt: string };
 }
 export type AreaShape = "star" | "cloud" | "heart" | "blob";
 export type Clef = "treble" | "bass";
@@ -90,6 +92,8 @@ export interface WorkbookPage {
   byLetter?: boolean;
   /** Color by Note pages only. */
   areas?: Area[];
+  /** Crayon Keys pages with a staff: its notes, left to right. */
+  staff?: { pitch: number; clef: Clef }[];
   /** The picture's height (it is 640 wide) and its areas' size, if not 300 and 1. */
   picture?: { height: number; scale: number };
 }
@@ -108,6 +112,11 @@ const staircase = (rows: [AreaShape, number, Clef?][][]) =>
       area(shape, pitch, 60 + c * 105, 55 + r * 130 + (5 - c) * 10, clef),
     ),
   );
+
+const bass = (...pitches: number[]) =>
+  pitches.map((pitch) => ({ pitch, clef: "bass" as const }));
+const treble = (...pitches: number[]) =>
+  pitches.map((pitch) => ({ pitch, clef: "treble" as const }));
 
 export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
   {
@@ -248,6 +257,23 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     picture: { height: 300, scale: 0.85 },
   },
   {
+    page: 14,
+    title: "C Position for the Left Hand",
+    useWith: 14,
+    game: "crayon-keys",
+    steps: [
+      {
+        crayon: "blue",
+        pitches: [48, 50, 52, 53, 55],
+        words: {
+          instruction:
+            "Color C, D, E, F and G from the Left Hand C POSITION blue.",
+          prompt: "Find Left Hand C Position: C D E F G",
+        },
+      },
+    ],
+  },
+  {
     page: 21,
     title: "C Position",
     useWith: 20,
@@ -274,6 +300,56 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       area("star", 52, 570, 70),
     ],
     picture: { height: 330, scale: 0.8 },
+  },
+  {
+    page: 36,
+    title: "C, D, E, F and G",
+    useWith: 35,
+    game: "crayon-keys",
+    steps: [
+      { crayon: "green", pitches: [48] },
+      { crayon: "yellow", pitches: [50] },
+      { crayon: "red", pitches: [52] },
+      { crayon: "pink", pitches: [53] },
+      { crayon: "orange", pitches: [55] },
+    ],
+    staff: bass(52, 50, 53, 55, 48),
+  },
+  {
+    page: 37,
+    title: "C and E",
+    useWith: 36,
+    game: "crayon-keys",
+    byLetter: true,
+    steps: [
+      { crayon: "green", pitches: [60] },
+      { crayon: "red", pitches: [64] },
+    ],
+    // Middle C sits on a ledger line above the bass staff.
+    staff: [...treble(64), ...bass(60)],
+  },
+  {
+    page: 38,
+    title: "D and G",
+    useWith: 37,
+    game: "crayon-keys",
+    byLetter: true,
+    steps: [
+      { crayon: "yellow", pitches: [62] },
+      { crayon: "orange", pitches: [55] },
+    ],
+    staff: [...treble(62), ...bass(55)],
+  },
+  {
+    page: 42,
+    title: "F and G",
+    useWith: 41,
+    game: "crayon-keys",
+    steps: [
+      { crayon: "pink", pitches: [65] },
+      { crayon: "orange", pitches: [55] },
+    ],
+    staff: [...treble(65), ...bass(55)],
   },
   {
     page: 48,
@@ -338,19 +414,33 @@ const withArticle = (letter: string) =>
   `${"AEF".includes(letter) ? "an" : "a"} ${letter}`;
 /** A step's line on the page, in the book's words. */
 export function instruction(page: WorkbookPage, step: Step) {
-  const note = page.byLetter
-    ? withArticle(letterName(step.pitches[0]))
-    : bookName(step.pitches[0]);
+  if (step.words) return step.words.instruction;
+  const letter = letterName(step.pitches[0]);
+  if (page.staff)
+    return `Color the ${page.byLetter ? letter : bookName(step.pitches[0])} on the keyboard and staff ${step.crayon}.`;
+  const note = page.byLetter ? withArticle(letter) : bookName(step.pitches[0]);
   return page.game === "color-by-note"
     ? `Color the areas containing ${note} ${step.crayon}.`
     : `Color ${note} ${step.crayon}.`;
 }
 /** What the child looks for now: "Find BASS CLEF D", "Play every F". */
 export function prompt(page: WorkbookPage, step: Step) {
-  if (page.game === "crayon-keys") return `Find ${bookName(step.pitches[0])}`;
+  if (step.words) return step.words.prompt;
+  const letter = letterName(step.pitches[0]);
+  if (page.game === "crayon-keys")
+    return page.byLetter
+      ? `Play the ${letter} on the staff`
+      : `Find ${bookName(step.pitches[0])}`;
   return page.byLetter
-    ? `Play every ${letterName(step.pitches[0])}`
+    ? `Play every ${letter}`
     : `Play ${bookName(step.pitches[0])}`;
+}
+/** A step's letters, as a hint says them: "D", or "C, D, E, F or G". */
+function wanted(step: Step | undefined) {
+  const letters = [...new Set(step?.pitches.map(letterName))];
+  return letters.length > 1
+    ? `${letters.slice(0, -1).join(", ")} or ${letters.at(-1)}`
+    : (letters[0] ?? "");
 }
 
 /** What one key press on the play zone did. */
@@ -442,16 +532,22 @@ export function feedback(
   const letters = "lettersShown" in outcome && outcome.lettersShown;
   const more = letters ? " The letters are on the keys now." : "";
   const done = `Page ${page.page} is done. ${pageAfter(page) ? "Next page: E2." : "This is the last page so far."}`;
-  const want = target ? letterName(target.pitches[0]) : "";
+  const want = wanted(target),
+    // Several notes of one letter ("an F"), or of several (C to G).
+    oneLetter = !want.includes(" or ");
   switch (outcome.kind) {
     case "painted":
       return outcome.finished
         ? done
-        : outcome.left
-          ? `Yes! Now find the other ${want}.`
-          : "Yes! Next crayon.";
+        : !outcome.left
+          ? "Yes! Next crayon."
+          : oneLetter
+            ? `Yes! Now find the other ${want}.`
+            : `Yes! ${outcome.left} more to find.`;
     case "again":
-      return `That ${want} is painted. Find the other ${want}.`;
+      return oneLetter
+        ? `That ${want} is painted. Find the other ${want}.`
+        : `That ${letterName(outcome.pitch)} is painted.`;
     case "octave":
       return `That is ${bookName(outcome.pitch)}. Go ${outcome.direction}.${more}`;
     case "wrong":
