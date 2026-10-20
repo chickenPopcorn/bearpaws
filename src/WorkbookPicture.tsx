@@ -4,11 +4,12 @@ import {
   bookName,
   type Area,
   type AreaShape,
+  type Clef,
   type Crayon,
 } from "./workbook";
 
 /** Half a staff space, in picture units: one step up the staff. */
-const HALF = 3;
+const HALF = 3.75;
 /** Treble clef notes are written from E4 (step 30), bass from G2 (step 18). */
 const BOTTOM_LINE_STEP = { treble: 30, bass: 18 } as const;
 
@@ -43,12 +44,11 @@ const SHAPES: Record<AreaShape, string> = {
 };
 
 /** A small staff with one whole note, centred on (0, 0). */
-function StaffNote({ pitch }: { pitch: number }) {
-  const clef = pitch >= 60 ? "treble" : "bass";
+function StaffNote({ pitch, clef }: { pitch: number; clef: Clef }) {
   const { step } = pitchPosition(pitch, clef === "treble" ? "right" : "left");
-  const bottom = 12,
-    left = -32,
-    right = 32,
+  const bottom = 4 * HALF,
+    left = -40,
+    right = 40,
     y = bottom - (step - BOTTOM_LINE_STEP[clef]) * HALF;
   // Ledger lines for a note below or above the staff.
   const ledgers: number[] = [];
@@ -69,7 +69,7 @@ function StaffNote({ pitch }: { pitch: number }) {
           />
         ))}
         {ledgers.map((ledger) => (
-          <line key={ledger} x1={12} x2={30} y1={ledger} y2={ledger} />
+          <line key={ledger} x1={14} x2={37} y1={ledger} y2={ledger} />
         ))}
       </g>
       <text
@@ -80,7 +80,7 @@ function StaffNote({ pitch }: { pitch: number }) {
       >
         {clef === "treble" ? "" : ""}
       </text>
-      <text className="workbook-note" x={16} y={y} fontSize={8 * HALF}>
+      <text className="workbook-note" x={19} y={y} fontSize={8 * HALF}>
         {""}
       </text>
     </g>
@@ -89,20 +89,25 @@ function StaffNote({ pitch }: { pitch: number }) {
 
 /**
  * A Color by Note picture: simple shapes, each holding one note on a small
- * staff. Painted areas take their step's crayon.
+ * staff. Painted areas take their step's crayon. The picture is 640 wide and
+ * `height` high; a page with many areas draws them at a smaller `scale`.
  */
 export function WorkbookPicture({
   areas,
   painted,
+  height = 300,
+  scale = 1,
 }: {
   areas: readonly Area[];
   painted: ReadonlyMap<number, Crayon>;
+  height?: number;
+  scale?: number;
 }) {
   const done = areas.filter((area) => painted.has(area.pitch)).length;
   return (
     <svg
       className="workbook-picture"
-      viewBox="0 0 640 300"
+      viewBox={`0 0 640 ${height}`}
       role="img"
       aria-label={`Picture with ${areas.length} areas, ${done} painted`}
     >
@@ -112,7 +117,7 @@ export function WorkbookPicture({
           <g
             key={i}
             className="workbook-area"
-            transform={`translate(${area.x} ${area.y})`}
+            transform={`translate(${area.x} ${area.y}) scale(${scale})`}
           >
             <title>
               {bookName(area.pitch)}
@@ -122,7 +127,10 @@ export function WorkbookPicture({
               d={SHAPES[area.shape]}
               style={{ fill: crayon ? CRAYONS[crayon] : undefined }}
             />
-            <StaffNote pitch={area.pitch} />
+            <StaffNote
+              pitch={area.pitch}
+              clef={area.clef ?? (area.pitch >= 60 ? "treble" : "bass")}
+            />
           </g>
         );
       })}

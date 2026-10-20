@@ -53,19 +53,26 @@ export function zoneOf(pitch: number): Zone {
   return "play";
 }
 
-/** One numbered step on the page: a note and the crayon it gets. */
+/** One numbered step on the page: its notes and the crayon they get. */
 export interface Step {
   crayon: Crayon;
-  pitch: number;
+  /**
+   * The notes this step paints. Several when the book names only a letter
+   * ("an F"): every F in the picture, in either clef.
+   */
+  pitches: readonly number[];
 }
 export type AreaShape = "star" | "cloud" | "heart" | "blob";
+export type Clef = "treble" | "bass";
 /** One area of a Color by Note picture, holding one note on a small staff. */
 export interface Area {
   shape: AreaShape;
   pitch: number;
-  /** The area's centre in the picture's 640 × 300 frame. */
+  /** The area's centre in the picture's frame, 640 wide. */
   x: number;
   y: number;
+  /** The staff's clef: treble from middle C up, unless the book writes bass. */
+  clef?: Clef;
 }
 export type WorkbookGame = "crayon-keys" | "color-by-note";
 export const GAME_NAMES: Record<WorkbookGame, string> = {
@@ -79,19 +86,101 @@ export interface WorkbookPage {
   useWith: number;
   game: WorkbookGame;
   steps: Step[];
+  /** The book names notes by letter only ("an F"), not by clef. */
+  byLetter?: boolean;
   /** Color by Note pages only. */
   areas?: Area[];
+  /** The picture's height (it is 640 wide) and its areas' size, if not 300 and 1. */
+  picture?: { height: number; scale: number };
 }
 
+const area = (
+  shape: AreaShape,
+  pitch: number,
+  x: number,
+  y: number,
+  clef?: Clef,
+): Area => ({ shape, pitch, x, y, ...(clef && { clef }) });
+/** Page 4's areas in three rows, rising to the right like its staircase. */
+const staircase = (rows: [AreaShape, number, Clef?][][]) =>
+  rows.flatMap((row, r) =>
+    row.map(([shape, pitch, clef], c) =>
+      area(shape, pitch, 60 + c * 105, 55 + r * 130 + (5 - c) * 10, clef),
+    ),
+  );
+
 export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
+  {
+    page: 4,
+    title: "Middle C Position Review",
+    useWith: 4,
+    game: "color-by-note",
+    byLetter: true,
+    steps: [
+      { crayon: "pink", pitches: [57] },
+      { crayon: "green", pitches: [59] },
+      { crayon: "yellow", pitches: [60] },
+      { crayon: "brown", pitches: [62] },
+      { crayon: "red", pitches: [64] },
+      { crayon: "blue", pitches: [53, 65] },
+      { crayon: "orange", pitches: [55, 67] },
+    ],
+    // Flowers, the pot and a stair in the bass clef; the stairs and Haydn
+    // Hippo's coat in the treble.
+    areas: staircase([
+      [
+        ["cloud", 55],
+        ["cloud", 60, "bass"],
+        ["cloud", 57],
+        ["cloud", 59],
+        ["cloud", 59],
+        ["heart", 65],
+      ],
+      [
+        ["blob", 53],
+        ["blob", 57],
+        ["blob", 62],
+        ["blob", 67],
+        ["blob", 62],
+        ["blob", 60],
+      ],
+      [
+        ["blob", 62],
+        ["blob", 64],
+        ["blob", 62],
+        ["blob", 64],
+        ["blob", 62],
+        ["blob", 62],
+      ],
+    ]),
+    picture: { height: 400, scale: 0.72 },
+  },
   {
     page: 7,
     title: "Bass Clef C",
     useWith: 7,
     game: "crayon-keys",
     steps: [
-      { crayon: "green", pitch: 60 },
-      { crayon: "red", pitch: 48 },
+      { crayon: "green", pitches: [60] },
+      { crayon: "red", pitches: [48] },
+    ],
+  },
+  {
+    page: 8,
+    title: "Middle C and Bass Clef C",
+    useWith: 8,
+    game: "color-by-note",
+    steps: [
+      { crayon: "red", pitches: [60] },
+      { crayon: "green", pitches: [48] },
+    ],
+    // Two coats and three boxes.
+    areas: [
+      area("cloud", 48, 190, 80),
+      area("heart", 60, 450, 80),
+      area("blob", 48, 100, 215),
+      area("blob", 60, 320, 220),
+      area("blob", 48, 540, 215),
     ],
   },
   {
@@ -100,8 +189,8 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     useWith: 9,
     game: "crayon-keys",
     steps: [
-      { crayon: "yellow", pitch: 62 },
-      { crayon: "blue", pitch: 50 },
+      { crayon: "yellow", pitches: [62] },
+      { crayon: "blue", pitches: [50] },
     ],
   },
   {
@@ -110,18 +199,18 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     useWith: 10,
     game: "color-by-note",
     steps: [
-      { crayon: "yellow", pitch: 62 },
-      { crayon: "blue", pitch: 50 },
-      { crayon: "pink", pitch: 48 },
+      { crayon: "yellow", pitches: [62] },
+      { crayon: "blue", pitches: [50] },
+      { crayon: "pink", pitches: [48] },
     ],
     areas: [
-      { shape: "star", pitch: 62, x: 90, y: 200 },
-      { shape: "star", pitch: 62, x: 190, y: 105 },
-      { shape: "star", pitch: 62, x: 330, y: 70 },
-      { shape: "blob", pitch: 50, x: 300, y: 225 },
-      { shape: "cloud", pitch: 50, x: 450, y: 150 },
-      { shape: "heart", pitch: 48, x: 560, y: 70 },
-      { shape: "cloud", pitch: 48, x: 555, y: 225 },
+      area("star", 62, 90, 200),
+      area("star", 62, 190, 105),
+      area("star", 62, 330, 70),
+      area("blob", 50, 300, 225),
+      area("cloud", 50, 450, 150),
+      area("heart", 48, 560, 70),
+      area("cloud", 48, 555, 225),
     ],
   },
   {
@@ -130,9 +219,98 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     useWith: 11,
     game: "crayon-keys",
     steps: [
-      { crayon: "red", pitch: 64 },
-      { crayon: "green", pitch: 52 },
+      { crayon: "red", pitches: [64] },
+      { crayon: "green", pitches: [52] },
     ],
+  },
+  {
+    page: 12,
+    title: "Treble Clef E and Bass Clef E",
+    useWith: 12,
+    game: "color-by-note",
+    steps: [
+      { crayon: "blue", pitches: [64] },
+      { crayon: "red", pitches: [52] },
+      { crayon: "yellow", pitches: [50] },
+      { crayon: "orange", pitches: [48] },
+    ],
+    // Six flowers, the vase and Haydn Hippo's coat.
+    areas: [
+      area("cloud", 52, 200, 70),
+      area("cloud", 50, 340, 65),
+      area("cloud", 48, 110, 170),
+      area("cloud", 52, 270, 165),
+      area("cloud", 50, 270, 255),
+      area("cloud", 48, 420, 170),
+      area("blob", 64, 90, 262),
+      area("heart", 64, 560, 200),
+    ],
+    picture: { height: 300, scale: 0.85 },
+  },
+  {
+    page: 21,
+    title: "C Position",
+    useWith: 20,
+    game: "color-by-note",
+    byLetter: true,
+    steps: [
+      { crayon: "green", pitches: [48, 60] },
+      { crayon: "blue", pitches: [50, 62] },
+      { crayon: "red", pitches: [52, 64] },
+      { crayon: "purple", pitches: [53, 65] },
+      { crayon: "orange", pitches: [55, 67] },
+    ],
+    // The letters of TALENT SHOW, as stars: TALEN below, T SHOW above.
+    areas: [
+      area("star", 65, 70, 275),
+      area("star", 55, 195, 255),
+      area("star", 50, 320, 235),
+      area("star", 60, 445, 215),
+      area("star", 64, 570, 195),
+      area("star", 67, 70, 150),
+      area("star", 53, 195, 130),
+      area("star", 48, 320, 110),
+      area("star", 62, 445, 90),
+      area("star", 52, 570, 70),
+    ],
+    picture: { height: 330, scale: 0.8 },
+  },
+  {
+    page: 48,
+    title: "C Position and Middle C Position",
+    useWith: 48,
+    game: "color-by-note",
+    byLetter: true,
+    steps: [
+      { crayon: "pink", pitches: [57] },
+      { crayon: "gray", pitches: [59] },
+      { crayon: "green", pitches: [48, 60] },
+      { crayon: "blue", pitches: [50, 62] },
+      { crayon: "purple", pitches: [52, 64] },
+      { crayon: "yellow", pitches: [53, 65] },
+      { crayon: "orange", pitches: [55, 67] },
+    ],
+    // The market: a cloud, the awning's bar and seven scallops, two hats,
+    // the tree, its pot, the table, the door and the mat.
+    areas: [
+      area("cloud", 50, 320, 48),
+      area("blob", 59, 220, 140),
+      area("blob", 60, 420, 140),
+      area("blob", 60, 60, 245, "bass"),
+      area("blob", 65, 147, 245),
+      area("blob", 67, 234, 245),
+      area("blob", 57, 320, 245),
+      area("blob", 64, 406, 245),
+      area("blob", 62, 493, 245),
+      area("blob", 53, 580, 245),
+      area("cloud", 57, 60, 350),
+      area("cloud", 59, 165, 350),
+      area("star", 48, 270, 350),
+      area("blob", 55, 375, 350),
+      area("blob", 50, 480, 350),
+      area("blob", 52, 585, 350),
+    ],
+    picture: { height: 400, scale: 0.68 },
   },
 ];
 
@@ -155,16 +333,37 @@ export function bookName(pitch: number) {
   if (pitch > 60 && pitch <= PLAY_ZONE[1]) return `TREBLE CLEF ${letter}`;
   return letter;
 }
+/** "an A", "a B": the letter as the book's steps say it. */
+const withArticle = (letter: string) =>
+  `${"AEF".includes(letter) ? "an" : "a"} ${letter}`;
 /** A step's line on the page, in the book's words. */
 export function instruction(page: WorkbookPage, step: Step) {
+  const note = page.byLetter
+    ? withArticle(letterName(step.pitches[0]))
+    : bookName(step.pitches[0]);
   return page.game === "color-by-note"
-    ? `Color the areas containing ${bookName(step.pitch)} ${step.crayon}.`
-    : `Color ${bookName(step.pitch)} ${step.crayon}.`;
+    ? `Color the areas containing ${note} ${step.crayon}.`
+    : `Color ${note} ${step.crayon}.`;
+}
+/** What the child looks for now: "Find BASS CLEF D", "Play every F". */
+export function prompt(page: WorkbookPage, step: Step) {
+  if (page.game === "crayon-keys") return `Find ${bookName(step.pitches[0])}`;
+  return page.byLetter
+    ? `Play every ${letterName(step.pitches[0])}`
+    : `Play ${bookName(step.pitches[0])}`;
 }
 
 /** What one key press on the play zone did. */
 export type Outcome =
-  | { kind: "painted"; pitch: number; finished: boolean }
+  | {
+      kind: "painted";
+      pitch: number;
+      /** The step's notes still to find. */
+      left: number;
+      finished: boolean;
+    }
+  /** One of the step's notes that is already painted. */
+  | { kind: "again"; pitch: number }
   | {
       kind: "octave";
       pitch: number;
@@ -176,8 +375,9 @@ export type Outcome =
 
 /**
  * One page being painted. The steps go one at a time, in the book's order:
- * only the current step's note paints. A wrong key gets a hint and the child
- * tries again; nothing is scored.
+ * only the current step's notes paint, and the step is done once each of
+ * them is played. A wrong key gets a hint and the child tries again; nothing
+ * is scored.
  */
 export class PaintGame {
   step = 0;
@@ -193,24 +393,36 @@ export class PaintGame {
   get finished() {
     return this.step >= this.page.steps.length;
   }
+  /** The current step's notes not painted yet. */
+  get left() {
+    return this.current?.pitches.filter((p) => !this.painted.has(p)) ?? [];
+  }
   play(pitch: number): Outcome {
     const target = this.current;
     if (!target) return { kind: "finished" };
-    if (pitch === target.pitch) {
+    if (target.pitches.includes(pitch)) {
+      if (this.painted.has(pitch)) return { kind: "again", pitch };
       this.painted.set(pitch, target.crayon);
-      this.step++;
-      this.misses = 0;
-      this.letters = false;
-      return { kind: "painted", pitch, finished: this.finished };
+      const left = this.left.length;
+      if (!left) {
+        this.step++;
+        this.misses = 0;
+        this.letters = false;
+      }
+      return { kind: "painted", pitch, left, finished: this.finished };
     }
     this.misses++;
     const lettersShown = !this.letters && this.misses >= LETTER_MISSES;
     if (lettersShown) this.letters = true;
-    if (letterName(pitch) === letterName(target.pitch) && !isBlack(pitch))
+    // The nearest note still to find with this letter, if any.
+    const [nearest] = this.left
+      .filter((p) => letterName(p) === letterName(pitch) && !isBlack(pitch))
+      .sort((a, b) => Math.abs(a - pitch) - Math.abs(b - pitch));
+    if (nearest !== undefined)
       return {
         kind: "octave",
         pitch,
-        direction: pitch < target.pitch ? "higher" : "lower",
+        direction: pitch < nearest ? "higher" : "lower",
         lettersShown,
       };
     return { kind: "wrong", pitch, lettersShown };
@@ -230,17 +442,22 @@ export function feedback(
   const letters = "lettersShown" in outcome && outcome.lettersShown;
   const more = letters ? " The letters are on the keys now." : "";
   const done = `Page ${page.page} is done. ${pageAfter(page) ? "Next page: E2." : "This is the last page so far."}`;
+  const want = target ? letterName(target.pitches[0]) : "";
   switch (outcome.kind) {
     case "painted":
-      return outcome.finished ? done : "Yes! Next crayon.";
+      return outcome.finished
+        ? done
+        : outcome.left
+          ? `Yes! Now find the other ${want}.`
+          : "Yes! Next crayon.";
+    case "again":
+      return `That ${want} is painted. Find the other ${want}.`;
     case "octave":
       return `That is ${bookName(outcome.pitch)}. Go ${outcome.direction}.${more}`;
-    case "wrong": {
-      const want = target ? letterName(target.pitch) : "";
+    case "wrong":
       return isBlack(outcome.pitch)
         ? `That is a black key. ${want} is a white key.${more}`
         : `That is ${letterName(outcome.pitch)}. Look for ${want}.${more}`;
-    }
     case "finished":
       return done;
   }
