@@ -70,6 +70,7 @@ check; it can also be run by hand from the Actions tab.
 - `src/notation.ts` and `src/SheetTimeline.tsx`: score layout, scrolling and seeking.
 - `src/usePianoFullscreen.ts`: fullscreen entry, autoplay callback and focus restoration.
 - `src/workbook.ts`: Music Workbook 3's pages, the paint game, the piano's control keys and page stamps.
+- `src/workbookHold.ts`: the workbook's Hold It! game, timing held keys and rests by the laptop's metronome.
 - `src/WorkbookScreen.tsx`, `src/WorkbookPicture.tsx`, `src/workbookKeyboard.ts`: a workbook page, its Color by Note picture and its three-zone keyboard.
 
 Once audio is unlocked, AudioContext time is the musical clock; MIDI event timestamps are mapped from the performance clock into it. Transport position is derived from anchors and speed, never accumulated frame deltas. Rendering, audio scheduling and scoring use that timeline. Audio uses a short look-ahead and cancels on discontinuities. Timestamp history preserves event positions across speed changes; queued events from before a seek/song/loop reset are excluded from the new passage. Rhythm reconciles a delayed in-window timestamp even if the current clock already marked that note missed.

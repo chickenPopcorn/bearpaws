@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app | 29/45 |
+| Game built in the app | 32/45 |
 
 By game, in the suggested build order:
 
@@ -33,14 +33,15 @@ By game, in the suggested build order:
 Games 1 and 2 share one engine (play a note, paint it), so building both first
 covers 17 pages. Interval Hop adds the most pages of any single game.
 
-**Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and 42)
-all of Color by Note (pages 4, 8, 10, 12, 21 and 48, and the interval pages
-26, 33 and 45), and all of Interval Hop (13, 19, 20, 23, 24, 28, 39, 40, 41, 43, 44 and 47),
-in
-`src/workbook.ts` (pages, `PaintGame`, `IntervalGame`, `HopGame`,
-`ControlKeys`), `src/WorkbookScreen.tsx`,
-`src/WorkbookPicture.tsx` and `src/workbookKeyboard.ts`. Music Workbook 3 is the
-last section of the library.
+**Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and
+42), all of Color by Note (4, 8, 10, 12, 21 and 48, and the interval pages
+26, 33 and 45), all of Interval Hop (13, 19, 20, 23, 24, 28, 39, 40, 41, 43,
+44 and 47) and all of Hold It! (6, 15 and 16). The pages and the note and
+interval games are in `src/workbook.ts` (`PaintGame`, `IntervalGame`,
+`HopGame`, `ControlKeys`), Hold It! in `src/workbookHold.ts`, and the screen
+in `src/WorkbookScreen.tsx`, `src/WorkbookPicture.tsx` and
+`src/workbookKeyboard.ts`. Music Workbook 3 is the last section of the
+library.
 
 **Not built yet:**
 
@@ -288,15 +289,19 @@ count as together.
 
 Paper task: match notes and rests to their counts; circle staccato notes.
 
-Uses the metronome on the laptop: it ticks every beat while the bar fills.
+Built. Any key in the play zone plays; the laptop's metronome clicks each
+count (the first one accented) at 60 beats a minute, and a bar of blocks,
+one per count, fills as the counts pass.
 
-- Notes (6): a note card appears. The child holds a key for its count while a
-  bar fills one beat at a time, and lets go on the right beat. Quarter = 1,
-  half = 2, dotted half = 3, whole = 4.
-- Rests (16): the child keeps hands off the keys for the rest's count, then
-  plays on the next beat. Playing too early wakes a sleeping character.
-- Staccato (15): the child plays each scattered note. Staccato notes must be
-  short (about 250 ms or less); plain quarter notes must last the full beat.
+- Notes (6): hold a key for the note's counts and let go, half a count
+  early or late at most. Quarter = 1, half = 2, dotted half = 3, whole = 4.
+  A done card shows its count ("= 2"), as the book's line would.
+- Rests (16): play a note and let go; the rest is counted from there. Play
+  the next note when the bar is full (up to 0.4 of a count early or 0.6
+  late). Too soon or too late says so, and that key starts a new try.
+- Staccato (15): the page's eight notes, four with a staccato dot. Play each
+  as written: a dotted note let go within 0.3 s, a plain one held at least
+  0.6 s. Staccato notes are circled orange; plain ones fade.
 
 ### 7. Note Snap
 
@@ -314,7 +319,7 @@ hand C–G). No timer: the page is done when every line is drawn.
 | ---: | --------------------------------------- | ----------------------------------------------- | ----------------- | ------ |
 |    4 | Middle C Position Review                | Color areas by note (A–G, Middle C Position)    | Color by Note     | Built  |
 |    5 | Left Hand and Right Hand                | Color the hand, play                            | Together or Apart | Idea   |
-|    6 | Note Values                             | Line from note to counts (4/4 or 3/4)           | Hold It!          | Idea   |
+|    6 | Note Values                             | Line from note to counts (4/4 or 3/4)           | Hold It!          | Built  |
 |    7 | Bass Clef C                             | Color Middle C and Bass Clef C on keyboard      | Crayon Keys       | Built  |
 |    8 | Middle C and Bass Clef C                | Color areas by note                             | Color by Note     | Built  |
 |    9 | Bass Clef D                             | Color Treble D and Bass D on keyboard           | Crayon Keys       | Built  |
@@ -323,8 +328,8 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   12 | Treble Clef E and Bass Clef E           | Color areas by note                             | Color by Note     | Built  |
 |   13 | Steps, Skips and Repeats                | Circle steps, skips, repeats                    | Interval Hop      | Built  |
 |   14 | C Position for the Left Hand            | Color LH C Position C–G on keyboard             | Crayon Keys       | Built  |
-|   15 | Staccato                                | Circle staccato notes                           | Hold It!          | Idea   |
-|   16 | Rests                                   | Line from rest to counts                        | Hold It!          | Idea   |
+|   15 | Staccato                                | Circle staccato notes                           | Hold It!          | Built  |
+|   16 | Rests                                   | Line from rest to counts                        | Hold It!          | Built  |
 |   17 | Staccato                                | Listen: staccato or not                         | Ear Detective     | Idea   |
 |   18 | Rhythm Patterns in 4/4 Time             | Listen: circle the clapped rhythm               | Ear Detective     | Idea   |
 |   19 | 2nds                                    | Color G and F; circle 2nds up and down          | Interval Hop      | Built  |

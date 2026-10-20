@@ -58,6 +58,10 @@ Each page is a game played on the piano:
 - **Interval Hop How far?** (41): the child plays each card, then presses how
   far apart its notes are on the answer keys: **G5** is 2, **A5** is 3 and
   **B5** is 4 (on the computer keyboard L, ; and ').
+- **Hold It!** (6, 15 and 16) plays on any key while the laptop's metronome
+  counts: hold each note for its counts, play short where there is a
+  staccato dot and a full count where there is not, and rest for each
+  rest's counts between two notes.
 - **Interval Hop Same and Different** (28 and 47): the child plays each box's
   top card, then its bottom card, then presses **G5** for Same or **A5** for
   Different (on the computer keyboard L and ;).
