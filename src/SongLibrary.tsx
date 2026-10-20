@@ -3,7 +3,7 @@ import { books, bookForSong, CLASSES_TITLE, songsInBook } from "./books";
 import type { LibraryBook } from "./library";
 import type { Song } from "./song";
 import {
-  GAME_NAMES,
+  gameName,
   WORKBOOK_SERIES,
   WORKBOOK_TITLE,
   stampText,
@@ -189,7 +189,7 @@ export const SongLibrary = memo(function SongLibrary({
                     >
                       {`Page ${page.page} · ${page.title}`}
                       <small>
-                        {GAME_NAMES[page.game]}
+                        {gameName(page)}
                         {day ? ` · Done ${stampText(day)}` : ""}
                       </small>
                     </button>

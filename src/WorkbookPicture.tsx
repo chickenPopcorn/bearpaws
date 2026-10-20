@@ -46,6 +46,8 @@ const SHAPES: Record<AreaShape, string> = {
   heart:
     "M 0 48 C -34 24 -66 4 -62 -22 C -58 -44 -26 -50 0 -26 C 26 -50 58 -44 62 -22 C 66 4 34 24 0 48 Z",
   blob: "M -60 -30 Q -60 -46 -44 -46 L 44 -46 Q 60 -46 60 -30 L 60 30 Q 60 46 44 46 L -44 46 Q -60 46 -60 30 Z",
+  // A grand staff card, for hands together.
+  tall: "M -70 -72 Q -70 -80 -62 -80 L 62 -80 Q 70 -80 70 -72 L 70 72 Q 70 80 62 80 L -62 80 Q -70 80 -70 72 Z",
   // An Interval Hop card, like the book's chalkboards.
   card: "M -70 -42 Q -70 -50 -62 -50 L 62 -50 Q 70 -50 70 -42 L 70 42 Q 70 50 62 50 L -62 50 Q -70 50 -70 42 Z",
 };
@@ -158,6 +160,36 @@ function StaffNotes({
   );
 }
 
+/**
+ * A grand staff on a card: the treble note above, the bass note or a
+ * quarter rest below, joined by a brace.
+ */
+function GrandNotes({ treble, bass }: { treble: number; bass?: number }) {
+  return (
+    <g>
+      <path
+        className="workbook-brace"
+        d="M -44 -50 Q -52 -30 -46 -4 Q -48 2 -54 4 Q -48 6 -46 12 Q -52 38 -44 58"
+      />
+      <g transform="translate(0 -30)">
+        <StaffNotes notes={[treble]} clef="treble" />
+      </g>
+      <g transform="translate(0 40)">
+        {bass === undefined ? (
+          <g>
+            <StaffNotes notes={[]} clef="bass" />
+            <text className="workbook-note" x={16} y={0} fontSize={8 * HALF}>
+              {"\uE4E5"}
+            </text>
+          </g>
+        ) : (
+          <StaffNotes notes={[bass]} clef="bass" />
+        )}
+      </g>
+    </g>
+  );
+}
+
 /** One area of a picture, as drawn. */
 export interface PictureArea {
   shape: AreaShape;
@@ -176,6 +208,8 @@ export interface PictureArea {
   dots?: readonly (Crayon | undefined)[];
   /** Passed over: a Find page's card without its interval. */
   faded?: boolean;
+  /** A grand staff card: a treble note, and a bass note or a rest. */
+  grand?: { treble: number; bass?: number };
   /** How far pages: the answers printed under the staff, 2, 3 and 4. */
   choices?: readonly (number | string)[];
   /** How far pages: the answer given, circled in `ring`. */
@@ -237,14 +271,18 @@ export function WorkbookPicture({
             d={SHAPES[area.shape]}
             style={{ fill: area.crayon ? CRAYONS[area.crayon] : undefined }}
           />
-          <g transform={area.choices ? "translate(0 -10)" : undefined}>
-            <StaffNotes
-              notes={area.notes}
-              clef={area.clef}
-              harmonic={area.harmonic}
-              dots={area.dots}
-            />
-          </g>
+          {area.grand ? (
+            <GrandNotes {...area.grand} />
+          ) : (
+            <g transform={area.choices ? "translate(0 -10)" : undefined}>
+              <StaffNotes
+                notes={area.notes}
+                clef={area.clef}
+                harmonic={area.harmonic}
+                dots={area.dots}
+              />
+            </g>
+          )}
           {area.choices?.map((choice, n) => {
             // Words ("Same", "Different") take more room than numbers.
             const word = typeof choice === "string",
@@ -274,7 +312,7 @@ export function WorkbookPicture({
             <ellipse
               className="workbook-ring"
               rx={86}
-              ry={64}
+              ry={area.grand ? 96 : 64}
               pathLength={1}
               style={{ stroke: CRAYONS[area.ring] }}
             />

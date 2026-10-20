@@ -12,7 +12,7 @@ import { SongTitle } from "./SongTitle";
 import {
   CRAYONS,
   ControlKeys,
-  GAME_NAMES,
+  gameName,
   HopGame,
   IntervalGame,
   PaintGame,
@@ -541,7 +541,7 @@ export const Workbook = memo(function Workbook({
             <SongTitle title={page.title} />
           </h1>
           <p>
-            {GAME_NAMES[page.game]} ·{" "}
+            {gameName(page)} ·{" "}
             {page.game === "color-by-interval"
               ? "Play each pair of notes on your piano."
               : page.game === "interval-hop"
