@@ -4,8 +4,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HOLD_MS, SKIP_KEY, WORKBOOK_PAGES } from "../src/workbook";
 
+type KeyListener = (
+  pitch: number,
+  down: boolean,
+  time: number,
+  lost?: boolean,
+) => void;
 const fake = vi.hoisted(() => {
-  const keys = new Set<(pitch: number, down: boolean, time: number) => void>();
+  const keys = new Set<KeyListener>();
   const listeners = new Set<() => void>();
   return {
     keys,
@@ -16,9 +22,7 @@ const fake = vi.hoisted(() => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-      onKey: (
-        listener: (pitch: number, down: boolean, time: number) => void,
-      ) => {
+      onKey: (listener: KeyListener) => {
         keys.add(listener);
         return () => keys.delete(listener);
       },
@@ -41,12 +45,12 @@ async function render(overrides: Partial<Props> = {}) {
 }
 /** The keys' clock, in ms: each key is played 1 s after the last. */
 let clock = 0;
-async function key(pitch: number, down: boolean) {
+async function key(pitch: number, down: boolean, lost = false) {
   clock += 1000;
   await act(async () => {
     if (down) fake.studio.input.down.add(pitch);
     else fake.studio.input.down.delete(pitch);
-    for (const listener of fake.keys) listener(pitch, down, clock);
+    for (const listener of fake.keys) listener(pitch, down, clock, lost);
   });
 }
 async function tap(pitch: number) {
@@ -396,6 +400,16 @@ describe("workbook control keys", () => {
     await key(38, false);
     expect(props.onLeave).toHaveBeenCalledOnce();
     expect(props.onPage).not.toHaveBeenCalled();
+  });
+
+  it("neither goes back nor leaves when the window loses focus mid-hold", async () => {
+    vi.useFakeTimers();
+    await render();
+    await key(38, true);
+    await key(38, false, true);
+    await act(async () => vi.advanceTimersByTime(HOLD_MS));
+    expect(props.onPage).not.toHaveBeenCalled();
+    expect(props.onLeave).not.toHaveBeenCalled();
   });
 
   it("starts the page over only when F2 is held", async () => {
