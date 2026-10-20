@@ -144,6 +144,41 @@ describe("workbook page", () => {
     expect(staff()).toBe("Staff: TREBLE CLEF E, MIDDLE C (green)");
   });
 
+  it("gives a title that starts with a number no initial", async () => {
+    await render({ page: page(26) });
+    expect(text("h1")).toBe("2nds and 3rds");
+    expect(container.querySelector("h1 .song-title-initial")).toBeNull();
+  });
+
+  it("plays an interval page one outlined area at a time", async () => {
+    await render({ page: page(33) });
+    const picture = () =>
+      container.querySelector(".workbook-picture")!.getAttribute("aria-label");
+    const outlined = () =>
+      container.querySelector(".workbook-area.is-current title")!.textContent;
+    expect(text("p")).toBe(
+      "Color by Note · Play each pair of notes on your piano.",
+    );
+    expect(text(".workbook-steps li")).toBe(
+      "Color the areas containing a melodic interval green.",
+    );
+    // The melodic ones first: E4, then F4.
+    expect(outlined()).toBe("TREBLE CLEF E then TREBLE CLEF F");
+    expect(text(".workbook-prompt")).toBe(
+      "Play the two notes, left then right",
+    );
+    await tap(64);
+    expect(text(".workbook-hint")).toBe("Now the note on the right.");
+    vi.spyOn(performance, "now").mockReturnValue(performance.now() + 1000);
+    await tap(65);
+    expect(text(".workbook-hint")).toBe(
+      "Yes! One after the other, so it is melodic: green.",
+    );
+    expect(picture()).toBe("Picture with 5 areas, 1 painted");
+    expect(outlined()).toBe("TREBLE CLEF G then TREBLE CLEF F");
+    vi.restoreAllMocks();
+  });
+
   it("paints every area holding the note on a Color by Note page", async () => {
     await render({ page: page(10) });
     const picture = () =>

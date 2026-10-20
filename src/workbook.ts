@@ -76,17 +76,57 @@ export interface Area {
   /** The staff's clef: treble from middle C up, unless the book writes bass. */
   clef?: Clef;
 }
-export type WorkbookGame = "crayon-keys" | "color-by-note";
+/**
+ * One area of an interval page's picture, holding two notes on a small
+ * staff: an interval.
+ */
+export interface IntervalArea {
+  shape: AreaShape;
+  /**
+   * Its notes: the left one first, then the right one; or, written one
+   * above the other, the lower one first.
+   */
+  notes: readonly [number, number];
+  /** Written one above the other, to play together (harmonic). */
+  harmonic: boolean;
+  /** The area's centre in the picture's frame, 640 wide. */
+  x: number;
+  y: number;
+  /** The staff's clef: treble when both notes are middle C or up. */
+  clef?: Clef;
+}
+/** One numbered step on an interval page: which intervals get its crayon. */
+export interface IntervalStep {
+  crayon: Crayon;
+  /** Intervals of a size (2 for 2nds), or played together or not. */
+  match: { size: number } | { harmonic: boolean };
+}
+export type WorkbookGame =
+  "crayon-keys" | "color-by-note" | "color-by-interval";
+// Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
   "color-by-note": "Color by Note",
+  "color-by-interval": "Color by Note",
 };
-export interface WorkbookPage {
+interface PageInfo {
   page: number;
   title: string;
   /** The Lesson Book 3 page it goes with ("Use with page N"). */
   useWith: number;
-  game: WorkbookGame;
+  /** The picture's height (it is 640 wide) and its areas' size, if not 300 and 1. */
+  picture?: { height: number; scale: number };
+}
+/** An interval page: 2nds and 3rds, melodic and harmonic, 4ths and 5ths. */
+export interface IntervalPage extends PageInfo {
+  game: "color-by-interval";
+  steps: IntervalStep[];
+  areas: IntervalArea[];
+}
+export type WorkbookPage = NotePage | IntervalPage;
+/** A page of single notes: Crayon Keys, and Color by Note by notes. */
+export interface NotePage extends PageInfo {
+  game: "crayon-keys" | "color-by-note";
   steps: Step[];
   /** The book names notes by letter only ("an F"), not by clef. */
   byLetter?: boolean;
@@ -94,8 +134,6 @@ export interface WorkbookPage {
   areas?: Area[];
   /** Crayon Keys pages with a staff: its notes, left to right. */
   staff?: { pitch: number; clef: Clef }[];
-  /** The picture's height (it is 640 wide) and its areas' size, if not 300 and 1. */
-  picture?: { height: number; scale: number };
 }
 
 const area = (
@@ -113,6 +151,20 @@ const staircase = (rows: [AreaShape, number, Clef?][][]) =>
     ),
   );
 
+const melodic = (
+  shape: AreaShape,
+  first: number,
+  second: number,
+  x: number,
+  y: number,
+): IntervalArea => ({ shape, notes: [first, second], harmonic: false, x, y });
+const harmonic = (
+  shape: AreaShape,
+  low: number,
+  high: number,
+  x: number,
+  y: number,
+): IntervalArea => ({ shape, notes: [low, high], harmonic: true, x, y });
 const bass = (...pitches: number[]) =>
   pitches.map((pitch) => ({ pitch, clef: "bass" as const }));
 const treble = (...pitches: number[]) =>
@@ -302,6 +354,44 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     picture: { height: 330, scale: 0.8 },
   },
   {
+    page: 26,
+    title: "2nds and 3rds",
+    useWith: 25,
+    game: "color-by-interval",
+    steps: [
+      { crayon: "pink", match: { size: 2 } },
+      { crayon: "purple", match: { size: 3 } },
+    ],
+    // Three dancers, each with a bodice and a tutu.
+    areas: [
+      melodic("blob", 65, 62, 110, 85),
+      melodic("cloud", 60, 59, 110, 215),
+      melodic("blob", 53, 55, 320, 85),
+      melodic("cloud", 65, 67, 320, 215),
+      melodic("blob", 59, 55, 530, 85),
+      melodic("cloud", 60, 64, 530, 215),
+    ],
+  },
+  {
+    page: 33,
+    title: "Melodic and Harmonic Intervals",
+    useWith: 32,
+    game: "color-by-interval",
+    steps: [
+      { crayon: "green", match: { harmonic: false } },
+      { crayon: "blue", match: { harmonic: true } },
+    ],
+    // Five swirls around George Bear, conducting.
+    areas: [
+      harmonic("cloud", 53, 55, 150, 90),
+      melodic("cloud", 64, 65, 490, 70),
+      harmonic("cloud", 52, 55, 490, 180),
+      melodic("cloud", 67, 65, 150, 250),
+      melodic("cloud", 60, 62, 490, 290),
+    ],
+    picture: { height: 345, scale: 1 },
+  },
+  {
     page: 36,
     title: "C, D, E, F and G",
     useWith: 35,
@@ -350,6 +440,28 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       { crayon: "orange", pitches: [55] },
     ],
     staff: [...treble(65), ...bass(55)],
+  },
+  {
+    page: 45,
+    title: "4ths and 5ths",
+    useWith: 44,
+    game: "color-by-interval",
+    steps: [
+      { crayon: "green", match: { size: 4 } },
+      { crayon: "yellow", match: { size: 5 } },
+    ],
+    // The left curtain, the middle curtain and the bunny, the right curtain.
+    areas: [
+      melodic("cloud", 60, 65, 110, 70),
+      melodic("blob", 53, 60, 110, 190),
+      melodic("cloud", 62, 67, 110, 310),
+      harmonic("blob", 60, 67, 320, 130),
+      harmonic("blob", 60, 65, 320, 270),
+      harmonic("cloud", 55, 60, 530, 70),
+      melodic("blob", 48, 55, 530, 190),
+      melodic("cloud", 55, 50, 530, 310),
+    ],
+    picture: { height: 380, scale: 0.9 },
   },
   {
     page: 48,
@@ -413,7 +525,7 @@ export function bookName(pitch: number) {
 const withArticle = (letter: string) =>
   `${"AEF".includes(letter) ? "an" : "a"} ${letter}`;
 /** A step's line on the page, in the book's words. */
-export function instruction(page: WorkbookPage, step: Step) {
+export function instruction(page: NotePage, step: Step) {
   if (step.words) return step.words.instruction;
   const letter = letterName(step.pitches[0]);
   if (page.staff)
@@ -424,7 +536,7 @@ export function instruction(page: WorkbookPage, step: Step) {
     : `Color ${note} ${step.crayon}.`;
 }
 /** What the child looks for now: "Find BASS CLEF D", "Play every F". */
-export function prompt(page: WorkbookPage, step: Step) {
+export function prompt(page: NotePage, step: Step) {
   if (step.words) return step.words.prompt;
   const letter = letterName(step.pitches[0]);
   if (page.game === "crayon-keys")
@@ -476,7 +588,7 @@ export class PaintGame {
   private misses = 0;
   /** Each painted note and its crayon. */
   readonly painted = new Map<number, Crayon>();
-  constructor(readonly page: WorkbookPage) {}
+  constructor(readonly page: NotePage) {}
   get current(): Step | undefined {
     return this.page.steps[this.step];
   }
@@ -524,14 +636,19 @@ export class PaintGame {
 }
 
 /** The hint under the prompt after `outcome`, for a grown-up to read aloud. */
+/** What a finished page says. */
+const doneText = (page: WorkbookPage) =>
+  `Page ${page.page} is done. ${pageAfter(page) ? "Next page: E2." : "This is the last page so far."}`;
+const lettersText = (outcome: { lettersShown?: boolean }) =>
+  outcome.lettersShown ? " The letters are on the keys now." : "";
+
 export function feedback(
-  page: WorkbookPage,
+  page: NotePage,
   outcome: Outcome,
   target: Step | undefined,
 ) {
-  const letters = "lettersShown" in outcome && outcome.lettersShown;
-  const more = letters ? " The letters are on the keys now." : "";
-  const done = `Page ${page.page} is done. ${pageAfter(page) ? "Next page: E2." : "This is the last page so far."}`;
+  const more = "lettersShown" in outcome ? lettersText(outcome) : "";
+  const done = doneText(page);
   const want = wanted(target),
     // Several notes of one letter ("an F"), or of several (C to G).
     oneLetter = !want.includes(" or ");
@@ -556,6 +673,203 @@ export function feedback(
         : `That is ${letterName(outcome.pitch)}. Look for ${want}.${more}`;
     case "finished":
       return done;
+  }
+}
+
+/** Notes that start this close together, in milliseconds, sound together. */
+export const TOGETHER_MS = 150;
+/** A note that comes this long after the other is a new try, not "apart". */
+export const RETRY_MS = 2000;
+const LETTER_STEP = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+/** The note's place on the staff, counted in steps (lines and spaces). */
+const staffStep = (pitch: number) =>
+  Math.floor(pitch / 12) * 7 + LETTER_STEP[pitch % 12];
+/** An interval's size: 2 for a 2nd, 3 for a 3rd. */
+export const intervalSize = ([a, b]: readonly [number, number]) =>
+  Math.abs(staffStep(a) - staffStep(b)) + 1;
+const ORDINALS: Record<number, string> = { 2: "2nd", 3: "3rd" };
+/** "2nd", "3rd", "4th", "5th". */
+export const intervalName = (size: number) => ORDINALS[size] ?? `${size}th`;
+/** Whether `step` colors `area`. */
+export const stepColors = (step: IntervalStep, area: IntervalArea) =>
+  "size" in step.match
+    ? intervalSize(area.notes) === step.match.size
+    : area.harmonic === step.match.harmonic;
+/** A step's line on an interval page, in the book's words. */
+export function intervalInstruction(step: IntervalStep) {
+  return "size" in step.match
+    ? `Color the areas containing ${intervalName(step.match.size)}s ${step.crayon}.`
+    : `Color the areas containing a ${step.match.harmonic ? "harmonic" : "melodic"} interval ${step.crayon}.`;
+}
+/** What the child does with the bright area now. */
+export const intervalPrompt = (area: IntervalArea) =>
+  area.harmonic
+    ? "Play the two notes together"
+    : "Play the two notes, left then right";
+
+/** What one key press on an interval page did. */
+export type IntervalOutcome =
+  | { kind: "painted"; finished: boolean }
+  /** The left note of a melodic interval: now the right one. */
+  | { kind: "next" }
+  /** One note of a harmonic interval, so far. */
+  | { kind: "waiting" }
+  /** The right note of a melodic interval, before the left one. */
+  | { kind: "order" }
+  /** Both notes of a melodic interval at once. */
+  | { kind: "together" }
+  /** A harmonic interval's notes, one after the other. */
+  | { kind: "apart" }
+  | {
+      kind: "octave";
+      pitch: number;
+      direction: "higher" | "lower";
+      lettersShown: boolean;
+    }
+  | { kind: "wrong"; pitch: number; lettersShown: boolean }
+  | { kind: "finished" };
+
+/**
+ * An interval page being painted. One area at a time, in the book's step
+ * order: the child plays its two notes as written, together or one after
+ * the other, and the area takes its interval's crayon. Nothing is scored.
+ */
+export class IntervalGame {
+  /** The areas in playing order, by their index on the page. */
+  readonly order: readonly number[];
+  private at = 0;
+  /** Letter names show on the keys, after misses or the hint key. */
+  letters = false;
+  private misses = 0;
+  /** Each painted area's crayon, by its index on the page. */
+  readonly painted = new Map<number, Crayon>();
+  /** When each of the current area's notes was pressed. */
+  private pressed = new Map<number, number>();
+  constructor(readonly page: IntervalPage) {
+    this.order = page.steps.flatMap((step) =>
+      page.areas.flatMap((area, i) => (stepColors(step, area) ? [i] : [])),
+    );
+  }
+  get finished() {
+    return this.at >= this.order.length;
+  }
+  /** The area to play now, by its index on the page. */
+  get current(): number | undefined {
+    return this.order[this.at];
+  }
+  /** The step whose crayon the current area gets. */
+  get step() {
+    const index = this.current;
+    return index === undefined
+      ? this.page.steps.length
+      : this.page.steps.findIndex((s) => stepColors(s, this.page.areas[index]));
+  }
+  /**
+   * The key `pitch` went down at `time` (ms); `down` holds every key down
+   * now, `pitch` included.
+   */
+  play(
+    pitch: number,
+    time: number,
+    down: ReadonlySet<number>,
+  ): IntervalOutcome {
+    const index = this.current;
+    if (index === undefined) return { kind: "finished" };
+    const area = this.page.areas[index];
+    const [first, second] = area.notes;
+    if (!area.notes.includes(pitch)) return this.miss(pitch, area);
+    if (area.harmonic) {
+      const other = pitch === first ? second : first,
+        then = this.pressed.get(other);
+      this.pressed.set(pitch, time);
+      if (then === undefined) return { kind: "waiting" };
+      if (down.has(other) && time - then <= TOGETHER_MS)
+        return this.paint(index);
+      if (!down.has(other) && time - then > RETRY_MS) {
+        this.pressed.delete(other);
+        return { kind: "waiting" };
+      }
+      this.pressed.clear();
+      return { kind: "apart" };
+    }
+    if (pitch === first) {
+      this.pressed.set(first, time);
+      return { kind: "next" };
+    }
+    const then = this.pressed.get(first);
+    if (then === undefined) return { kind: "order" };
+    if (time - then < TOGETHER_MS) {
+      this.pressed.clear();
+      return { kind: "together" };
+    }
+    return this.paint(index);
+  }
+  /** The hint key shows the letter names until the area is done. */
+  hint() {
+    if (!this.finished) this.letters = true;
+  }
+  private paint(index: number): IntervalOutcome {
+    this.painted.set(index, this.page.steps[this.step].crayon);
+    this.at++;
+    this.pressed.clear();
+    this.misses = 0;
+    this.letters = false;
+    return { kind: "painted", finished: this.finished };
+  }
+  private miss(pitch: number, area: IntervalArea): IntervalOutcome {
+    this.pressed.clear();
+    this.misses++;
+    const lettersShown = !this.letters && this.misses >= LETTER_MISSES;
+    if (lettersShown) this.letters = true;
+    const [nearest] = area.notes
+      .filter((p) => letterName(p) === letterName(pitch) && !isBlack(pitch))
+      .sort((a, b) => Math.abs(a - pitch) - Math.abs(b - pitch));
+    if (nearest !== undefined)
+      return {
+        kind: "octave",
+        pitch,
+        direction: pitch < nearest ? "higher" : "lower",
+        lettersShown,
+      };
+    return { kind: "wrong", pitch, lettersShown };
+  }
+}
+
+/**
+ * The hint after an interval page's `outcome`, or null to keep the one
+ * shown (one note of a harmonic interval is half of a try, not a mistake).
+ */
+export function intervalFeedback(
+  page: IntervalPage,
+  outcome: IntervalOutcome,
+  area: IntervalArea | undefined,
+): string | null {
+  switch (outcome.kind) {
+    case "painted": {
+      if (outcome.finished || !area) return doneText(page);
+      const step = page.steps.find((s) => stepColors(s, area))!;
+      return "size" in step.match
+        ? `Yes! That is a ${intervalName(step.match.size)}: ${step.crayon}.`
+        : `Yes! ${area.harmonic ? "Together, so it is harmonic" : "One after the other, so it is melodic"}: ${step.crayon}.`;
+    }
+    case "next":
+      return "Now the note on the right.";
+    case "waiting":
+      return null;
+    case "order":
+      return "Start with the note on the left.";
+    case "together":
+      return "These go one after the other: the left note, then the right.";
+    case "apart":
+      return "These notes are stacked: play them at the same time.";
+    case "octave":
+      return `That is ${bookName(outcome.pitch)}. Go ${outcome.direction}.${lettersText(outcome)}`;
+    case "wrong":
+      return isBlack(outcome.pitch)
+        ? `That is a black key. Both notes are on white keys.${lettersText(outcome)}`
+        : `That is ${letterName(outcome.pitch)}. Look at the notes again.${lettersText(outcome)}`;
+    case "finished":
+      return doneText(page);
   }
 }
 

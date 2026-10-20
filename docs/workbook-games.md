@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app | 14/45 |
+| Game built in the app | 17/45 |
 
 By game, in the suggested build order:
 
@@ -34,8 +34,9 @@ Games 1 and 2 share one engine (play a note, paint it), so building both first
 covers 17 pages. Interval Hop adds the most pages of any single game.
 
 **Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and 42)
-and pages 4, 8, 10, 12, 21 and 48 of Color by Note,
-in `src/workbook.ts` (pages, `PaintGame`, `ControlKeys`), `src/WorkbookScreen.tsx`,
+and all of Color by Note (pages 4, 8, 10, 12, 21 and 48, and the interval
+pages 26, 33 and 45), in `src/workbook.ts` (pages, `PaintGame`,
+`IntervalGame`, `ControlKeys`), `src/WorkbookScreen.tsx`,
 `src/WorkbookPicture.tsx` and `src/workbookKeyboard.ts`. Music Workbook 3 is the
 last section of the library.
 
@@ -198,10 +199,14 @@ is full.
 - Pages 4, 21 and 48 name notes by letter only ("an F"). Such a step can hold
   a note in each clef (F3 and F4); it is done once every one of them is
   played, and "Yes! Now find the other F." sends the child to the next.
-- Interval pages (26, 33, 45): each area holds two notes. The child plays both;
-  harmonic intervals must be played together, melodic ones one after the
-  other. When both notes are right, the area paints in its interval's crayon
-  by itself; the child does not name the interval here.
+- Interval pages (26, 33, 45): each area holds two notes. The areas go one at
+  a time, in the book's step order (all the 2nds, then the 3rds), and the one
+  to play is outlined. Harmonic intervals must be played together (starting
+  within 150 ms), melodic ones left note first, then the right one. When both
+  notes are right, the area paints in its interval's crayon by itself and the
+  hint names it ("Yes! That is a 3rd: purple."); the child does not name the
+  interval here. One note of a harmonic interval alone is half a try, not a
+  mistake.
 
 ### 3. Interval Hop
 
@@ -308,14 +313,14 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   23 | 3rds                                    | Color G and E; circle 3rds up and down          | Interval Hop      | Idea   |
 |   24 | 3rds                                    | Circle each 3rd                                 | Interval Hop      | Idea   |
 |   25 | Melodies with 2nds and 3rds             | Listen: circle the melody                       | Ear Detective     | Idea   |
-|   26 | 2nds and 3rds                           | Color areas by interval                         | Color by Note     | Idea   |
+|   26 | 2nds and 3rds                           | Color areas by interval                         | Color by Note     | Built  |
 |   27 | Staccato and Legato Melodies            | Listen: circle the melody                       | Ear Detective     | Idea   |
 |   28 | Same and Different                      | Same or different intervals                     | Interval Hop      | Idea   |
 |   29 | Left Hand and Right Hand                | Color the hand, trace the slur, play            | Together or Apart | Idea   |
 |   30 | C Position                              | Line from letter to staff note                  | Note Snap         | Idea   |
 |   31 | Harmonic Intervals                      | Circle notes played together                    | Together or Apart | Idea   |
 |   32 | Melodic Intervals                       | Circle notes played separately                  | Together or Apart | Idea   |
-|   33 | Melodic and Harmonic Intervals          | Color areas by interval kind                    | Color by Note     | Idea   |
+|   33 | Melodic and Harmonic Intervals          | Color areas by interval kind                    | Color by Note     | Built  |
 |   34 | Middle C Position                       | Line from letter to staff note                  | Note Snap         | Idea   |
 |   35 | Hands Together                          | Circle examples played hands together           | Together or Apart | Idea   |
 |   36 | C, D, E, F and G                        | Color Bass C–G on keyboard and staff            | Crayon Keys       | Built  |
@@ -327,7 +332,7 @@ hand C–G). No timer: the page is done when every line is drawn.
 |   42 | F and G                                 | Color Treble F and Bass G on keyboard and staff | Crayon Keys       | Built  |
 |   43 | 5ths                                    | Color C and G; circle 5ths up and down          | Interval Hop      | Idea   |
 |   44 | 5ths                                    | Circle each 5th                                 | Interval Hop      | Idea   |
-|   45 | 4ths and 5ths                           | Color areas by interval                         | Color by Note     | Idea   |
+|   45 | 4ths and 5ths                           | Color areas by interval                         | Color by Note     | Built  |
 |   46 | Melodies with 2nds, 3rds, 4ths and 5ths | Listen: circle the melody                       | Ear Detective     | Idea   |
 |   47 | Same and Different                      | Same or different intervals                     | Interval Hop      | Idea   |
 |   48 | C Position and Middle C Position        | Color areas A–G (Market)                        | Color by Note     | Built  |

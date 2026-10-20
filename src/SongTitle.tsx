@@ -1,7 +1,11 @@
-/** A title with its first letter as a decorative initial, read whole. */
+/**
+ * A title with its first letter as a decorative initial, read whole. A title
+ * that starts with a number has none.
+ */
 export function SongTitle({ title }: { title: string }) {
   const letter = /\p{L}/u.exec(title);
-  if (!letter) return <>{title}</>;
+  // "2nds and 3rds" starts with a number: no initial in mid-word.
+  if (!letter || /^\p{N}/u.test(title)) return <>{title}</>;
   return (
     <>
       <span className="sr-only">{title}</span>

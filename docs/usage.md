@@ -36,11 +36,19 @@ with barlines. General MIDI players may ignore these text events.
 ## Music Workbook 3
 
 The library's last section is _Music for Little Mozarts, Music Workbook 3_.
-Each page is a game played on the piano: pages 7, 9, 11, 14, 36, 37, 38 and 42
-(Crayon Keys) paint the named keys, and on pages with a staff its note too, and pages 4, 8, 10, 12, 21 and 48 (Color by Note) paint each
-area of a picture by its note. Where the book names only a letter ("an F"),
-every F in the picture counts, in either clef. The steps go in the book's order; a wrong key gets a hint, and after
-two misses the letter names appear on the keys. A finished page gets a date
+Each page is a game played on the piano:
+
+- **Crayon Keys** (pages 7, 9, 11, 14, 36, 37, 38 and 42) paints the named
+  keys, and on pages with a staff its note too.
+- **Color by Note** (pages 4, 8, 10, 12, 21 and 48) paints each area of a
+  picture by its note. Where the book names only a letter ("an F"), every F
+  in the picture counts, in either clef.
+- **Color by Note with intervals** (pages 26, 33 and 45) outlines one area at
+  a time. The child plays its two notes as written, together or left then
+  right, and the area takes its interval's crayon.
+
+The steps go in the book's order; a wrong key gets a hint, and after two
+misses the letter names appear on the keys. A finished page gets a date
 stamp, kept in this browser.
 
 Once a page is open, the piano does everything, so the child never needs the
