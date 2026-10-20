@@ -44,6 +44,11 @@ const unstamped = ({ updated: _updated, ...rest }: Progress) =>
  */
 const savedBeat = (beat: number) => Math.round(beat * 1e6) / 1e6;
 const NO_PEDALS: readonly PedalSpan[] = [];
+/**
+ * A key went down or came up at `time`: milliseconds on the performance
+ * clock, as MIDI event time stamps are.
+ */
+export type KeyListener = (pitch: number, down: boolean, time: number) => void;
 const NO_NOTES: Note[] = [];
 /** How long after Play the count-in's first click sounds, in seconds. */
 const COUNT_IN_DELAY = 0.1;
@@ -90,7 +95,7 @@ export class Studio {
   revision = 0;
   listeners = new Set<() => void>();
   /** Told of every key that goes down or comes up, as the workbook needs. */
-  private keyListeners = new Set<(pitch: number, down: boolean) => void>();
+  private keyListeners = new Set<KeyListener>();
   lastSave = 0;
   /** The current song's record as last written, without its stamp. */
   private savedProgress = "";
@@ -314,8 +319,11 @@ export class Studio {
     return () => this.listeners.delete(listener);
   };
   snapshot = () => this.revision;
-  /** Follow key presses and releases from the piano, the screen and shortcuts. */
-  onKey = (listener: (pitch: number, down: boolean) => void) => {
+  /**
+   * Follow key presses and releases from the piano, the screen and
+   * shortcuts, each with when it happened.
+   */
+  onKey = (listener: KeyListener) => {
     this.keyListeners.add(listener);
     return () => this.keyListeners.delete(listener);
   };
@@ -924,10 +932,13 @@ export class Studio {
     const before = this.input.down;
     const edge = this.input.message(data);
     if (this.keyListeners.size) {
-      if (edge) for (const l of this.keyListeners) l(edge.pitch, true);
+      // The key's own time, not when this message was handled: messages can
+      // queue behind a busy page and arrive together.
+      const time = Math.min(timestamp, performance.now());
+      if (edge) for (const l of this.keyListeners) l(edge.pitch, true, time);
       for (const pitch of before)
         if (!this.input.down.has(pitch))
-          for (const l of this.keyListeners) l(pitch, false);
+          for (const l of this.keyListeners) l(pitch, false, time);
     }
     if (edge) {
       this.lastVelocity = edge.velocity;

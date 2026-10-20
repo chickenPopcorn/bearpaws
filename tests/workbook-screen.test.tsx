@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HOLD_MS, WORKBOOK_PAGES } from "../src/workbook";
 
 const fake = vi.hoisted(() => {
-  const keys = new Set<(pitch: number, down: boolean) => void>();
+  const keys = new Set<(pitch: number, down: boolean, time: number) => void>();
   const listeners = new Set<() => void>();
   return {
     keys,
@@ -15,7 +15,9 @@ const fake = vi.hoisted(() => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-      onKey: (listener: (pitch: number, down: boolean) => void) => {
+      onKey: (
+        listener: (pitch: number, down: boolean, time: number) => void,
+      ) => {
         keys.add(listener);
         return () => keys.delete(listener);
       },
@@ -36,11 +38,14 @@ async function render(overrides: Partial<Props> = {}) {
     root.render(<Workbook key={props.page.page} {...props} />),
   );
 }
+/** The keys' clock, in ms: each key is played 1 s after the last. */
+let clock = 0;
 async function key(pitch: number, down: boolean) {
+  clock += 1000;
   await act(async () => {
     if (down) fake.studio.input.down.add(pitch);
     else fake.studio.input.down.delete(pitch);
-    for (const listener of fake.keys) listener(pitch, down);
+    for (const listener of fake.keys) listener(pitch, down, clock);
   });
 }
 async function tap(pitch: number) {
@@ -169,14 +174,12 @@ describe("workbook page", () => {
     );
     await tap(64);
     expect(text(".workbook-hint")).toBe("Now the note on the right.");
-    vi.spyOn(performance, "now").mockReturnValue(performance.now() + 1000);
     await tap(65);
     expect(text(".workbook-hint")).toBe(
       "Yes! One after the other, so it is melodic: green.",
     );
     expect(picture()).toBe("Picture with 5 areas, 1 painted");
     expect(outlined()).toBe("TREBLE CLEF G then TREBLE CLEF F");
-    vi.restoreAllMocks();
   });
 
   it("paints every area holding the note on a Color by Note page", async () => {

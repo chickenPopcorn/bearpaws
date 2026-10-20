@@ -175,7 +175,7 @@ export const Workbook = memo(function Workbook({
         return;
     }
   });
-  const key = useEffectEvent((pitch: number, down: boolean) => {
+  const key = useEffectEvent((pitch: number, down: boolean, time: number) => {
     if (!down) {
       controls.current?.up(pitch);
       return;
@@ -184,7 +184,7 @@ export const Workbook = memo(function Workbook({
     let outcome;
     if (game instanceof IntervalGame) {
       const index = game.current;
-      outcome = game.play(pitch, performance.now(), studio.input.down);
+      outcome = game.play(pitch, time, studio.input.down);
       const text = intervalFeedback(
         game.page,
         outcome,
@@ -208,7 +208,7 @@ export const Workbook = memo(function Workbook({
       (pitch) => studio.input.down.has(pitch),
     );
     controls.current = keys;
-    const stop = studio.onKey((pitch, down) => key(pitch, down));
+    const stop = studio.onKey((pitch, down, time) => key(pitch, down, time));
     return () => {
       stop();
       keys.clear();

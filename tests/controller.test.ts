@@ -2301,4 +2301,14 @@ describe("key listeners", () => {
       [62, false],
     ]);
   });
+
+  it("gives each key the time it was played, not when it was handled", () => {
+    const studio = create();
+    const times: number[] = [];
+    studio.onKey((_pitch, down, time) => down && times.push(time));
+    // Two presses 0.3 s apart, handled together now.
+    midi(studio, [0x90, 60, 80], 0.5);
+    midi(studio, [0x90, 64, 80], 0.2);
+    expect(times).toEqual([(env.now - 0.5) * 1000, (env.now - 0.2) * 1000]);
+  });
 });
