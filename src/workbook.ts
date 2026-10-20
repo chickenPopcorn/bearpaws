@@ -1672,6 +1672,17 @@ export class ControlKeys {
     else this.act("restart-short");
     return true;
   }
+  /**
+   * A key was let go without its release reaching here, as when the window
+   * loses focus: its hold ends without acting. False when it is not a
+   * control key.
+   */
+  cancel(pitch: number) {
+    if (zoneOf(pitch) !== "control") return false;
+    clearTimeout(this.holds.get(pitch));
+    this.holds.delete(pitch);
+    return true;
+  }
   /** Forget held keys, as when the page closes. */
   clear() {
     for (const timer of this.holds.values()) clearTimeout(timer);

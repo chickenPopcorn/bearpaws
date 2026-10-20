@@ -2304,13 +2304,14 @@ describe("key listeners", () => {
 
   it("lets listeners hear keys come up when they are released together", () => {
     const studio = create();
-    const keys: [number, boolean][] = [];
-    studio.onKey((pitch, down) => keys.push([pitch, down]));
+    const keys: [number, boolean, boolean | undefined][] = [];
+    studio.onKey((pitch, down, _time, lost) => keys.push([pitch, down, lost]));
     studio.virtual(60, true);
     studio.releaseKeys();
+    // The release is marked lost: the key itself was never let go.
     expect(keys).toEqual([
-      [60, true],
-      [60, false],
+      [60, true, undefined],
+      [60, false, true],
     ]);
   });
 

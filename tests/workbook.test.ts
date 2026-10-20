@@ -1335,6 +1335,14 @@ describe("ControlKeys", () => {
     expect(actions).toEqual(["holding-restart"]);
   });
 
+  it("cancels a hold whose key was lost, without going back", () => {
+    keys.down(CONTROL_KEYS.back);
+    expect(keys.cancel(CONTROL_KEYS.back)).toBe(true);
+    vi.advanceTimersByTime(HOLD_MS);
+    expect(keys.cancel(60)).toBe(false);
+    expect(actions).toEqual(["holding-leave"]);
+  });
+
   it("drops a pending hold when cleared", () => {
     keys.down(CONTROL_KEYS.restart);
     keys.clear();
