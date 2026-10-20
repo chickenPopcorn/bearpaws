@@ -168,6 +168,8 @@ export interface PictureArea {
   ring?: Crayon;
   /** Each note head's crayon, once colored. */
   dots?: readonly (Crayon | undefined)[];
+  /** Passed over: a Find page's card without its interval. */
+  faded?: boolean;
 }
 /** An area's clef: treble when all its notes are middle C or up. */
 export const areaClef = (notes: readonly number[], clef?: Clef): Clef =>
@@ -203,13 +205,14 @@ export function WorkbookPicture({
       {areas.map((area, i) => (
         <g
           key={i}
-          className={`workbook-area${i === current ? " is-current" : ""}`}
+          className={`workbook-area${i === current ? " is-current" : ""}${area.faded ? " is-skipped" : ""}`}
           transform={`translate(${area.x} ${area.y}) scale(${scale})`}
         >
           <title>
             {area.notes.map(bookName).join(area.harmonic ? " with " : " then ")}
             {area.crayon ? `, ${area.crayon}` : ""}
             {area.ring ? `, circled ${area.ring}` : ""}
+            {area.faded ? ", skipped" : ""}
           </title>
           <path
             d={SHAPES[area.shape]}

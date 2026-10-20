@@ -29,7 +29,7 @@ import { CD_AUDIO_BUCKET, StoryPlayer } from "./story";
 import { signedInFetch } from "./supabase";
 import { SongTitle } from "./SongTitle";
 import { Workbook } from "./WorkbookScreen";
-import { WORKBOOK_PAGES, readStamps, stampPage } from "./workbook";
+import { SKIP_KEY, WORKBOOK_PAGES, readStamps, stampPage } from "./workbook";
 /**
  * Save a library song's MIDI file. Only a signed-in request can read it, so
  * a plain link cannot: fetch it, then save it from this page.
@@ -589,7 +589,10 @@ export function App({
       )
         return;
       const key = e.key.toLowerCase(),
-        written = shortcuts[key];
+        // On a workbook page L, the key after the play zone's K, is Skip.
+        written =
+          shortcuts[key] ??
+          (pageOpen.current && key === "l" ? SKIP_KEY : undefined);
       if (written !== undefined) {
         e.preventDefault();
         // With Duet on, the keys follow the student part up.

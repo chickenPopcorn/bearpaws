@@ -2,7 +2,7 @@
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HOLD_MS, WORKBOOK_PAGES } from "../src/workbook";
+import { HOLD_MS, SKIP_KEY, WORKBOOK_PAGES } from "../src/workbook";
 
 const fake = vi.hoisted(() => {
   const keys = new Set<(pitch: number, down: boolean, time: number) => void>();
@@ -192,6 +192,34 @@ describe("workbook page", () => {
     expect(text(".workbook-hint")).toBe("Yes! A 2nd going up: green.");
     expect(title(1)).toBe("TREBLE CLEF F then TREBLE CLEF G, circled green");
     expect(container.querySelectorAll(".workbook-ring")).toHaveLength(1);
+  });
+
+  it("circles a Find page's cards and skips the others on G5", async () => {
+    await render({ page: page(24) });
+    expect(text("p")).toBe(
+      "Interval Hop · Play the cards it asks for; skip the others on G5.",
+    );
+    expect(text(".workbook-prompt")).toBe(
+      "Is it a 3rd? Play it, or press Skip",
+    );
+    // Card 0, C4 to D4, is a 2nd.
+    await tap(SKIP_KEY);
+    expect(text(".workbook-hint")).toBe("Right: no 3rd there. Next card.");
+    const title = (i: number) =>
+      container.querySelectorAll(".workbook-area title")[i].textContent;
+    expect(title(0)).toBe("MIDDLE C then TREBLE CLEF D, skipped");
+    // Card 1, C3 to E3, is a 3rd: Skip sends the child back.
+    await tap(SKIP_KEY);
+    expect(text(".workbook-hint")).toBe(
+      "Look again: that is a 3rd. Play it, left then right.",
+    );
+    await tap(48);
+    await tap(52);
+    expect(text(".workbook-hint")).toBe("Yes! That is a 3rd: red.");
+    expect(title(1)).toBe("BASS CLEF C then BASS CLEF E, circled red");
+    // Other answer keys do nothing.
+    await tap(SKIP_KEY + 2);
+    expect(text(".workbook-hint")).toBe("Yes! That is a 3rd: red.");
   });
 
   it("plays an interval page one outlined area at a time", async () => {

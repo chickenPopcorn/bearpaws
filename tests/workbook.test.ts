@@ -10,6 +10,7 @@ import {
   PLAY_ZONE,
   PaintGame,
   RETRY_MS,
+  SKIP_KEY,
   TOGETHER_MS,
   WORKBOOK_PAGES,
   bookName,
@@ -21,6 +22,7 @@ import {
   intervalName,
   intervalPrompt,
   intervalSize,
+  findPrompt,
   letterName,
   prompt,
   stepColors,
@@ -31,6 +33,7 @@ import {
   stampText,
   zoneOf,
   type ControlAction,
+  type FindPage,
   type HopPage,
   type IntervalPage,
   type NotePage,
@@ -41,6 +44,8 @@ const page = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
 const intervals = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as IntervalPage;
+const find = (number: number) =>
+  WORKBOOK_PAGES.find((p) => p.page === number) as FindPage;
 const hop = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as HopPage;
 const notePages = WORKBOOK_PAGES.filter(
@@ -52,12 +57,15 @@ const intervalPages = WORKBOOK_PAGES.filter(
 const hopPages = WORKBOOK_PAGES.filter(
   (p): p is HopPage => p.game === "interval-hop",
 );
+const findPages = WORKBOOK_PAGES.filter(
+  (p): p is FindPage => p.game === "interval-find",
+);
 
 describe("workbook pages", () => {
   it("lists the built pages in book order", () => {
     expect(WORKBOOK_PAGES.map((p) => p.page)).toEqual([
-      4, 7, 8, 9, 10, 11, 12, 13, 14, 19, 21, 23, 26, 33, 36, 37, 38, 39, 42,
-      43, 45, 48,
+      4, 7, 8, 9, 10, 11, 12, 13, 14, 19, 20, 21, 23, 24, 26, 33, 36, 37, 38,
+      39, 40, 42, 43, 44, 45, 48,
     ]);
   });
 
@@ -67,7 +75,7 @@ describe("workbook pages", () => {
         ...p.steps.flatMap((s) => s.pitches),
         ...(p.areas ?? []).map((a) => a.pitch),
       ]),
-      ...[...intervalPages, ...hopPages].flatMap((p) =>
+      ...[...intervalPages, ...hopPages, ...findPages].flatMap((p) =>
         p.areas.flatMap((a) => a.notes),
       ),
     ]) {
@@ -221,6 +229,7 @@ describe("workbook pages", () => {
     expect(pageAfter(page(12))?.page).toBe(13);
     expect(pageBefore(page(48))?.page).toBe(45);
     expect(pageAfter(page(21))?.page).toBe(23);
+    expect(pageAfter(hop(19))?.page).toBe(20);
     expect(pageAfter(page(48))).toBeUndefined();
   });
 
@@ -498,6 +507,123 @@ describe("Interval Hop pages", () => {
         expect(
           p.areas.some((a) => a.notes.some((n) => letterName(n) === letter)),
         ).toBe(true);
+  });
+});
+
+describe("Interval Hop Find pages", () => {
+  const sizes = (number: number) =>
+    find(number).areas.map((a) => intervalSize(a.notes));
+
+  it("has each card's two notes as printed", () => {
+    const printed = (number: number) =>
+      find(number).areas.map((a) => a.notes.join(">"));
+    expect(printed(20)).toEqual([
+      "52>50",
+      "60>64",
+      "62>64",
+      "67>65",
+      "48>50",
+      "55>52",
+    ]);
+    expect(printed(24)).toEqual([
+      "60>62",
+      "48>52",
+      "64>60",
+      "52>53",
+      "64>67",
+      "55>52",
+    ]);
+    expect(printed(40)).toEqual([
+      "64>67",
+      "53>55",
+      "55>50",
+      "65>64",
+      "62>67",
+      "52>48",
+    ]);
+    expect(printed(44)).toEqual([
+      "53>60",
+      "64>67",
+      "53>57",
+      "67>65",
+      "55>60",
+      "67>60",
+    ]);
+  });
+
+  it("mixes the interval it asks for with others", () => {
+    expect(sizes(20)).toEqual([2, 3, 2, 2, 2, 3]);
+    expect(sizes(24)).toEqual([2, 3, 3, 2, 3, 3]);
+    expect(sizes(40)).toEqual([3, 2, 4, 2, 4, 3]);
+    expect(sizes(44)).toEqual([5, 3, 3, 2, 4, 5]);
+  });
+
+  it("words each page as the book does", () => {
+    expect(
+      findPages.map((p) => [p.title, intervalInstruction(p.steps[0])]),
+    ).toEqual([
+      ["2nds", "Using a blue crayon, circle each 2nd."],
+      ["3rds", "Using a red crayon, circle each 3rd."],
+      ["4ths", "Using a purple crayon, circle each 4th."],
+      ["5ths", "Using a green crayon, circle each 5th."],
+    ]);
+    expect(findPrompt(find(20))).toBe("Is it a 2nd? Play it, or press Skip");
+    expect(SKIP_KEY).toBe(79);
+  });
+});
+
+describe("Find pages", () => {
+  const held = (...pitches: number[]) => new Set(pitches);
+  const playCard = (game: IntervalGame, time: number) => {
+    const [first, second] = game.page.areas[game.current!].notes;
+    game.play(first, time, held(first));
+    return game.play(second, time + 500, held(second));
+  };
+
+  it("circles the cards it asks for and skips the others, in order", () => {
+    const p = find(20);
+    const game = new IntervalGame(p);
+    expect(game.order).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(intervalFeedback(p, playCard(game, 0), p.areas[0])).toBe(
+      "Yes! That is a 2nd: blue.",
+    );
+    expect(game.lastHop).toEqual({ from: 52, to: 50, count: 1 });
+    // Card 1 is a 3rd: playing it is not enough.
+    const third = playCard(game, 2000);
+    expect(third).toEqual({ kind: "not-it", size: 3 });
+    expect(intervalFeedback(p, third, p.areas[1])).toBe(
+      "That is a 3rd, not a 2nd. Press Skip (G5).",
+    );
+    expect(game.current).toBe(1);
+    const skipped = game.skip();
+    expect(intervalFeedback(p, skipped, p.areas[1])).toBe(
+      "Right: no 2nd there. Next card.",
+    );
+    // Skip on a 2nd sends the child back to it.
+    const back = game.skip();
+    expect(back).toEqual({ kind: "look-again", size: 2 });
+    expect(intervalFeedback(p, back, p.areas[2])).toBe(
+      "Look again: that is a 2nd. Play it, left then right.",
+    );
+    expect(game.current).toBe(2);
+    let time = 5000;
+    for (const index of [2, 3, 4]) {
+      expect(game.current).toBe(index);
+      playCard(game, (time += 1000));
+    }
+    expect(game.skip()).toEqual({ kind: "skipped", finished: true });
+    expect(game.finished).toBe(true);
+    expect([...game.painted.keys()]).toEqual([0, 2, 3, 4]);
+    expect([...game.skipped]).toEqual([1, 5]);
+    expect(game.step).toBe(1);
+  });
+
+  it("keeps the step on the one step while cards are skipped", () => {
+    const game = new IntervalGame(find(44));
+    expect(game.step).toBe(0);
+    playCard(game, 0);
+    expect(game.current).toBe(1);
+    expect(game.step).toBe(0);
   });
 });
 
