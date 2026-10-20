@@ -1835,6 +1835,9 @@ footer a {
   font-weight: 700;
   fill: var(--text);
 }
+.workbook-choice.is-word {
+  font-size: 13px;
+}
 /* A Find page's card passed over: no interval to circle. */
 .workbook-area.is-skipped {
   opacity: 0.4;

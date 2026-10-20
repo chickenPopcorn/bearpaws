@@ -58,6 +58,9 @@ Each page is a game played on the piano:
 - **Interval Hop How far?** (41): the child plays each card, then presses how
   far apart its notes are on the answer keys: **G5** is 2, **A5** is 3 and
   **B5** is 4 (on the computer keyboard L, ; and ').
+- **Interval Hop Same and Different** (28 and 47): the child plays each box's
+  top card, then its bottom card, then presses **G5** for Same or **A5** for
+  Different (on the computer keyboard L and ;).
 
 The steps go in the book's order; a wrong key gets a hint, and after two
 misses the letter names appear on the keys. A finished page gets a date

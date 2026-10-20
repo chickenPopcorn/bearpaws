@@ -346,6 +346,7 @@ describe("Music Workbook 3", () => {
       "Page 23 · 3rds",
       "Page 24 · 3rds",
       "Page 26 · 2nds and 3rds",
+      "Page 28 · Same and Different",
       "Page 33 · Melodic and Harmonic Intervals",
       "Page 36 · C, D, E, F and G",
       "Page 37 · C and E",
@@ -357,6 +358,7 @@ describe("Music Workbook 3", () => {
       "Page 43 · 5ths",
       "Page 44 · 5ths",
       "Page 45 · 4ths and 5ths",
+      "Page 47 · Same and Different",
       "Page 48 · C Position and Middle C Position",
     ]);
     expect(pages[3].querySelector("small")!.textContent).toBe(

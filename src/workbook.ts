@@ -124,7 +124,8 @@ export type WorkbookGame =
   | "color-by-interval"
   | "interval-hop"
   | "interval-find"
-  | "interval-name";
+  | "interval-name"
+  | "interval-twins";
 // Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
@@ -133,6 +134,7 @@ export const GAME_NAMES: Record<WorkbookGame, string> = {
   "interval-hop": "Interval Hop",
   "interval-find": "Interval Hop",
   "interval-name": "Interval Hop",
+  "interval-twins": "Interval Hop",
 };
 interface PageInfo {
   page: number;
@@ -183,9 +185,28 @@ export interface NamePage extends PageInfo {
   choices: number[];
   areas: IntervalArea[];
 }
-export type IntervalsPage = IntervalPage | HopPage | FindPage | NamePage;
+/**
+ * An Interval Hop "Same and Different" page: boxes of two cards, top and
+ * bottom. The child plays both, then says whether their intervals are the
+ * same. The book circles a character: one for same, one for different.
+ */
+export interface TwinsPage extends PageInfo {
+  game: "interval-twins";
+  /** The one step, matching every card: the crayon that circles answers. */
+  steps: [IntervalStep];
+  /** The answers, on the answer keys from G5 up. */
+  choices: ["Same", "Different"];
+  /** The characters the book circles for each answer. */
+  characters: { same: string; different: string };
+  /** The cards, each box's top one then its bottom one. */
+  areas: IntervalArea[];
+}
+export type IntervalsPage =
+  IntervalPage | HopPage | FindPage | NamePage | TwinsPage;
 export type WorkbookPage =
-  NotePage | IntervalPage | HopPage | FindPage | NamePage;
+  NotePage | IntervalPage | HopPage | FindPage | NamePage | TwinsPage;
+/** A page whose cards are answered on the answer keys after playing. */
+export type AnswerPage = NamePage | TwinsPage;
 /** The answer key whose sticker says Skip: G5. */
 export const SKIP_KEY: number = ANSWER_ZONE[0];
 /** The answer keys in order, G5, A5, B5 and C6: a How far page's choices. */
@@ -259,6 +280,37 @@ const findPage = (
     },
   ],
   areas: sixCards(notes),
+});
+/** Four boxes, two by two, each of a top and a bottom card. */
+const twinBoxes = (boxes: [[number, number], [number, number]][]) =>
+  boxes.flatMap(([top, bottom], i) => {
+    const x = 170 + (i % 2) * 300,
+      y = 55 + Math.floor(i / 2) * 190;
+    return [card(...top, x, y), card(...bottom, x, y + 85)];
+  });
+/** A Same and Different page. */
+const twinsPage = (
+  page: number,
+  useWith: number,
+  same: string,
+  different: string,
+  boxes: [[number, number], [number, number]][],
+): TwinsPage => ({
+  page,
+  title: "Same and Different",
+  useWith,
+  game: "interval-twins",
+  steps: [
+    {
+      crayon: "red",
+      match: { any: true },
+      words: `Circle ${same} if the intervals are the same. Circle ${different} if the intervals are different.`,
+    },
+  ],
+  choices: ["Same", "Different"],
+  characters: { same, different },
+  areas: twinBoxes(boxes),
+  picture: { height: 390, scale: 0.75 },
 });
 /** Four cards, two by two. */
 const fourCards = (notes: [number, number][]) =>
@@ -579,6 +631,24 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       melodic("cloud", 60, 64, 530, 215),
     ],
   },
+  twinsPage(28, 27, "Beethoven Bear", "Mozart Mouse", [
+    [
+      [60, 64],
+      [60, 62],
+    ],
+    [
+      [62, 60],
+      [62, 60],
+    ],
+    [
+      [60, 57],
+      [60, 57],
+    ],
+    [
+      [59, 60],
+      [57, 60],
+    ],
+  ]),
   {
     page: 33,
     title: "Melodic and Harmonic Intervals",
@@ -765,6 +835,24 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
     ],
     picture: { height: 380, scale: 0.9 },
   },
+  twinsPage(47, 46, "Haydn Hippo", "Clara Schumann-Cat", [
+    [
+      [67, 60],
+      [67, 62],
+    ],
+    [
+      [67, 65],
+      [67, 65],
+    ],
+    [
+      [55, 50],
+      [55, 50],
+    ],
+    [
+      [55, 53],
+      [55, 52],
+    ],
+  ]),
   {
     page: 48,
     title: "C Position and Middle C Position",
@@ -1047,14 +1135,16 @@ export type IntervalOutcome =
   | { kind: "look-again"; size: number }
   /** Find pages: a card without the interval, skipped. */
   | { kind: "skipped"; finished: boolean }
-  /** How far pages: the card played, now its answer. */
+  /** How far and Same and Different pages: the card played, now its answer. */
   | { kind: "played" }
+  /** Same and Different pages: the top card played, now the bottom one. */
+  | { kind: "played-first" }
   /** How far pages: the card again, while its answer is due. */
   | { kind: "answer-now" }
   /** How far pages: an answer key before the card is played. */
   | { kind: "play-first" }
-  /** How far pages: not that far. */
-  | { kind: "wrong-answer"; size: number }
+  /** How far and Same and Different pages: not that answer. */
+  | { kind: "wrong-answer"; choice: number | string }
   | { kind: "finished" };
 
 /**
@@ -1077,15 +1167,17 @@ export class IntervalGame {
   lastHop: { from: number; to: number; count: number } | null = null;
   /** How far pages: the card is played and its answer is due. */
   answering = false;
-  /** How far pages: each answered card's answer, by its index. */
-  readonly answers = new Map<number, number>();
+  /** How far and Same and Different pages: each answer, by card index. */
+  readonly answers = new Map<number, number | string>();
   /** When each of the current area's notes was pressed. */
   private pressed = new Map<number, number>();
   constructor(readonly page: IntervalsPage) {
     // Find and How far pages go through every card, in order; the others go
     // through each step's areas in turn.
     this.order =
-      page.game === "interval-find" || page.game === "interval-name"
+      page.game === "interval-find" ||
+      page.game === "interval-name" ||
+      page.game === "interval-twins"
         ? page.areas.map((_, i) => i)
         : page.steps.flatMap((step) =>
             page.areas.flatMap((area, i) =>
@@ -1165,22 +1257,38 @@ export class IntervalGame {
    * An answer key, on a How far page: how far apart the card's notes are,
    * once the card is played.
    */
-  answer(size: number): IntervalOutcome {
+  answer(choice: number | string): IntervalOutcome {
     const index = this.current;
     if (index === undefined) return { kind: "finished" };
     if (!this.answering) return { kind: "play-first" };
-    if (intervalSize(this.page.areas[index].notes) !== size)
-      return { kind: "wrong-answer", size };
-    this.answers.set(index, size);
+    if (choice !== rightAnswer(this.page, index))
+      return { kind: "wrong-answer", choice };
+    this.answers.set(index, choice);
     this.answering = false;
-    return this.paint(index);
+    // The card hopped as it was played; the answer only paints it.
+    return this.paint(index, false);
   }
-  /** A card played as written: painted, or on a How far page, to answer. */
+  /**
+   * A card played as written: painted; on a How far page, to answer; on a
+   * Same and Different page, the top card leads on to the bottom one.
+   */
   private played(index: number): IntervalOutcome {
-    if (this.page.game !== "interval-name") return this.paint(index);
+    const { game } = this.page;
+    if (game !== "interval-name" && game !== "interval-twins")
+      return this.paint(index);
+    if (game === "interval-twins" && index % 2 === 0) {
+      this.hop(index);
+      this.next();
+      return { kind: "played-first" };
+    }
+    this.hop(index);
     this.answering = true;
     this.pressed.clear();
     return { kind: "played" };
+  }
+  private hop(index: number) {
+    const [from, to] = this.page.areas[index].notes;
+    this.lastHop = { from, to, count: (this.lastHop?.count ?? 0) + 1 };
   }
   /**
    * The Skip key, on a Find page: passes over a card without the interval,
@@ -1200,10 +1308,9 @@ export class IntervalGame {
   hint() {
     if (!this.finished) this.letters = true;
   }
-  private paint(index: number): IntervalOutcome {
+  private paint(index: number, hop = true): IntervalOutcome {
     this.painted.set(index, this.page.steps[this.step].crayon);
-    const [from, to] = this.page.areas[index].notes;
-    this.lastHop = { from, to, count: (this.lastHop?.count ?? 0) + 1 };
+    if (hop) this.hop(index);
     this.next();
     return { kind: "painted", finished: this.finished };
   }
@@ -1242,8 +1349,23 @@ export const findPrompt = (page: FindPage) =>
   `Is it a ${intervalName(findSize(page))}? Play it, or press Skip`;
 
 /** What the child does with the outlined card on a How far page. */
-export const namePrompt = (game: IntervalGame, area: IntervalArea) =>
-  game.answering ? "How far apart? Press 2, 3 or 4" : intervalPrompt(area);
+export function namePrompt(game: IntervalGame, area: IntervalArea) {
+  if (game.page.game !== "interval-twins")
+    return game.answering
+      ? "How far apart? Press 2, 3 or 4"
+      : intervalPrompt(area);
+  if (game.answering) return "Same or different? Press G5 or A5";
+  return `Play the ${(game.current ?? 0) % 2 ? "bottom" : "top"} card, left then right`;
+}
+/** A How far or Same and Different card's right answer, by its index. */
+export function rightAnswer(page: IntervalsPage, index: number) {
+  if (page.game !== "interval-twins")
+    return intervalSize(page.areas[index].notes);
+  return intervalSize(page.areas[index - 1].notes) ===
+    intervalSize(page.areas[index].notes)
+    ? "Same"
+    : "Different";
+}
 
 /**
  * The hint after an interval page's `outcome`, or null to keep the one
@@ -1256,11 +1378,21 @@ export function intervalFeedback(
 ): string | null {
   switch (outcome.kind) {
     case "painted": {
-      if (outcome.finished || !area) return doneText(page);
+      if (!area) return doneText(page);
+      // An answer page's last answer is praised too, before the page ends.
+      const done = outcome.finished ? ` ${doneText(page)}` : "";
       if (page.game === "interval-name") {
         const size = intervalSize(area.notes);
-        return `Yes! ${size}: that is a ${intervalName(size)}.`;
+        return `Yes! ${size}: that is a ${intervalName(size)}.${done}`;
       }
+      if (page.game === "interval-twins") {
+        const top = page.areas[page.areas.indexOf(area) - 1],
+          [a, b] = [top, area].map((card) => intervalSize(card.notes));
+        return a === b
+          ? `Yes! Both are ${intervalName(a)}s: ${page.characters.same}.${done}`
+          : `Yes! A ${intervalName(a)} and a ${intervalName(b)}: ${page.characters.different}.${done}`;
+      }
+      if (outcome.finished) return doneText(page);
       const step = page.steps.find((s) => stepColors(s, area))!;
       if (step.name) return `Yes! That is a ${step.name}: ${step.crayon}.`;
       if ("up" in step.match)
@@ -1270,13 +1402,23 @@ export function intervalFeedback(
         : `Yes! ${area.harmonic ? "Together, so it is harmonic" : "One after the other, so it is melodic"}: ${step.crayon}.`;
     }
     case "played":
-      return "How far apart? Press 2, 3 or 4.";
+      return page.game === "interval-twins"
+        ? "Same or different? Same is G5, Different is A5."
+        : "How far apart? Press 2, 3 or 4.";
+    case "played-first":
+      return "Now play the bottom card, left then right.";
     case "answer-now":
-      return "Now press how far apart: 2, 3 or 4.";
+      return page.game === "interval-twins"
+        ? "Now press Same (G5) or Different (A5)."
+        : "Now press how far apart: 2, 3 or 4.";
     case "play-first":
-      return "Play the card first, then press how far apart.";
+      return page.game === "interval-twins"
+        ? "Play both cards first, then press Same or Different."
+        : "Play the card first, then press how far apart.";
     case "wrong-answer":
-      return `Not ${outcome.size}. Count each line and space from one note to the other.`;
+      return page.game === "interval-twins"
+        ? "Look again: count how far apart the notes on each card are."
+        : `Not ${outcome.choice}. Count each line and space from one note to the other.`;
     case "not-it": {
       const want = intervalName(findSize(page));
       return `That is a ${intervalName(outcome.size)}, not a ${want}. Press Skip (G5).`;

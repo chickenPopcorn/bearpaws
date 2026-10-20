@@ -171,9 +171,9 @@ export interface PictureArea {
   /** Passed over: a Find page's card without its interval. */
   faded?: boolean;
   /** How far pages: the answers printed under the staff, 2, 3 and 4. */
-  choices?: readonly number[];
+  choices?: readonly (number | string)[];
   /** How far pages: the answer given, circled in `ring`. */
-  chosen?: number;
+  chosen?: number | string;
 }
 /** An area's clef: treble when all its notes are middle C or up. */
 export const areaClef = (notes: readonly number[], clef?: Clef): Clef =>
@@ -191,12 +191,15 @@ export function WorkbookPicture({
   current,
   height = 300,
   scale = 1,
+  summary,
 }: {
   areas: readonly PictureArea[];
   /** The area to play now, by index. */
   current?: number;
   height?: number;
   scale?: number;
+  /** What the picture holds and how far along it is, if not areas painted. */
+  summary?: string;
 }) {
   const done = areas.filter((area) => area.crayon || area.ring).length;
   return (
@@ -204,7 +207,9 @@ export function WorkbookPicture({
       className="workbook-picture"
       viewBox={`0 0 640 ${height}`}
       role="img"
-      aria-label={`Picture with ${areas.length} areas, ${done} painted`}
+      aria-label={
+        summary ?? `Picture with ${areas.length} areas, ${done} painted`
+      }
     >
       {areas.map((area, i) => (
         <g
@@ -235,16 +240,22 @@ export function WorkbookPicture({
             />
           </g>
           {area.choices?.map((choice, n) => {
-            const x = (n - (area.choices!.length - 1) / 2) * 40;
+            // Words ("Same", "Different") take more room than numbers.
+            const word = typeof choice === "string",
+              x = (n - (area.choices!.length - 1) / 2) * (word ? 62 : 40);
             return (
               <g key={choice} transform={`translate(${x} 34)`}>
-                <text className="workbook-choice" textAnchor="middle" y={6}>
+                <text
+                  className={`workbook-choice${word ? " is-word" : ""}`}
+                  textAnchor="middle"
+                  y={word ? 5 : 6}
+                >
                   {choice}
                 </text>
                 {area.ring && area.chosen === choice && (
                   <ellipse
                     className="workbook-ring"
-                    rx={13}
+                    rx={word ? 34 : 13}
                     ry={12}
                     pathLength={1}
                     style={{ stroke: CRAYONS[area.ring] }}
