@@ -23,6 +23,7 @@ import {
   intervalPrompt,
   intervalSize,
   findPrompt,
+  gameName,
   letterName,
   namePrompt,
   rightAnswer,
@@ -41,6 +42,7 @@ import {
   type NamePage,
   type TwinsPage,
   type HoldPage,
+  type HandsPage,
   type HopPage,
   type IntervalPage,
   type NotePage,
@@ -56,6 +58,12 @@ import {
   holdHint,
   holdPrompt,
 } from "../src/workbookHold";
+import {
+  HandsGame,
+  LEGATO_GAP_MS,
+  handsFeedback,
+  handsPrompt,
+} from "../src/workbookHands";
 
 const page = (number: number) =>
   WORKBOOK_PAGES.find((p) => p.page === number) as NotePage;
@@ -93,8 +101,9 @@ describe("workbook pages", () => {
     const pages = WORKBOOK_PAGES.map((p) => p.page);
     expect(pages).toEqual([...pages].sort((a, b) => a - b));
     expect(pages).toEqual([
-      4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 23, 24, 26, 28, 30,
-      33, 34, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47, 48,
+      4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 23, 24, 26, 28,
+      29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47,
+      48,
     ]);
   });
 
@@ -593,7 +602,10 @@ describe("Interval Hop Find pages", () => {
 
   it("words each page as the book does", () => {
     expect(
-      findPages.map((p) => [p.title, intervalInstruction(p.steps[0])]),
+      [20, 24, 40, 44].map((n) => [
+        find(n).title,
+        intervalInstruction(find(n).steps[0]),
+      ]),
     ).toEqual([
       ["2nds", "Using a blue crayon, circle each 2nd."],
       ["3rds", "Using a red crayon, circle each 3rd."],
@@ -602,6 +614,190 @@ describe("Interval Hop Find pages", () => {
     ]);
     expect(findPrompt(find(20))).toBe("Is it a 2nd? Play it, or press Skip");
     expect(SKIP_KEY).toBe(79);
+  });
+});
+
+describe("Together or Apart Find pages", () => {
+  const held = (...pitches: number[]) => new Set(pitches);
+  const cards = (number: number) =>
+    find(number).areas.map(
+      (a) =>
+        `${a.notes.join(a.harmonic ? "+" : ">")}${a.grand && !a.harmonic ? " rest" : ""}`,
+    );
+
+  it("has each card as printed", () => {
+    expect(cards(31)).toEqual([
+      "60>64",
+      "60>62",
+      "60+64",
+      "60+62",
+      "60+64",
+      "64>60",
+    ]);
+    expect(cards(32)).toEqual([
+      "53+55",
+      "52>55",
+      "55>53",
+      "53>55",
+      "52+55",
+      "53+55",
+    ]);
+    expect(cards(35)).toEqual([
+      "60 rest",
+      "48+60",
+      "48+64",
+      "62 rest",
+      "48+64",
+      "64 rest",
+    ]);
+    expect([31, 32, 35].map((n) => gameName(find(n)))).toEqual([
+      "Together or Apart",
+      "Together or Apart",
+      "Together or Apart",
+    ]);
+  });
+
+  it("circles notes played together and skips the others", () => {
+    const p = find(31);
+    const game = new IntervalGame(p);
+    expect(findPrompt(p)).toBe(
+      "Played together? Play the notes together, or press Skip",
+    );
+    // A melodic card, played apart: not what the page asks for.
+    game.play(60, 0, held(60));
+    const apart = game.play(64, 500, held(64));
+    expect(intervalFeedback(p, apart, p.areas[0])).toBe(
+      "Those notes are played one after the other. Press Skip (G5).",
+    );
+    expect(intervalFeedback(p, game.skip(), p.areas[0])).toBe(
+      "Right: those are played separately. Next card.",
+    );
+    game.skip();
+    // Skip on a harmonic card sends the child back to it.
+    expect(intervalFeedback(p, game.skip(), p.areas[2])).toBe(
+      "Look again: those notes are stacked. Play them together.",
+    );
+    game.play(60, 2000, held(60));
+    const together = game.play(64, 2050, held(60, 64));
+    expect(intervalFeedback(p, together, p.areas[2])).toBe(
+      "Yes! Together, so it is harmonic: blue.",
+    );
+  });
+
+  it("circles notes played separately on page 32", () => {
+    const p = find(32);
+    const game = new IntervalGame(p);
+    // A harmonic card, played together, is skipped instead.
+    game.play(53, 0, held(53));
+    const together = game.play(55, 40, held(53, 55));
+    expect(intervalFeedback(p, together, p.areas[0])).toBe(
+      "Those notes are played together. Press Skip (G5).",
+    );
+    game.skip();
+    game.play(52, 1000, held(52));
+    expect(game.play(55, 1500, held(55))).toMatchObject({ kind: "painted" });
+    expect(game.painted.get(1)).toBe("purple");
+  });
+
+  it("circles hands together on page 35", () => {
+    const p = find(35);
+    const game = new IntervalGame(p);
+    expect(findPrompt(p)).toBe(
+      "Hands together? Play both notes together, or press Skip",
+    );
+    // The right hand's note alone: the left hand rests here.
+    const alone = game.play(60, 0, held(60));
+    expect(intervalFeedback(p, alone, p.areas[0])).toBe(
+      "Only the right hand plays here: the left hand rests. Press Skip (G5).",
+    );
+    game.skip();
+    game.play(48, 1000, held(48));
+    const both = game.play(60, 1050, held(48, 60));
+    expect(intervalFeedback(p, both, p.areas[1])).toBe(
+      "Yes! Hands together: yellow.",
+    );
+  });
+});
+
+describe("Left Hand and Right Hand", () => {
+  const hands = (number: number) =>
+    WORKBOOK_PAGES.find((p) => p.page === number) as HandsPage;
+
+  it("has each example as printed", () => {
+    expect(
+      hands(5).examples.map((e) => `${e.hand} ${e.notes.join(" ")}`),
+    ).toEqual([
+      "right 60 64 67",
+      "left 60 57 53",
+      "left 53 55 57",
+      "right 67 65 64",
+    ]);
+    expect(
+      hands(29).examples.map((e) => `${e.hand} ${e.notes.join(" ")}`),
+    ).toEqual([
+      "right 60 62 64",
+      "left 55 53 52",
+      "left 48 50 52",
+      "right 67 64 60",
+    ]);
+    expect([hands(5).slur, hands(29).slur]).toEqual([false, true]);
+    // The right hand reads the treble clef here, the left hand the bass.
+    for (const p of [hands(5), hands(29)])
+      for (const e of p.examples)
+        expect(e.clef).toBe(e.hand === "right" ? "treble" : "bass");
+  });
+
+  it("takes the hand, then the example's notes in order", () => {
+    const p = hands(5);
+    const game = new HandsGame(p);
+    expect(handsPrompt(game)).toBe("Which hand plays it? LH is G5, RH is A5");
+    const early = game.down(60, 0);
+    expect(handsFeedback(p, early, p.examples[0])).toBe(
+      "First say which hand plays it: LH is G5, RH is A5.",
+    );
+    expect(handsFeedback(p, game.answer("left"), p.examples[0])).toBe(
+      "Look again: this one is in the treble clef, for the right hand.",
+    );
+    expect(handsFeedback(p, game.answer("right"), p.examples[0])).toBe(
+      "Yes! The right hand plays it. Now play it.",
+    );
+    expect(game.answer("left")).toEqual({ kind: "ignored" });
+    expect(handsPrompt(game)).toBe("Play the example on the keyboard");
+    expect(game.down(60, 0)).toEqual({ kind: "next-note" });
+    game.up(60, 400);
+    expect(handsFeedback(p, game.down(65, 900), p.examples[0])).toBe(
+      "That is F. Look at the next note.",
+    );
+    // Without a slur, a gap between notes is fine.
+    game.down(64, 1500);
+    expect(handsFeedback(p, game.down(67, 3000), p.examples[0])).toBe(
+      "Yes! Played with the right hand.",
+    );
+    expect([...game.done]).toEqual([0]);
+    expect(game.current).toBe(1);
+  });
+
+  it("starts a slurred example again when the keys are not joined", () => {
+    const p = hands(29);
+    const game = new HandsGame(p);
+    game.answer("right");
+    game.down(60, 0);
+    game.up(60, 500);
+    // D4 long after C4 was let go: not legato.
+    const gap = game.down(62, 500 + LEGATO_GAP_MS + 1);
+    expect(handsFeedback(p, gap, p.examples[0])).toBe(
+      "Keep the notes joined: hold each key until the next one goes down. Start again.",
+    );
+    expect(game.progress).toBe(0);
+    // Joined: each key down before (or just after) the one before comes up.
+    game.down(60, 2000);
+    game.down(62, 2400);
+    game.up(60, 2410);
+    game.up(62, 2800);
+    expect(game.down(64, 2800 + LEGATO_GAP_MS)).toEqual({
+      kind: "done",
+      finished: false,
+    });
   });
 });
 

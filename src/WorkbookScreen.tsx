@@ -13,7 +13,7 @@ import { SongTitle } from "./SongTitle";
 import {
   CRAYONS,
   ControlKeys,
-  GAME_NAMES,
+  gameName,
   HopGame,
   IntervalGame,
   PaintGame,
@@ -53,7 +53,9 @@ import {
   holdHint,
   holdPrompt,
 } from "./workbookHold";
+import { HandsGame, handsFeedback, handsPrompt } from "./workbookHands";
 import {
+  HandsCards,
   HoldCards,
   SnapBoard,
   WorkbookPicture,
@@ -75,7 +77,9 @@ const newGame = (page: WorkbookPage) =>
       ? new HopGame(page)
       : page.game === "hold"
         ? new HoldGame(page)
-        : new PaintGame(page);
+        : page.game === "hands"
+          ? new HandsGame(page)
+          : new PaintGame(page);
 type Hop = { from: number; to: number; count: number };
 const NO_HOP: Hop = { from: 60, to: 60, count: 0 };
 /** A Find page's one sticker, on its answer key. */
@@ -90,6 +94,11 @@ const answerStickers = (choices: readonly number[]) =>
       { mark: String(choice), word: intervalName(choice) },
     ]),
   );
+/** A Left Hand and Right Hand page's answers, on G5 and A5. */
+const HAND_STICKERS: ReadonlyMap<number, KeyLabel> = new Map([
+  [ANSWER_KEYS[0], { mark: "L", word: "LH" }],
+  [ANSWER_KEYS[1], { mark: "R", word: "RH" }],
+]);
 /** A Same and Different page's answers, on G5 and A5. */
 const TWIN_STICKERS: ReadonlyMap<number, KeyLabel> = new Map([
   [ANSWER_KEYS[0], { mark: "=", word: "Same" }],
@@ -352,12 +361,38 @@ export const Workbook = memo(function Workbook({
       // A hold cut short by the window losing focus does nothing.
       if (lost ? controls.current?.cancel(pitch) : controls.current?.up(pitch))
         return;
-      // Hold It! times how long each key is held.
+      // Hold It! times how long each key is held; a slur joins the keys.
       if (game instanceof HoldGame && inPlayZone(pitch))
         play(pitch, time, false);
+      if (game instanceof HandsGame && zoneOf(pitch) === "play")
+        game.up(pitch, time);
       return;
     }
     if (controls.current?.down(pitch)) return;
+    if (game instanceof HandsGame) {
+      const hand =
+        pitch === ANSWER_KEYS[0]
+          ? "left"
+          : pitch === ANSWER_KEYS[1]
+            ? "right"
+            : undefined;
+      if (zoneOf(pitch) === "answer" && !hand) return;
+      const index = game.current;
+      const wasFinished = game.finished;
+      const outcome = hand ? game.answer(hand) : game.down(pitch, time);
+      const text = handsFeedback(
+        game.page,
+        outcome,
+        index === undefined ? undefined : game.page.examples[index],
+      );
+      if (text !== null) setHint(text);
+      setRevision((r) => r + 1);
+      if (!wasFinished && game.finished) {
+        setFresh(true);
+        onFinish(page.page);
+      }
+      return;
+    }
     if (game instanceof HoldGame) {
       if (inPlayZone(pitch)) play(pitch, time, true);
       return;
@@ -450,6 +485,14 @@ export const Workbook = memo(function Workbook({
     }));
     now = holdPrompt(game);
     keys = NO_KEYS;
+  } else if (game instanceof HandsGame) {
+    lines = game.page.steps.map((step) => ({
+      crayon: step.crayon,
+      text: step.words,
+    }));
+    now = handsPrompt(game);
+    keys = NO_KEYS;
+    stickers = HAND_STICKERS;
   } else if (game instanceof HopGame) {
     const { page } = game;
     lines = [
@@ -560,7 +603,7 @@ export const Workbook = memo(function Workbook({
             <SongTitle title={page.title} />
           </h1>
           <p>
-            {GAME_NAMES[page.game]} ·{" "}
+            {gameName(page)} ·{" "}
             {page.game === "color-by-interval"
               ? "Play each pair of notes on your piano."
               : page.game === "interval-hop"
@@ -571,7 +614,9 @@ export const Workbook = memo(function Workbook({
                     ? "Play each card, then press how far apart: 2, 3 or 4."
                     : page.game === "interval-twins"
                       ? "Play both cards, then press Same or Different."
-                      : "Play each note on your piano."}
+                      : page.game === "hands"
+                        ? "Say which hand plays each example, then play it."
+                        : "Play each note on your piano."}
           </p>
         </div>
         <div className="song-tools">
@@ -627,6 +672,18 @@ export const Workbook = memo(function Workbook({
           <SnapBoard columns={game.page.snap} joined={game.step} />
         </section>
       )}
+      {game instanceof HandsGame && (
+        <section className="panel workbook-picture-panel" aria-label="Examples">
+          <HandsCards
+            examples={game.page.examples}
+            current={game.current}
+            chosen={game.chosen}
+            done={game.done}
+            slur={game.page.slur}
+            crayon={game.page.steps[0].crayon}
+          />
+        </section>
+      )}
       {game instanceof HoldGame && (
         <section className="panel workbook-picture-panel" aria-label="Cards">
           <HoldCards
@@ -677,6 +734,8 @@ export const Workbook = memo(function Workbook({
           " Skip: G5, or L on the computer keyboard."}
         {page.game === "interval-name" &&
           " Answers: G5 is 2, A5 is 3, B5 is 4 (on the computer keyboard L, ; and ')."}
+        {page.game === "hands" &&
+          " Hands: G5 is LH, A5 is RH (on the computer keyboard L and ;)."}
         {page.game === "interval-twins" &&
           " Answers: G5 is Same, A5 is Different (on the computer keyboard L and ;)."}
       </p>

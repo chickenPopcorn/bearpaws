@@ -9,6 +9,7 @@ import {
   type NoteValue,
   type RestValue,
   type SnapColumn,
+  type HandExample,
   letterName,
 } from "./workbook";
 import { cardCounts } from "./workbookHold";
@@ -46,6 +47,8 @@ const SHAPES: Record<AreaShape, string> = {
   heart:
     "M 0 48 C -34 24 -66 4 -62 -22 C -58 -44 -26 -50 0 -26 C 26 -50 58 -44 62 -22 C 66 4 34 24 0 48 Z",
   blob: "M -60 -30 Q -60 -46 -44 -46 L 44 -46 Q 60 -46 60 -30 L 60 30 Q 60 46 44 46 L -44 46 Q -60 46 -60 30 Z",
+  // A grand staff card, for hands together.
+  tall: "M -70 -72 Q -70 -80 -62 -80 L 62 -80 Q 70 -80 70 -72 L 70 72 Q 70 80 62 80 L -62 80 Q -70 80 -70 72 Z",
   // An Interval Hop card, like the book's chalkboards.
   card: "M -70 -42 Q -70 -50 -62 -50 L 62 -50 Q 70 -50 70 -42 L 70 42 Q 70 50 62 50 L -62 50 Q -70 50 -70 42 Z",
 };
@@ -158,6 +161,36 @@ function StaffNotes({
   );
 }
 
+/**
+ * A grand staff on a card: the treble note above, the bass note or a
+ * quarter rest below, joined by a brace.
+ */
+function GrandNotes({ treble, bass }: { treble: number; bass?: number }) {
+  return (
+    <g>
+      <path
+        className="workbook-brace"
+        d="M -44 -50 Q -52 -30 -46 -4 Q -48 2 -54 4 Q -48 6 -46 12 Q -52 38 -44 58"
+      />
+      <g transform="translate(0 -30)">
+        <StaffNotes notes={[treble]} clef="treble" />
+      </g>
+      <g transform="translate(0 40)">
+        {bass === undefined ? (
+          <g>
+            <StaffNotes notes={[]} clef="bass" />
+            <text className="workbook-note" x={16} y={0} fontSize={8 * HALF}>
+              {"\uE4E5"}
+            </text>
+          </g>
+        ) : (
+          <StaffNotes notes={[bass]} clef="bass" />
+        )}
+      </g>
+    </g>
+  );
+}
+
 /** One area of a picture, as drawn. */
 export interface PictureArea {
   shape: AreaShape;
@@ -176,6 +209,8 @@ export interface PictureArea {
   dots?: readonly (Crayon | undefined)[];
   /** Passed over: a Find page's card without its interval. */
   faded?: boolean;
+  /** A grand staff card: a treble note, and a bass note or a rest. */
+  grand?: { treble: number; bass?: number };
   /** How far pages: the answers printed under the staff, 2, 3 and 4. */
   choices?: readonly (number | string)[];
   /** How far pages: the answer given, circled in `ring`. */
@@ -234,17 +269,22 @@ export function WorkbookPicture({
             {area.faded ? ", skipped" : ""}
           </title>
           <path
+            className="workbook-shape"
             d={SHAPES[area.shape]}
             style={{ fill: area.crayon ? CRAYONS[area.crayon] : undefined }}
           />
-          <g transform={area.choices ? "translate(0 -10)" : undefined}>
-            <StaffNotes
-              notes={area.notes}
-              clef={area.clef}
-              harmonic={area.harmonic}
-              dots={area.dots}
-            />
-          </g>
+          {area.grand ? (
+            <GrandNotes {...area.grand} />
+          ) : (
+            <g transform={area.choices ? "translate(0 -10)" : undefined}>
+              <StaffNotes
+                notes={area.notes}
+                clef={area.clef}
+                harmonic={area.harmonic}
+                dots={area.dots}
+              />
+            </g>
+          )}
           {area.choices?.map((choice, n) => {
             // Words ("Same", "Different") take more room than numbers.
             const word = typeof choice === "string",
@@ -274,7 +314,7 @@ export function WorkbookPicture({
             <ellipse
               className="workbook-ring"
               rx={86}
-              ry={64}
+              ry={area.grand ? 96 : 64}
               pathLength={1}
               style={{ stroke: CRAYONS[area.ring] }}
             />
@@ -457,7 +497,7 @@ export function HoldCards({
                   : `, ${cardCounts(card)} count${cardCounts(card) === 1 ? "" : "s"}`
                 : ""}
             </title>
-            <path d={SHAPES.card} />
+            <path className="workbook-shape" d={SHAPES.card} />
             {card.kind === "rest" && card.value !== "quarter" && (
               <line
                 className="workbook-rest-line"
@@ -602,7 +642,7 @@ export function SnapBoard({
                   : ""}
               </title>
               <g transform="scale(0.62)">
-                <path d={SHAPES.card} />
+                <path className="workbook-shape" d={SHAPES.card} />
                 <StaffNotes notes={[pitch]} clef={clef} />
               </g>
               <circle className="workbook-snap-dot" cx={-47} r={4} />
@@ -610,6 +650,182 @@ export function SnapBoard({
           ))}
         </g>
       ))}
+    </svg>
+  );
+}
+
+/**
+ * A Left Hand and Right Hand page's examples, two by two: each a staff of
+ * its notes, the finger marked on the first, the slur if the page has one,
+ * and the two hands to choose from below. The example to play is outlined;
+ * its hand is colored in the page's crayon once chosen, and a done
+ * example's slur is traced solid.
+ */
+export function HandsCards({
+  examples,
+  current,
+  chosen,
+  done,
+  slur,
+  crayon,
+}: {
+  examples: readonly HandExample[];
+  current?: number;
+  chosen: ReadonlyMap<number, "left" | "right">;
+  done: ReadonlySet<number>;
+  slur: boolean;
+  crayon: Crayon;
+}) {
+  const half = 4.5,
+    staffBottom = -4;
+  return (
+    <svg
+      className="workbook-picture"
+      viewBox="0 0 640 360"
+      role="img"
+      aria-label={`${examples.length} examples, ${done.size} played`}
+    >
+      {examples.map((example, i) => {
+        const x = 165 + (i % 2) * 310,
+          y = 95 + Math.floor(i / 2) * 175,
+          y0 = (step: number) =>
+            staffBottom - (step - BOTTOM_LINE_STEP[example.clef]) * half,
+          heads = example.notes.map((pitch, n) => ({
+            x: -48 + n * 42,
+            y: y0(
+              pitchPosition(pitch, example.clef === "treble" ? "right" : "left")
+                .step,
+            ),
+            step: pitchPosition(
+              pitch,
+              example.clef === "treble" ? "right" : "left",
+            ).step,
+          })),
+          hand = chosen.get(i);
+        return (
+          <g
+            key={i}
+            className={`workbook-area${i === current ? " is-current" : ""}`}
+            transform={`translate(${x} ${y})`}
+          >
+            <title>
+              {`${example.notes.map(bookName).join(", ")}${hand ? `, ${hand} hand` : ""}${done.has(i) ? ", played" : ""}`}
+            </title>
+            <path
+              className="workbook-shape"
+              d="M -140 -67 Q -140 -75 -132 -75 L 132 -75 Q 140 -75 140 -67 L 140 67 Q 140 75 132 75 L -132 75 Q -140 75 -140 67 Z"
+            />
+            <g className="sheet-staff-line">
+              {[0, 1, 2, 3, 4].map((line) => (
+                <line
+                  key={line}
+                  x1={-120}
+                  x2={120}
+                  y1={staffBottom - line * 2 * half}
+                  y2={staffBottom - line * 2 * half}
+                />
+              ))}
+              {heads.flatMap(({ x: hx, step }) => {
+                const ledgers: number[] = [];
+                for (
+                  let s = BOTTOM_LINE_STEP[example.clef] - 2;
+                  s >= step;
+                  s -= 2
+                )
+                  ledgers.push(s);
+                for (
+                  let s = BOTTOM_LINE_STEP[example.clef] + 10;
+                  s <= step;
+                  s += 2
+                )
+                  ledgers.push(s);
+                return ledgers.map((s) => (
+                  <line
+                    key={`${hx}:${s}`}
+                    x1={hx - 6}
+                    x2={hx + 18}
+                    y1={y0(s)}
+                    y2={y0(s)}
+                  />
+                ));
+              })}
+            </g>
+            <text
+              className="sheet-clef"
+              x={-118}
+              y={
+                example.clef === "treble"
+                  ? staffBottom - 2 * half
+                  : staffBottom - 6 * half
+              }
+              fontSize={8 * half}
+            >
+              {example.clef === "treble" ? "" : ""}
+            </text>
+            {heads.map(({ x: hx, y: hy }, n) => (
+              <text
+                key={n}
+                className="workbook-note"
+                x={hx}
+                y={hy}
+                fontSize={8 * half}
+              >
+                {""}
+              </text>
+            ))}
+            <text
+              className="workbook-note"
+              x={84}
+              y={staffBottom - 4 * half}
+              fontSize={8 * half}
+            >
+              {""}
+            </text>
+            <text
+              className="workbook-finger"
+              textAnchor="middle"
+              x={heads[0].x + 6}
+              y={
+                example.clef === "treble"
+                  ? staffBottom - 10 * half - 4
+                  : staffBottom + 16
+              }
+            >
+              {example.finger}
+            </text>
+            {slur && (
+              // Below the notes on a treble staff, above them on a bass one,
+              // as the book draws it.
+              <g>
+                <path
+                  className={`workbook-slur${done.has(i) ? " is-traced" : ""}`}
+                  d={
+                    example.clef === "treble"
+                      ? `M ${heads[0].x + 4} ${staffBottom + 8} Q ${(heads[0].x + heads.at(-1)!.x) / 2 + 6} ${staffBottom + 26} ${heads.at(-1)!.x + 10} ${staffBottom + 8}`
+                      : `M ${heads[0].x + 4} ${staffBottom - 10 * half - 4} Q ${(heads[0].x + heads.at(-1)!.x) / 2 + 6} ${staffBottom - 10 * half - 22} ${heads.at(-1)!.x + 10} ${staffBottom - 10 * half - 4}`
+                  }
+                />
+              </g>
+            )}
+            {(["left", "right"] as const).map((h, n) => (
+              <g key={h} transform={`translate(${-48 + n * 96} 48)`}>
+                <rect
+                  className="workbook-hand"
+                  x={-30}
+                  y={-15}
+                  width={60}
+                  height={30}
+                  rx={15}
+                  style={{ fill: hand === h ? CRAYONS[crayon] : undefined }}
+                />
+                <text className="workbook-hand-label" textAnchor="middle" y={5}>
+                  {h === "left" ? "LH" : "RH"}
+                </text>
+              </g>
+            ))}
+          </g>
+        );
+      })}
     </svg>
   );
 }

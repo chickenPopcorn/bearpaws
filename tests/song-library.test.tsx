@@ -332,6 +332,7 @@ describe("Music Workbook 3", () => {
     );
     expect(pages.map((page) => page.firstChild!.textContent)).toEqual([
       "Page 4 · Middle C Position Review",
+      "Page 5 · Left Hand and Right Hand",
       "Page 6 · Note Values",
       "Page 7 · Bass Clef C",
       "Page 8 · Middle C and Bass Clef C",
@@ -350,9 +351,13 @@ describe("Music Workbook 3", () => {
       "Page 24 · 3rds",
       "Page 26 · 2nds and 3rds",
       "Page 28 · Same and Different",
+      "Page 29 · Left Hand and Right Hand",
       "Page 30 · C Position",
+      "Page 31 · Harmonic Intervals",
+      "Page 32 · Melodic Intervals",
       "Page 33 · Melodic and Harmonic Intervals",
       "Page 34 · Middle C Position",
+      "Page 35 · Hands Together",
       "Page 36 · C, D, E, F and G",
       "Page 37 · C and E",
       "Page 38 · D and G",
@@ -366,11 +371,11 @@ describe("Music Workbook 3", () => {
       "Page 47 · Same and Different",
       "Page 48 · C Position and Middle C Position",
     ]);
-    expect(pages[4].querySelector("small")!.textContent).toBe(
+    expect(pages[5].querySelector("small")!.textContent).toBe(
       "Crayon Keys · Done OCT 20 2026",
     );
-    expect(pages[5].querySelector("small")!.textContent).toBe("Color by Note");
-    await click(pages[4]);
+    expect(pages[6].querySelector("small")!.textContent).toBe("Color by Note");
+    await click(pages[5]);
     expect(book.onSelect).toHaveBeenCalledWith(9);
   });
 

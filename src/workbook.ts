@@ -67,7 +67,14 @@ export interface Step {
   /** The book's own words, for a step the usual wording cannot say. */
   words?: { instruction: string; prompt: string };
 }
-export type AreaShape = "star" | "cloud" | "heart" | "blob" | "card";
+export type AreaShape =
+  | "star"
+  | "cloud"
+  | "heart"
+  | "blob"
+  | "card"
+  /** A card tall enough for a grand staff. */
+  | "tall";
 export type Clef = "treble" | "bass";
 /** One area of a Color by Note picture, holding one note on a small staff. */
 export interface Area {
@@ -87,11 +94,17 @@ export interface IntervalArea {
   shape: AreaShape;
   /**
    * Its notes: the left one first, then the right one; or, written one
-   * above the other, the lower one first.
+   * above the other, the lower one first. A grand staff card may hold one
+   * note, its other hand resting.
    */
-  notes: readonly [number, number];
+  notes: readonly number[];
   /** Written one above the other, to play together (harmonic). */
   harmonic: boolean;
+  /**
+   * A grand staff card (page 35): the treble staff's note, and the bass
+   * staff's note or, when there is none, a rest.
+   */
+  grand?: { treble: number; bass?: number };
   /** The area's centre in the picture's frame, 640 wide. */
   x: number;
   y: number;
@@ -130,7 +143,8 @@ export type WorkbookGame =
   | "interval-name"
   | "interval-twins"
   | "hold"
-  | "note-snap";
+  | "note-snap"
+  | "hands";
 // Interval pages are Color by Note pages whose areas hold two notes.
 export const GAME_NAMES: Record<WorkbookGame, string> = {
   "crayon-keys": "Crayon Keys",
@@ -142,6 +156,7 @@ export const GAME_NAMES: Record<WorkbookGame, string> = {
   "interval-twins": "Interval Hop",
   hold: "Hold It!",
   "note-snap": "Note Snap",
+  hands: "Together or Apart",
 };
 interface PageInfo {
   page: number;
@@ -150,7 +165,12 @@ interface PageInfo {
   useWith: number;
   /** The picture's height (it is 640 wide) and its areas' size, if not 300 and 1. */
   picture?: { height: number; scale: number };
+  /** The game's name, where it is not the usual one for the page's kind. */
+  gameName?: string;
 }
+/** The name of the game a page plays: "Crayon Keys", "Together or Apart". */
+export const gameName = (page: PageInfo & { game: WorkbookGame }) =>
+  page.gameName ?? GAME_NAMES[page.game];
 /** An interval page: 2nds and 3rds, melodic and harmonic, 4ths and 5ths. */
 export interface IntervalPage extends PageInfo {
   game: "color-by-interval";
@@ -174,9 +194,11 @@ export interface HopPage extends PageInfo {
  */
 export interface FindPage extends PageInfo {
   game: "interval-find";
-  /** The one step: the interval to circle, and its crayon. */
+  /**
+   * The one step: what to circle (an interval's size, notes played together
+   * or apart, or hands together) and its crayon.
+   */
   steps: [IntervalStep];
-  /** The cards, all melodic. */
   areas: IntervalArea[];
 }
 /** A page whose areas hold two notes. */
@@ -230,6 +252,26 @@ export interface HoldPage extends PageInfo {
   steps: [{ crayon: Crayon; words: string }];
   cards: HoldCard[];
 }
+/** One example of a Left Hand and Right Hand page. */
+export interface HandExample {
+  clef: Clef;
+  /** Its notes, in order. */
+  notes: number[];
+  /** The hand that plays it, and the finger marked on its first note. */
+  hand: "left" | "right";
+  finger: number;
+}
+/**
+ * A Left Hand and Right Hand page: for each example, the child says which
+ * hand plays it on the answer keys, then plays it; with a slur, legato.
+ */
+export interface HandsPage extends PageInfo {
+  game: "hands";
+  steps: [{ crayon: Crayon; words: string }];
+  examples: HandExample[];
+  /** The examples are slurred: each key held until the next goes down. */
+  slur: boolean;
+}
 export type WorkbookPage =
   | NotePage
   | IntervalPage
@@ -237,7 +279,8 @@ export type WorkbookPage =
   | FindPage
   | NamePage
   | TwinsPage
-  | HoldPage;
+  | HoldPage
+  | HandsPage;
 /** A page whose cards are answered on the answer keys after playing. */
 export type AnswerPage = NamePage | TwinsPage;
 /** The answer key whose sticker says Skip: G5. */
@@ -353,6 +396,46 @@ const findPage = (
   ],
   areas: sixCards(notes),
 });
+/**
+ * A Together or Apart page: circle the cards played together (harmonic) or
+ * apart (melodic), and skip the others.
+ */
+const togetherPage = (
+  page: number,
+  title: string,
+  useWith: number,
+  crayon: Crayon,
+  harmonic: boolean,
+  words: string,
+  areas: IntervalArea[],
+): FindPage => ({
+  page,
+  title,
+  useWith,
+  game: "interval-find",
+  gameName: "Together or Apart",
+  steps: [{ crayon, match: { harmonic }, words }],
+  areas,
+});
+/** Six cards, three by two: [notes, harmonic]. */
+const sixMixed = (cards: [number[], boolean][]) =>
+  cards.map(([notes, harmonic], i) => ({
+    shape: "card" as const,
+    notes,
+    harmonic,
+    x: 110 + (i % 3) * 210,
+    y: 75 + Math.floor(i / 3) * 140,
+  }));
+/** Page 35's grand staff cards: a treble note, and a bass note or a rest. */
+const grandCards = (cards: [number, number | null][]) =>
+  cards.map(([treble, bass], i) => ({
+    shape: "tall" as const,
+    notes: bass === null ? [treble] : [bass, treble],
+    harmonic: bass !== null,
+    grand: { treble, ...(bass !== null && { bass }) },
+    x: 110 + (i % 3) * 210,
+    y: 100 + Math.floor(i / 3) * 190,
+  }));
 /** Four boxes, two by two, each of a top and a bottom card. */
 const twinBoxes = (boxes: [[number, number], [number, number]][]) =>
   boxes.flatMap(([top, bottom], i) => {
@@ -439,6 +522,26 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       ],
     ]),
     picture: { height: 400, scale: 0.72 },
+  },
+  {
+    page: 5,
+    title: "Left Hand and Right Hand",
+    useWith: 5,
+    game: "hands",
+    steps: [
+      {
+        crayon: "red",
+        words:
+          "Using a red crayon, color the hand that plays the example. Then play the example on the keyboard.",
+      },
+    ],
+    slur: false,
+    examples: [
+      { clef: "treble", notes: [60, 64, 67], hand: "right", finger: 1 },
+      { clef: "bass", notes: [60, 57, 53], hand: "left", finger: 1 },
+      { clef: "bass", notes: [53, 55, 57], hand: "left", finger: 5 },
+      { clef: "treble", notes: [67, 65, 64], hand: "right", finger: 5 },
+    ],
   },
   {
     page: 6,
@@ -775,6 +878,26 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       [57, 60],
     ],
   ]),
+  {
+    page: 29,
+    title: "Left Hand and Right Hand",
+    useWith: 28,
+    game: "hands",
+    steps: [
+      {
+        crayon: "red",
+        words:
+          "Using a red crayon, color the hand that plays the example. Using a black crayon, trace the slur. Then play the example on the keyboard.",
+      },
+    ],
+    slur: true,
+    examples: [
+      { clef: "treble", notes: [60, 62, 64], hand: "right", finger: 1 },
+      { clef: "bass", notes: [55, 53, 52], hand: "left", finger: 1 },
+      { clef: "bass", notes: [48, 50, 52], hand: "left", finger: 5 },
+      { clef: "treble", notes: [67, 64, 60], hand: "right", finger: 5 },
+    ],
+  },
   snapPage(30, "C Position", 29, [
     {
       letters: LETTER_COLUMN,
@@ -785,6 +908,38 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       notes: treble(62, 60, 65, 67, 64),
     },
   ]),
+  togetherPage(
+    31,
+    "Harmonic Intervals",
+    30,
+    "blue",
+    true,
+    "Using a blue crayon, circle the notes that are played together (harmonic intervals).",
+    sixMixed([
+      [[60, 64], false],
+      [[60, 62], false],
+      [[60, 64], true],
+      [[60, 62], true],
+      [[60, 64], true],
+      [[64, 60], false],
+    ]),
+  ),
+  togetherPage(
+    32,
+    "Melodic Intervals",
+    31,
+    "purple",
+    false,
+    "Using a purple crayon, circle the notes that are played separately (melodic intervals).",
+    sixMixed([
+      [[53, 55], true],
+      [[52, 55], false],
+      [[55, 53], false],
+      [[53, 55], false],
+      [[52, 55], true],
+      [[53, 55], true],
+    ]),
+  ),
   {
     page: 33,
     title: "Melodic and Harmonic Intervals",
@@ -814,6 +969,25 @@ export const WORKBOOK_PAGES: readonly WorkbookPage[] = [
       notes: treble(62, 60, 65, 67, 64),
     },
   ]),
+  {
+    ...togetherPage(
+      35,
+      "Hands Together",
+      34,
+      "yellow",
+      true,
+      "Using a yellow crayon, circle the examples that are played hands together.",
+      grandCards([
+        [60, null],
+        [60, 48],
+        [64, 48],
+        [62, null],
+        [64, 48],
+        [64, null],
+      ]),
+    ),
+    picture: { height: 390, scale: 1 },
+  },
   {
     page: 36,
     title: "C, D, E, F and G",
@@ -1228,7 +1402,7 @@ const LETTER_STEP = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
 const staffStep = (pitch: number) =>
   Math.floor(pitch / 12) * 7 + LETTER_STEP[pitch % 12];
 /** An interval's size: 2 for a 2nd, 3 for a 3rd. */
-export const intervalSize = ([a, b]: readonly [number, number]) =>
+export const intervalSize = ([a, b = a]: readonly number[]) =>
   Math.abs(staffStep(a) - staffStep(b)) + 1;
 /**
  * "2nd", "3rd", "4th", "5th". A function, so the page list above can name
@@ -1374,6 +1548,8 @@ export class IntervalGame {
     const area = this.page.areas[index];
     const [first, second] = area.notes;
     if (!area.notes.includes(pitch)) return this.miss(pitch, area);
+    // One hand's note alone, the other resting.
+    if (area.notes.length === 1) return this.played(index);
     if (area.harmonic) {
       const other = pitch === first ? second : first,
         then = this.pressed.get(other);
@@ -1400,10 +1576,6 @@ export class IntervalGame {
       this.pressed.clear();
       return { kind: "together" };
     }
-    if (!this.wanted(area)) {
-      this.pressed.clear();
-      return { kind: "not-it", size: intervalSize(area.notes) };
-    }
     return this.played(index);
   }
   /**
@@ -1427,6 +1599,13 @@ export class IntervalGame {
    */
   private played(index: number): IntervalOutcome {
     const { game } = this.page;
+    if (!this.wanted(this.page.areas[index])) {
+      this.pressed.clear();
+      return {
+        kind: "not-it",
+        size: intervalSize(this.page.areas[index].notes),
+      };
+    }
     if (game !== "interval-name" && game !== "interval-twins")
       return this.paint(index);
     if (game === "interval-twins" && index % 2 === 0) {
@@ -1497,9 +1676,26 @@ const findSize = (page: IntervalsPage) => {
   const { match } = page.steps[0];
   return "size" in match ? match.size : 0;
 };
+/** What a Find page looks for: an interval, notes together or apart, or hands together. */
+const findKind = (page: IntervalsPage) => {
+  const { match } = page.steps[0];
+  if ("size" in match) return "size";
+  if (page.areas.some((a) => a.grand)) return "hands";
+  return "harmonic" in match && match.harmonic ? "together" : "apart";
+};
 /** What the child does with the outlined card on a Find page. */
-export const findPrompt = (page: FindPage) =>
-  `Is it a ${intervalName(findSize(page))}? Play it, or press Skip`;
+export function findPrompt(page: FindPage) {
+  switch (findKind(page)) {
+    case "size":
+      return `Is it a ${intervalName(findSize(page))}? Play it, or press Skip`;
+    case "together":
+      return "Played together? Play the notes together, or press Skip";
+    case "apart":
+      return "Played separately? Play them left then right, or press Skip";
+    case "hands":
+      return "Hands together? Play both notes together, or press Skip";
+  }
+}
 
 /** What the child does with the outlined card on a How far page. */
 export function namePrompt(game: IntervalGame, area: IntervalArea) {
@@ -1547,6 +1743,8 @@ export function intervalFeedback(
       }
       if (outcome.finished) return doneText(page);
       const step = page.steps.find((s) => stepColors(s, area))!;
+      if (page.game === "interval-find" && findKind(page) === "hands")
+        return `Yes! Hands together: ${step.crayon}.`;
       if (step.name) return `Yes! That is a ${step.name}: ${step.crayon}.`;
       if ("up" in step.match)
         return `Yes! A ${intervalName(intervalSize(area.notes))} going ${step.match.up ? "up" : "down"}: ${step.crayon}.`;
@@ -1572,16 +1770,43 @@ export function intervalFeedback(
       return page.game === "interval-twins"
         ? "Look again: count how far apart the notes on each card are."
         : `Not ${outcome.choice}. Count each line and space from one note to the other.`;
-    case "not-it": {
-      const want = intervalName(findSize(page));
-      return `That is a ${intervalName(outcome.size)}, not a ${want}. Press Skip (G5).`;
-    }
+    case "not-it":
+      switch (findKind(page)) {
+        case "size":
+          return `That is a ${intervalName(outcome.size)}, not a ${intervalName(findSize(page))}. Press Skip (G5).`;
+        case "together":
+          return "Those notes are played one after the other. Press Skip (G5).";
+        case "apart":
+          return "Those notes are played together. Press Skip (G5).";
+        case "hands":
+          return "Only the right hand plays here: the left hand rests. Press Skip (G5).";
+      }
+      break;
     case "look-again":
-      return `Look again: that is a ${intervalName(outcome.size)}. Play it, left then right.`;
+      switch (findKind(page)) {
+        case "size":
+          return `Look again: that is a ${intervalName(outcome.size)}. Play it, left then right.`;
+        case "together":
+          return "Look again: those notes are stacked. Play them together.";
+        case "apart":
+          return "Look again: those notes are side by side. Play them, left then right.";
+        case "hands":
+          return "Look again: both hands play here. Play both notes together.";
+      }
+      break;
     case "skipped":
-      return outcome.finished
-        ? doneText(page)
-        : `Right: no ${intervalName(findSize(page))} there. Next card.`;
+      if (outcome.finished) return doneText(page);
+      switch (findKind(page)) {
+        case "size":
+          return `Right: no ${intervalName(findSize(page))} there. Next card.`;
+        case "together":
+          return "Right: those are played separately. Next card.";
+        case "apart":
+          return "Right: those are played together. Next card.";
+        case "hands":
+          return "Right: one hand only. Next card.";
+      }
+      break;
     case "next":
       return area && area.notes[0] === area.notes[1]
         ? "Now the same note again."
