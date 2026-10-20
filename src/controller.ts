@@ -188,6 +188,8 @@ export class Studio {
       onChange: () => this.emit(),
       onOutputChosen: (id, opened) => void this.followOutput(id, () => opened),
       onOutputLost: () => {
+        // A workbook example sent its notes there too: press C2 again.
+        this.stopExample();
         // Playback, or a start still loading, sent its notes to the lost
         // output and never prepared their laptop sound: stop, and let Play
         // start over on the laptop.
@@ -218,6 +220,8 @@ export class Studio {
     this.emit();
     const resume = this.playing || this.playbackPending;
     this.pause();
+    // A workbook example does not move: it stops, to be heard again.
+    this.stopExample();
     const generation = this.playGeneration;
     try {
       await change();
@@ -364,33 +368,39 @@ export class Studio {
       (s): s is typeof s & { pitch: number } => s.pitch !== undefined,
     );
     const generation = this.playGeneration;
+    // On a piano output, a melody with no count-in needs no browser audio,
+    // which may be unavailable, as for a song routed there.
+    const routed = this.midi.player.connected,
+      pianoOnly = routed && countIn === 0 && notes.length === sounds.length;
     try {
-      if (this.midi.player.connected) await this.audio.unlock();
-      else
+      if (!routed)
         await this.prepareAudio(
           notes.map(({ pitch }) => ({ pitch, velocity: KEY_VELOCITY })),
           generation,
         );
+      else if (!pianoOnly) await this.audio.unlock();
     } catch {
       return null;
     }
     // Another example, or the page closing, came while the sound loaded.
     if (run !== this.exampleRun) return null;
-    const context = this.audio.context;
-    if (!context || context.state !== "running") return null;
-    const lead = 0.15,
-      start = context.currentTime + lead,
-      from = start + countIn * beat,
+    const context =
+      this.audio.context?.state === "running" ? this.audio.context : null;
+    if (!context && !pianoOnly) return null;
+    // Times are in seconds from now; laptop sounds add the audio clock's now.
+    const now = context?.currentTime ?? 0,
+      lead = 0.15,
+      from = lead + countIn * beat,
       timers: ReturnType<typeof setTimeout>[] = [],
       sources: AudioScheduledSourceNode[] = [];
-    for (let i = 0; i < countIn; i++)
-      sources.push(playClick(context, start + i * beat, i === 0).source);
+    if (context)
+      for (let i = 0; i < countIn; i++)
+        sources.push(playClick(context, now + lead + i * beat, i === 0).source);
     for (const sound of sounds) {
       const when = from + sound.start;
-      if (sound.pitch === undefined) sources.push(playClap(context, when));
-      else if (this.midi.player.connected) {
+      if (routed && sound.pitch !== undefined) {
         const pitch = sound.pitch,
-          delay = (when - context.currentTime) * 1000;
+          delay = when * 1000;
         timers.push(
           setTimeout(
             () => this.midi.player.keyDown(pitch, KEY_VELOCITY),
@@ -401,7 +411,17 @@ export class Studio {
             delay + sound.duration * 1000,
           ),
         );
-      } else this.audio.tone(sound.pitch, KEY_VELOCITY, when, sound.duration);
+      } else if (context) {
+        if (sound.pitch === undefined)
+          sources.push(playClap(context, now + when));
+        else
+          this.audio.tone(
+            sound.pitch,
+            KEY_VELOCITY,
+            now + when,
+            sound.duration,
+          );
+      }
     }
     const end = Math.max(
       from,
@@ -420,7 +440,7 @@ export class Studio {
         this.audio.stop();
       },
     };
-    return performance.now() + (end - context.currentTime) * 1000;
+    return performance.now() + end * 1000;
   }
   /** Stop the workbook's playing, as a page closes. */
   stopExample() {

@@ -2321,6 +2321,36 @@ describe("key listeners", () => {
     expect(studio.audio.tone).toHaveBeenCalledOnce();
   });
 
+  it("plays an Ear Detective melody on the piano without browser audio", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const studio = create();
+    output(studio);
+    vi.mocked(studio.audio.unlock).mockRejectedValue(new Error("blocked"));
+    const note = [{ pitch: 60, start: 0, duration: 0.5 }];
+    expect(await studio.playExample(note, 0, 0.6)).toBe(env.now * 1000 + 650);
+    vi.advanceTimersByTime(200);
+    expect(studio.midi.player.keyDown).toHaveBeenCalledWith(
+      60,
+      expect.any(Number),
+    );
+    vi.useRealTimers();
+  });
+
+  it("stops an Ear Detective example when the sound output changes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const studio = create();
+    output(studio);
+    const note = [{ pitch: 60, start: 0, duration: 0.5 }];
+    await studio.playExample(note, 0, 0.6);
+    await studio.soundOutput("");
+    vi.advanceTimersByTime(1000);
+    await studio.playExample(note, 0, 0.6);
+    env.outputLosses.at(-1)!();
+    vi.advanceTimersByTime(1000);
+    expect(studio.midi.player.keyDown).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it("lets listeners hear keys come up when they are released together", () => {
     const studio = create();
     const keys: [number, boolean, boolean | undefined][] = [];
