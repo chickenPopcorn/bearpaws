@@ -62,6 +62,10 @@ Each page is a game played on the piano:
   counts: hold each note for its counts, play short where there is a
   staccato dot and a full count where there is not, and rest for each
   rest's counts between two notes.
+- **Ear Detective** (17, 18, 22, 25, 27 and 46): **C2** plays the example, a
+  clapped rhythm or a melody; the child plays it back, and the example heard
+  is circled. If the echo matches neither option, **G5** (top) and **A5**
+  (bottom) answer instead.
 - **Together or Apart** (5, 29, 31, 32 and 35): circle the notes played
   together or separately, or the examples played hands together, skipping
   the others with **G5**; or say which hand plays each example (**G5** is LH,
@@ -85,7 +89,8 @@ mouse:
 - **F2**: hold 2 seconds to start the page over
 
 The page's notes are between C3 and C5. The computer shortcuts also play
-them. See [Workbook games](workbook-games.md) for every page's plan.
+them; on a workbook page L, ; and ' are G5, A5 and B5, and 1 to 4 are C2,
+D2, E2 and F2. See [Workbook games](workbook-games.md) for every page's plan.
 
 ## Score, waterfall and shortcuts
 

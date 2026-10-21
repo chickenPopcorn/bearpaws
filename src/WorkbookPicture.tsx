@@ -10,6 +10,8 @@ import {
   type RestValue,
   type SnapColumn,
   type HandExample,
+  type EarOption,
+  type EarPage,
   letterName,
 } from "./workbook";
 import { cardCounts } from "./workbookHold";
@@ -821,6 +823,256 @@ export function HandsCards({
                 <text className="workbook-hand-label" textAnchor="middle" y={5}>
                   {h === "left" ? "LH" : "RH"}
                 </text>
+              </g>
+            ))}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+const EAR_NOTE_GLYPHS: Record<number, string> = {
+  1: "",
+  2: "",
+  3: "",
+  4: "",
+};
+const EAR_REST_GLYPHS: Record<number, string> = {
+  1: "",
+  2: "",
+  4: "",
+};
+/** A time signature's digit, in Bravura. */
+const timeDigit = (n: number) => String.fromCodePoint(0xe080 + n);
+
+/** One of an Ear Detective example's options, centred on (0, 0). */
+function EarOptionStaff({
+  option,
+  meter,
+  clef,
+}: {
+  option: EarOption;
+  meter: number;
+  clef?: Clef;
+}) {
+  const half = 4,
+    bottom = 8,
+    total = option.notes.reduce((sum, n) => sum + n.beats, 0),
+    from = -78,
+    width = 196,
+    x = (beat: number) => from + (beat / total) * width,
+    y = (pitch?: number) =>
+      clef && pitch !== undefined
+        ? bottom -
+          (pitchPosition(pitch, clef === "treble" ? "right" : "left").step -
+            BOTTOM_LINE_STEP[clef]) *
+            half
+        : 0;
+  let at = 0;
+  const placed = option.notes.map((note) => {
+    const placedAt = at;
+    at += note.beats;
+    return { note, at: placedAt };
+  });
+  const bars = Array.from(
+    { length: Math.floor((total - 0.01) / meter) },
+    (_, i) => x((i + 1) * meter) - 8,
+  );
+  return (
+    <g>
+      <g className="sheet-staff-line">
+        {clef ? (
+          [0, 1, 2, 3, 4].map((line) => (
+            <line
+              key={line}
+              x1={-135}
+              x2={130}
+              y1={bottom - line * 2 * half}
+              y2={bottom - line * 2 * half}
+            />
+          ))
+        ) : (
+          <line x1={-135} x2={130} y1={0} y2={0} />
+        )}
+        {bars.map((bx) => (
+          <line
+            key={bx}
+            x1={bx}
+            x2={bx}
+            y1={clef ? bottom - 8 * half : -8}
+            y2={clef ? bottom : 8}
+          />
+        ))}
+        <line
+          x1={130}
+          x2={130}
+          y1={clef ? bottom - 8 * half : -8}
+          y2={clef ? bottom : 8}
+        />
+        {clef &&
+          placed.flatMap(({ note, at: beat }) => {
+            if (note.pitch === undefined) return [];
+            const step = pitchPosition(
+              note.pitch,
+              clef === "treble" ? "right" : "left",
+            ).step;
+            const ledgers: number[] = [];
+            for (let s = BOTTOM_LINE_STEP[clef] - 2; s >= step; s -= 2)
+              ledgers.push(s);
+            for (let s = BOTTOM_LINE_STEP[clef] + 10; s <= step; s += 2)
+              ledgers.push(s);
+            return ledgers.map((s) => (
+              <line
+                key={`${beat}:${s}`}
+                x1={x(beat) - 4}
+                x2={x(beat) + 14}
+                y1={bottom - (s - BOTTOM_LINE_STEP[clef]) * half}
+                y2={bottom - (s - BOTTOM_LINE_STEP[clef]) * half}
+              />
+            ));
+          })}
+      </g>
+      {clef && (
+        <text
+          className="sheet-clef"
+          x={-133}
+          y={clef === "treble" ? bottom - 2 * half : bottom - 6 * half}
+          fontSize={8 * half}
+        >
+          {clef === "treble" ? "" : ""}
+        </text>
+      )}
+      <g className="sheet-clef" fontSize={8 * half}>
+        <text x={clef ? -106 : -128} y={clef ? bottom - 6 * half : -half}>
+          {timeDigit(meter)}
+        </text>
+        <text x={clef ? -106 : -128} y={clef ? bottom - 2 * half : 3 * half}>
+          {timeDigit(4)}
+        </text>
+      </g>
+      {placed.map(({ note, at: beat }, i) => {
+        const nx = x(beat);
+        if (note.rest)
+          return (
+            <text
+              key={i}
+              className="workbook-note"
+              x={nx}
+              y={clef ? bottom - 4 * half : 0}
+              fontSize={8 * half}
+            >
+              {EAR_REST_GLYPHS[note.beats] ?? EAR_REST_GLYPHS[1]}
+            </text>
+          );
+        const ny = y(note.pitch);
+        return (
+          <g key={i}>
+            <text className="workbook-note" x={nx} y={ny} fontSize={8 * half}>
+              {EAR_NOTE_GLYPHS[note.beats] ?? EAR_NOTE_GLYPHS[1]}
+            </text>
+            {note.beats === 3 && (
+              <text
+                className="workbook-note"
+                x={nx + 13}
+                y={ny}
+                fontSize={8 * half}
+              >
+                {""}
+              </text>
+            )}
+            {note.staccato && (
+              <text
+                className="workbook-note"
+                x={nx + 2}
+                y={ny + 3 * half}
+                fontSize={8 * half}
+              >
+                {""}
+              </text>
+            )}
+          </g>
+        );
+      })}
+      {option.slur && (
+        <path
+          className="workbook-slur is-traced"
+          d={`M ${x(0) + 4} ${bottom + 10} Q ${(x(0) + x(total - 1)) / 2} ${bottom + 26} ${x(total - 1) + 10} ${bottom + 10}`}
+        />
+      )}
+    </g>
+  );
+}
+
+/**
+ * An Ear Detective page's examples, two by two: each box holds the two
+ * options the app chooses from, top and bottom (or, where the book has
+ * characters, their names). The example to listen to is outlined, and the
+ * option heard is circled in the page's crayon.
+ */
+export function EarCards({
+  page,
+  current,
+  circled,
+  crayon,
+}: {
+  page: EarPage;
+  current?: number;
+  circled: ReadonlyMap<number, 0 | 1>;
+  crayon: Crayon;
+}) {
+  return (
+    <svg
+      className="workbook-picture"
+      viewBox="0 0 640 400"
+      role="img"
+      aria-label={`${page.examples.length} examples, ${circled.size} found`}
+    >
+      {page.examples.map((example, i) => {
+        const x = 165 + (i % 2) * 310,
+          y = 100 + Math.floor(i / 2) * 195,
+          ring = circled.get(i);
+        return (
+          <g
+            key={i}
+            className={`workbook-area${i === current ? " is-current" : ""}`}
+            transform={`translate(${x} ${y})`}
+          >
+            <title>
+              {`Example ${i + 1}${ring === undefined ? "" : `: ${page.labels?.[ring] ?? (ring ? "bottom" : "top")} circled`}`}
+            </title>
+            <path
+              className="workbook-shape"
+              d="M -148 -82 Q -148 -90 -140 -90 L 140 -90 Q 148 -90 148 -82 L 148 82 Q 148 90 140 90 L -140 90 Q -148 90 -148 82 Z"
+            />
+            {example.options.map((option, n) => (
+              <g key={n} transform={`translate(0 ${n ? 42 : -38})`}>
+                {page.labels ? (
+                  <text
+                    className="workbook-snap-letter"
+                    textAnchor="middle"
+                    y={8}
+                  >
+                    {page.labels[n]}
+                  </text>
+                ) : (
+                  <EarOptionStaff
+                    option={option}
+                    meter={example.meter}
+                    clef={example.clef}
+                  />
+                )}
+                {ring === n && (
+                  <ellipse
+                    className="workbook-ring"
+                    cx={0}
+                    cy={0}
+                    rx={142}
+                    ry={34}
+                    pathLength={1}
+                    style={{ stroke: CRAYONS[crayon] }}
+                  />
+                )}
               </g>
             ))}
           </g>

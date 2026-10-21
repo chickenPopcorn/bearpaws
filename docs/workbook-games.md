@@ -16,7 +16,7 @@ note to the teacher and the table of contents.
 | --------------------- | ----: |
 | Page has a game idea  | 45/45 |
 | Page seen in a photo  | 45/45 |
-| Game built in the app | 39/45 |
+| Game built in the app | 45/45 |
 
 By game, in the suggested build order:
 
@@ -33,19 +33,17 @@ By game, in the suggested build order:
 Games 1 and 2 share one engine (play a note, paint it), so building both first
 covers 17 pages. Interval Hop adds the most pages of any single game.
 
-**Built so far:** all of Crayon Keys (pages 7, 9, 11, 14, 36, 37, 38 and
-42), all of Color by Note (4, 8, 10, 12, 21 and 48, and the interval pages
-26, 33 and 45), all of Interval Hop (13, 19, 20, 23, 24, 28, 39, 40, 41, 43,
-44 and 47), all of Hold It! (6, 15 and 16), all of Note Snap (30 and 34)
-and all of Together or Apart (5, 29, 31, 32 and 35). The pages and the note and
+**Built:** all 45 pages, in all seven games. The pages and the note and
 interval games are in `src/workbook.ts` (`PaintGame`, `IntervalGame`,
-`HopGame`, `ControlKeys`), Hold It! in `src/workbookHold.ts`, and the screen
-in `src/WorkbookScreen.tsx`, `src/WorkbookPicture.tsx` and
+`HopGame`, `ControlKeys`); Hold It! in `src/workbookHold.ts`; Left Hand and
+Right Hand in `src/workbookHands.ts`; Ear Detective in `src/workbookEar.ts`;
+and the screen in `src/WorkbookScreen.tsx`, `src/WorkbookPicture.tsx` and
 `src/workbookKeyboard.ts`. Music Workbook 3 is the last section of the
 library.
 
 **Not built yet:**
 
+- Note Snap's reverse round (a letter lights; play it in the page's position).
 - E2 after a lesson song, to open its workbook page.
 - Stamps sync to the account; today they stay in this browser.
 - Workbook time in the practice calendar.
@@ -256,19 +254,23 @@ color for up or down.
 Paper task: the teacher plays or claps; the child circles the example they
 heard.
 
-The app plays the teacher's part. The child answers by echoing: they play back
-what they heard. The app compares the echo with both printed options, circles
-the closer one, then replays the right answer.
+Built. The app is the teacher. C2 (or 1 on the computer keyboard) plays
+the example, picked at random from its two options: a rhythm is clapped on
+the laptop after a bar of metronome clicks; a melody plays in the piano's
+sound, on the piano itself when its output is chosen. Then the child plays
+it back:
 
-- **Rhythm** (18, 22): the app claps the pattern on the laptop after a
-  one-bar count-in. The child taps it back on any key. Compare onset spacing.
-- **Melody** (25, 46): the child plays the melody back. Compare pitches.
-- **Staccato or legato** (17, 27): compare how long each echoed note is held.
-  On page 17 the answer is Nannerl Mouse (staccato) or Haydn Hippo (not
-  staccato).
-- If the echo is too far from both options to match, two answer keys (top and
-  bottom) appear and the child presses one.
-- Listen again (C2) works any number of times.
+- **Rhythm** (18, 22): taps on any key. The taps must number as the
+  pattern's notes and be spaced like it, at the child's own tempo.
+- **Melody** (25, 46): the notes, in order.
+- **Staccato or legato** (17, 27): the notes, short or held. Page 17 has no
+  notation: five notes of the right or left hand's Middle C Position, up or
+  down, and the answer is Nannerl Mouse (staccato) or Haydn Hippo (not).
+
+An echo that matches the example circles it. One that matches the other
+option says so. One that matches neither turns on the answer keys: G5 for
+the top (Nannerl Mouse on 17), A5 for the bottom (Haydn Hippo). The child
+can listen again any number of times.
 
 ### 5. Together or Apart
 
@@ -337,17 +339,17 @@ built.
 |   14 | C Position for the Left Hand            | Color LH C Position C–G on keyboard             | Crayon Keys       | Built  |
 |   15 | Staccato                                | Circle staccato notes                           | Hold It!          | Built  |
 |   16 | Rests                                   | Line from rest to counts                        | Hold It!          | Built  |
-|   17 | Staccato                                | Listen: staccato or not                         | Ear Detective     | Idea   |
-|   18 | Rhythm Patterns in 4/4 Time             | Listen: circle the clapped rhythm               | Ear Detective     | Idea   |
+|   17 | Staccato                                | Listen: staccato or not                         | Ear Detective     | Built  |
+|   18 | Rhythm Patterns in 4/4 Time             | Listen: circle the clapped rhythm               | Ear Detective     | Built  |
 |   19 | 2nds                                    | Color G and F; circle 2nds up and down          | Interval Hop      | Built  |
 |   20 | 2nds                                    | Circle each 2nd                                 | Interval Hop      | Built  |
 |   21 | C Position                              | Color areas C–G (Talent Show)                   | Color by Note     | Built  |
-|   22 | Rhythm Patterns                         | Listen: circle the clapped rhythm (3/4 and 4/4) | Ear Detective     | Idea   |
+|   22 | Rhythm Patterns                         | Listen: circle the clapped rhythm (3/4 and 4/4) | Ear Detective     | Built  |
 |   23 | 3rds                                    | Color G and E; circle 3rds up and down          | Interval Hop      | Built  |
 |   24 | 3rds                                    | Circle each 3rd                                 | Interval Hop      | Built  |
-|   25 | Melodies with 2nds and 3rds             | Listen: circle the melody                       | Ear Detective     | Idea   |
+|   25 | Melodies with 2nds and 3rds             | Listen: circle the melody                       | Ear Detective     | Built  |
 |   26 | 2nds and 3rds                           | Color areas by interval                         | Color by Note     | Built  |
-|   27 | Staccato and Legato Melodies            | Listen: circle the melody                       | Ear Detective     | Idea   |
+|   27 | Staccato and Legato Melodies            | Listen: circle the melody                       | Ear Detective     | Built  |
 |   28 | Same and Different                      | Same or different intervals                     | Interval Hop      | Built  |
 |   29 | Left Hand and Right Hand                | Color the hand, trace the slur, play            | Together or Apart | Built  |
 |   30 | C Position                              | Line from letter to staff note                  | Note Snap         | Built  |
@@ -366,7 +368,7 @@ built.
 |   43 | 5ths                                    | Color C and G; circle 5ths up and down          | Interval Hop      | Built  |
 |   44 | 5ths                                    | Circle each 5th                                 | Interval Hop      | Built  |
 |   45 | 4ths and 5ths                           | Color areas by interval                         | Color by Note     | Built  |
-|   46 | Melodies with 2nds, 3rds, 4ths and 5ths | Listen: circle the melody                       | Ear Detective     | Idea   |
+|   46 | Melodies with 2nds, 3rds, 4ths and 5ths | Listen: circle the melody                       | Ear Detective     | Built  |
 |   47 | Same and Different                      | Same or different intervals                     | Interval Hop      | Built  |
 |   48 | C Position and Middle C Position        | Color areas A–G (Market)                        | Color by Note     | Built  |
 

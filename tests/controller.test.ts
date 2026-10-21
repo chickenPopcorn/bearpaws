@@ -2302,6 +2302,55 @@ describe("key listeners", () => {
     ]);
   });
 
+  it("drops an Ear Detective example stopped while its sound loads", async () => {
+    const studio = create();
+    Object.assign(studio.audio, {
+      context: { state: "running", currentTime: 0 },
+    });
+    const note = [{ pitch: 60, start: 0, duration: 0.5 }];
+    let loaded!: () => void;
+    env.unlockWait = new Promise<void>((resolve) => (loaded = resolve));
+    const first = studio.playExample(note, 0, 0.6);
+    // The page restarts before the sound has loaded.
+    studio.stopExample();
+    env.unlockWait = null;
+    loaded();
+    expect(await first).toBeNull();
+    expect(studio.audio.tone).not.toHaveBeenCalled();
+    expect(await studio.playExample(note, 0, 0.6)).not.toBeNull();
+    expect(studio.audio.tone).toHaveBeenCalledOnce();
+  });
+
+  it("plays an Ear Detective melody on the piano without browser audio", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const studio = create();
+    output(studio);
+    vi.mocked(studio.audio.unlock).mockRejectedValue(new Error("blocked"));
+    const note = [{ pitch: 60, start: 0, duration: 0.5 }];
+    expect(await studio.playExample(note, 0, 0.6)).toBe(env.now * 1000 + 650);
+    vi.advanceTimersByTime(200);
+    expect(studio.midi.player.keyDown).toHaveBeenCalledWith(
+      60,
+      expect.any(Number),
+    );
+    vi.useRealTimers();
+  });
+
+  it("stops an Ear Detective example when the sound output changes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const studio = create();
+    output(studio);
+    const note = [{ pitch: 60, start: 0, duration: 0.5 }];
+    await studio.playExample(note, 0, 0.6);
+    await studio.soundOutput("");
+    vi.advanceTimersByTime(1000);
+    await studio.playExample(note, 0, 0.6);
+    env.outputLosses.at(-1)!();
+    vi.advanceTimersByTime(1000);
+    expect(studio.midi.player.keyDown).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it("lets listeners hear keys come up when they are released together", () => {
     const studio = create();
     const keys: [number, boolean, boolean | undefined][] = [];

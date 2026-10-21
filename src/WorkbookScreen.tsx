@@ -55,6 +55,15 @@ import {
 } from "./workbookHold";
 import { HandsGame, handsFeedback, handsPrompt } from "./workbookHands";
 import {
+  CLAP_BEAT,
+  EarGame,
+  NOTE_BEAT,
+  earFeedback,
+  earPrompt,
+  sounds,
+} from "./workbookEar";
+import {
+  EarCards,
   HandsCards,
   HoldCards,
   SnapBoard,
@@ -79,7 +88,9 @@ const newGame = (page: WorkbookPage) =>
         ? new HoldGame(page)
         : page.game === "hands"
           ? new HandsGame(page)
-          : new PaintGame(page);
+          : page.game === "ear"
+            ? new EarGame(page)
+            : new PaintGame(page);
 type Hop = { from: number; to: number; count: number };
 const NO_HOP: Hop = { from: 60, to: 60, count: 0 };
 /** A Find page's one sticker, on its answer key. */
@@ -321,6 +332,11 @@ export const Workbook = memo(function Workbook({
     switch (action) {
       case "hint":
         if (game.finished) return;
+        // On Ear Detective pages C2 plays the example.
+        if (game instanceof EarGame) {
+          void listen(game);
+          return;
+        }
         if (game instanceof HoldGame) {
           setHint(holdHint(game) ?? "");
           return;
@@ -341,6 +357,7 @@ export const Workbook = memo(function Workbook({
         onLeave();
         return;
       case "restart":
+        stopListening();
         setGame(newGame(page));
         setFresh(false);
         setHint("Started over. " + START_HINT);
@@ -366,9 +383,30 @@ export const Workbook = memo(function Workbook({
         play(pitch, time, false);
       if (game instanceof HandsGame && zoneOf(pitch) === "play")
         game.up(pitch, time);
+      if (game instanceof EarGame && inPlayZone(pitch)) {
+        game.up(pitch, time);
+        watchEcho(game);
+      }
       return;
     }
     if (controls.current?.down(pitch)) return;
+    if (game instanceof EarGame) {
+      if (zoneOf(pitch) === "answer") {
+        const option =
+          pitch === ANSWER_KEYS[0] ? 0 : pitch === ANSWER_KEYS[1] ? 1 : null;
+        if (option === null || !game.asking) return;
+        earOutcome(game, () => game.answer(option), option);
+        return;
+      }
+      // An echo is played on the page's own keys, C3 to C5.
+      if (!inPlayZone(pitch)) return;
+      const outcome = game.down(pitch, time);
+      const text = earFeedback(game.page, outcome, undefined);
+      if (text !== null) setHint(text);
+      if (outcome.kind === "echoing") watchEcho(game);
+      setRevision((r) => r + 1);
+      return;
+    }
     if (game instanceof HandsGame) {
       const hand =
         pitch === ANSWER_KEYS[0]
@@ -435,6 +473,91 @@ export const Workbook = memo(function Workbook({
       onFinish(page.page);
     }
   });
+  /**
+   * An Ear Detective answer, from the echo or the answer keys: `answer`
+   * gives the outcome, judged while example `index` was current.
+   */
+  const earOutcome = (
+    ear: EarGame,
+    answer: () => ReturnType<EarGame["judge"]>,
+    option: 0 | 1 | undefined,
+  ) => {
+    const index = ear.current;
+    const wasFinished = ear.finished;
+    const outcome = answer();
+    const circled =
+      outcome.kind === "right" && index !== undefined
+        ? ear.circled.get(index)
+        : option;
+    const text = earFeedback(ear.page, outcome, circled);
+    if (text !== null) setHint(text);
+    setRevision((r) => r + 1);
+    if (!wasFinished && ear.finished) {
+      setFresh(true);
+      onFinish(page.page);
+    }
+  };
+  /** Play the Ear Detective example, then wait for its echo. */
+  const listen = async (ear: EarGame) => {
+    const option = ear.listen();
+    if (!option) return;
+    clearTimeout(echoTimer.current);
+    const run = ++listening.current;
+    const rhythm = ear.page.kind === "rhythm";
+    const example = ear.page.examples[ear.current!];
+    setHint(rhythm ? "Listen to the clapping…" : "Listen…");
+    const until = await studio.playExample(
+      sounds(ear.page, option),
+      // A bar of clicks before a rhythm, as a teacher counts in.
+      rhythm ? example.meter : 0,
+      rhythm ? CLAP_BEAT : NOTE_BEAT,
+    );
+    // Another listen, a restart or leaving the page came while it loaded.
+    if (run !== listening.current) return;
+    if (until === null) {
+      setHint("The sound could not start. Press C2 to try again.");
+      return;
+    }
+    ear.playing(until);
+    setRevision((r) => r + 1);
+    echoTimer.current = setTimeout(
+      () =>
+        setHint(
+          rhythm ? "Your turn: tap it back." : "Your turn: play it back.",
+        ),
+      Math.max(0, until - performance.now()),
+    );
+  };
+  const echoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  /** Counts listens: one still loading when another starts gives up. */
+  const listening = useRef(0);
+  /** Stop the example and the echo's timers, as the page restarts or closes. */
+  const stopListening = () => {
+    listening.current++;
+    clearTimeout(echoTimer.current);
+    studio.stopExample();
+  };
+  /** Judge the echo once it is complete, or once it has gone quiet. */
+  const watchEcho = (ear: EarGame) => {
+    clearTimeout(echoTimer.current);
+    if (ear.echoComplete) {
+      // A moment for the last key's release to arrive.
+      echoTimer.current = setTimeout(() => judge(ear), 250);
+      return;
+    }
+    const ends = ear.echoEnds;
+    if (ends !== null)
+      echoTimer.current = setTimeout(
+        () => judge(ear),
+        Math.max(0, ends - performance.now()),
+      );
+  };
+  const judge = useEffectEvent((ear: EarGame) => {
+    if (ear !== game) return;
+    earOutcome(ear, () => ear.judge(), undefined);
+  });
   /** A Hold It! key going down or coming up. */
   const play = (pitch: number, time: number, down: boolean) => {
     if (!(game instanceof HoldGame)) return;
@@ -466,6 +589,7 @@ export const Workbook = memo(function Workbook({
       stop();
       keys.clear();
       controls.current = null;
+      stopListening();
     };
   }, []);
   // The page's steps, its prompt now, and what its keys and picture show.
@@ -485,6 +609,24 @@ export const Workbook = memo(function Workbook({
     }));
     now = holdPrompt(game);
     keys = NO_KEYS;
+  } else if (game instanceof EarGame) {
+    lines = game.page.steps.map((step) => ({
+      crayon: step.crayon,
+      text: step.words,
+    }));
+    now = earPrompt(game);
+    keys = NO_KEYS;
+    if (game.asking)
+      stickers = new Map([
+        [
+          ANSWER_KEYS[0],
+          { mark: "↑", word: game.page.labels ? "Mouse" : "Top" },
+        ],
+        [
+          ANSWER_KEYS[1],
+          { mark: "↓", word: game.page.labels ? "Hippo" : "Bottom" },
+        ],
+      ]);
   } else if (game instanceof HandsGame) {
     lines = game.page.steps.map((step) => ({
       crayon: step.crayon,
@@ -616,7 +758,9 @@ export const Workbook = memo(function Workbook({
                       ? "Play both cards, then press Same or Different."
                       : page.game === "hands"
                         ? "Say which hand plays each example, then play it."
-                        : "Play each note on your piano."}
+                        : page.game === "ear"
+                          ? "Press C2 to listen, then play it back."
+                          : "Play each note on your piano."}
           </p>
         </div>
         <div className="song-tools">
@@ -670,6 +814,16 @@ export const Workbook = memo(function Workbook({
       {game instanceof PaintGame && game.page.snap && (
         <section className="panel workbook-picture-panel" aria-label="Cards">
           <SnapBoard columns={game.page.snap} joined={game.step} />
+        </section>
+      )}
+      {game instanceof EarGame && (
+        <section className="panel workbook-picture-panel" aria-label="Examples">
+          <EarCards
+            page={game.page}
+            current={game.current}
+            circled={game.circled}
+            crayon={game.page.steps[0].crayon}
+          />
         </section>
       )}
       {game instanceof HandsGame && (
@@ -734,6 +888,8 @@ export const Workbook = memo(function Workbook({
           " Skip: G5, or L on the computer keyboard."}
         {page.game === "interval-name" &&
           " Answers: G5 is 2, A5 is 3, B5 is 4 (on the computer keyboard L, ; and ')."}
+        {page.game === "ear" &&
+          " Listen: C2. Answers when asked: G5 top, A5 bottom (on the computer keyboard 1 listens; L and ; answer)."}
         {page.game === "hands" &&
           " Hands: G5 is LH, A5 is RH (on the computer keyboard L and ;)."}
         {page.game === "interval-twins" &&

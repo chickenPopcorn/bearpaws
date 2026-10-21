@@ -29,6 +29,7 @@ import { IDLE_SECONDS, PracticeLog, watchSessions } from "./practiceLog";
 import {
   createClickTrack,
   Metronome,
+  playClap,
   playClick,
   type ClickClock,
   type ClickTrack,
@@ -187,6 +188,8 @@ export class Studio {
       onChange: () => this.emit(),
       onOutputChosen: (id, opened) => void this.followOutput(id, () => opened),
       onOutputLost: () => {
+        // A workbook example sent its notes there too: press C2 again.
+        this.stopExample();
         // Playback, or a start still loading, sent its notes to the lost
         // output and never prepared their laptop sound: stop, and let Play
         // start over on the laptop.
@@ -217,6 +220,8 @@ export class Studio {
     this.emit();
     const resume = this.playing || this.playbackPending;
     this.pause();
+    // A workbook example does not move: it stops, to be heard again.
+    this.stopExample();
     const generation = this.playGeneration;
     try {
       await change();
@@ -339,6 +344,109 @@ export class Studio {
           playClick(context, context.currentTime, accent);
       })
       .catch(() => {});
+  }
+  /** The workbook's playing, to stop when another starts or a page closes. */
+  private examplePlaying: { stop(): void } | null = null;
+  /** Counts examples started and stopped: a start still loading gives up. */
+  private exampleRun = 0;
+  /**
+   * Play an Ear Detective example: `countIn` metronome clicks a beat apart,
+   * then each sound: a clap on the laptop where it has no pitch, else a note
+   * in the piano's sound (on the piano's own output when one is chosen).
+   * Resolves with when the playing ends, in performance-clock milliseconds,
+   * or null if it could not start or was stopped while its sound loaded.
+   */
+  async playExample(
+    sounds: readonly { pitch?: number; start: number; duration: number }[],
+    countIn: number,
+    beat: number,
+  ): Promise<number | null> {
+    this.stopExample();
+    this.pause();
+    const run = this.exampleRun;
+    const notes = sounds.filter(
+      (s): s is typeof s & { pitch: number } => s.pitch !== undefined,
+    );
+    const generation = this.playGeneration;
+    // On a piano output, a melody with no count-in needs no browser audio,
+    // which may be unavailable, as for a song routed there.
+    const routed = this.midi.player.connected,
+      pianoOnly = routed && countIn === 0 && notes.length === sounds.length;
+    try {
+      if (!routed)
+        await this.prepareAudio(
+          notes.map(({ pitch }) => ({ pitch, velocity: KEY_VELOCITY })),
+          generation,
+        );
+      else if (!pianoOnly) await this.audio.unlock();
+    } catch {
+      return null;
+    }
+    // Another example, or the page closing, came while the sound loaded.
+    if (run !== this.exampleRun) return null;
+    const context =
+      this.audio.context?.state === "running" ? this.audio.context : null;
+    if (!context && !pianoOnly) return null;
+    // Times are in seconds from now; laptop sounds add the audio clock's now.
+    const now = context?.currentTime ?? 0,
+      lead = 0.15,
+      from = lead + countIn * beat,
+      timers: ReturnType<typeof setTimeout>[] = [],
+      sources: AudioScheduledSourceNode[] = [];
+    if (context)
+      for (let i = 0; i < countIn; i++)
+        sources.push(playClick(context, now + lead + i * beat, i === 0).source);
+    for (const sound of sounds) {
+      const when = from + sound.start;
+      if (routed && sound.pitch !== undefined) {
+        const pitch = sound.pitch,
+          delay = when * 1000;
+        timers.push(
+          setTimeout(
+            () => this.midi.player.keyDown(pitch, KEY_VELOCITY),
+            delay,
+          ),
+          setTimeout(
+            () => this.midi.player.keyUp(pitch),
+            delay + sound.duration * 1000,
+          ),
+        );
+      } else if (context) {
+        if (sound.pitch === undefined)
+          sources.push(playClap(context, now + when));
+        else
+          this.audio.tone(
+            sound.pitch,
+            KEY_VELOCITY,
+            now + when,
+            sound.duration,
+          );
+      }
+    }
+    const end = Math.max(
+      from,
+      ...sounds.map((s) => from + s.start + s.duration),
+    );
+    this.examplePlaying = {
+      stop: () => {
+        for (const timer of timers) clearTimeout(timer);
+        for (const source of sources)
+          try {
+            source.stop();
+          } catch {
+            // Already stopped.
+          }
+        for (const note of notes) this.midi.player.keyUp(note.pitch);
+        this.audio.stop();
+      },
+    };
+    return performance.now() + end * 1000;
+  }
+  /** Stop the workbook's playing, as a page closes. */
+  stopExample() {
+    this.exampleRun++;
+    this.examplePlaying?.stop();
+    this.examplePlaying = null;
   }
   /**
    * Follow key presses and releases from the piano, the screen and
